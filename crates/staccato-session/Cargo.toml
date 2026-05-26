@@ -1,0 +1,13 @@
+[package]
+name = "staccato-session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+serde.workspace = true
+staccato-config.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

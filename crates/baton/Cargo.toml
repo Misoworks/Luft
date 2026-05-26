@@ -1,0 +1,26 @@
+[package]
+name = "baton"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
+smithay.workspace = true
+staccato-config.workspace = true
+staccato-ipc = { version = "0.1.0", path = "../staccato-ipc" }
+staccato-layout.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[features]
+session-backend = [
+    "smithay/backend_drm",
+    "smithay/backend_gbm",
+    "smithay/backend_libinput",
+    "smithay/backend_session_libseat",
+    "smithay/backend_udev",
+    "smithay/renderer_gl",
+]

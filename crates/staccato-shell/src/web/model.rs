@@ -1,0 +1,427 @@
+use super::icons::icon_data_uri;
+use crate::{
+    apps::AppEntry,
+    color::Color,
+    dock::{DockApp, DockAppState},
+    ipc::ShellModel,
+    services::{
+        notifications::{NotificationSnapshot, NotificationUrgency},
+        system_status::{AudioInfo, BatteryInfo, NetworkInfo, SystemStatus},
+        tray::{TrayItemStatus, TraySnapshot},
+    },
+    theme::ShellPalette,
+};
+use serde::Serialize;
+use time::{OffsetDateTime, macros::format_description};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebShellSnapshot {
+    pub surface: Option<WebShellSurface>,
+    pub time: String,
+    pub date: String,
+    pub active_workspace: String,
+    pub active_profile: String,
+    pub active_mode: String,
+    pub blur_enabled: bool,
+    pub debug_overlay: bool,
+    pub chrome_hidden: bool,
+    pub palette: WebPalette,
+    pub profiles: Vec<WebProfile>,
+    pub workspaces: Vec<WebWorkspace>,
+    pub windows: Vec<WebWindow>,
+    pub dock_apps: Vec<WebDockApp>,
+    pub dock_menu_command: Option<String>,
+    pub applications: Vec<WebApplication>,
+    pub status: WebSystemStatus,
+    pub tray: Vec<WebTrayItem>,
+    pub notifications: Vec<WebNotification>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WebShellSurface {
+    Panel,
+    Dock,
+    DockMenu,
+    Sidebar,
+    QuickSettings,
+    DateCenter,
+    Overview,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebPalette {
+    pub panel: String,
+    pub panel_control: String,
+    pub panel_text: String,
+    pub dock: String,
+    pub accent: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebWorkspace {
+    pub id: String,
+    pub name: String,
+    pub profile: String,
+    pub mode: String,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebProfile {
+    pub id: String,
+    pub name: String,
+    pub mode: String,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebWindow {
+    pub id: u64,
+    pub title: String,
+    pub app_id: Option<String>,
+    pub workspace: String,
+    pub geometry: WebGeometry,
+    pub active: bool,
+    pub visible: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebDockApp {
+    pub label: String,
+    pub command: String,
+    pub icon_uri: Option<String>,
+    pub running: bool,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebApplication {
+    pub name: String,
+    pub command: String,
+    pub comment: Option<String>,
+    pub icon: Option<String>,
+    pub icon_uri: Option<String>,
+    pub pinned: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebGeometry {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebSystemStatus {
+    pub battery: Option<WebBattery>,
+    pub network: Option<WebNetwork>,
+    pub audio: Option<WebAudio>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebBattery {
+    pub percent: u8,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebNetwork {
+    pub name: String,
+    pub wireless: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebAudio {
+    pub percent: u8,
+    pub muted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebTrayItem {
+    pub title: String,
+    pub icon_uri: Option<String>,
+    pub status: WebTrayStatus,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WebTrayStatus {
+    Passive,
+    Active,
+    NeedsAttention,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebNotification {
+    pub id: u32,
+    pub app_name: String,
+    pub summary: String,
+    pub body: String,
+    pub urgency: WebNotificationUrgency,
+    pub actions: Vec<WebNotificationAction>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebNotificationAction {
+    pub key: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WebNotificationUrgency {
+    Low,
+    Normal,
+    Critical,
+}
+
+impl WebShellSnapshot {
+    pub fn from_shell(
+        model: &ShellModel,
+        status: &SystemStatus,
+        tray: &TraySnapshot,
+        notifications: &NotificationSnapshot,
+        dock_apps: &[DockApp],
+        dock_menu_command: Option<&str>,
+        applications: &[AppEntry],
+        palette: ShellPalette,
+        chrome_hidden: bool,
+    ) -> Self {
+        let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+        Self {
+            surface: None,
+            time: now
+                .format(format_description!("[hour]:[minute]"))
+                .unwrap_or_else(|_| "--:--".to_string()),
+            date: now
+                .format(format_description!(
+                    "[weekday repr:long], [month repr:long] [day]"
+                ))
+                .unwrap_or_else(|_| "Today".to_string()),
+            active_workspace: model.active_workspace.0.clone(),
+            active_profile: model.active_profile.0.clone(),
+            active_mode: mode_name(model.active_mode),
+            blur_enabled: model.blur_enabled,
+            debug_overlay: model.debug_overlay,
+            chrome_hidden,
+            palette: WebPalette::from(palette),
+            profiles: model
+                .profiles
+                .iter()
+                .map(|profile| WebProfile {
+                    id: profile.id.0.clone(),
+                    name: profile.name.clone(),
+                    mode: mode_name(profile.mode),
+                    active: profile.id == model.active_profile,
+                })
+                .collect(),
+            workspaces: model
+                .workspaces
+                .iter()
+                .map(|workspace| WebWorkspace {
+                    id: workspace.id.0.clone(),
+                    name: workspace.name.clone(),
+                    profile: workspace.profile.0.clone(),
+                    mode: mode_name(workspace.mode),
+                    active: workspace.id == model.active_workspace,
+                })
+                .collect(),
+            windows: model
+                .windows
+                .iter()
+                .map(|window| WebWindow {
+                    id: window.id.0,
+                    title: window
+                        .title
+                        .clone()
+                        .or_else(|| window.app_id.clone())
+                        .unwrap_or_else(|| "Window".to_string()),
+                    app_id: window.app_id.clone(),
+                    workspace: window.workspace.0.clone(),
+                    geometry: WebGeometry {
+                        x: window.geometry.x,
+                        y: window.geometry.y,
+                        width: window.geometry.width,
+                        height: window.geometry.height,
+                    },
+                    active: window.is_active,
+                    visible: window.is_visible,
+                })
+                .collect(),
+            dock_apps: dock_apps
+                .iter()
+                .map(|app| {
+                    let state = DockAppState::for_app(app, model);
+                    WebDockApp {
+                        label: app.label.clone(),
+                        command: app.command.clone(),
+                        icon_uri: app.icon_path.as_deref().and_then(icon_data_uri),
+                        running: state.running,
+                        active: state.active,
+                    }
+                })
+                .collect(),
+            dock_menu_command: dock_menu_command.map(str::to_string),
+            applications: applications
+                .iter()
+                .map(|app| WebApplication {
+                    name: app.name.clone(),
+                    command: app.command.clone(),
+                    comment: app.comment.clone(),
+                    icon: app.icon.clone(),
+                    icon_uri: app.icon_path.as_deref().and_then(icon_data_uri),
+                    pinned: dock_apps
+                        .iter()
+                        .any(|dock_app| commands_equal(&dock_app.command, &app.command)),
+                })
+                .collect(),
+            status: WebSystemStatus::from(status),
+            tray: tray
+                .items
+                .iter()
+                .map(|item| WebTrayItem {
+                    title: item.title.clone(),
+                    icon_uri: item
+                        .icon_name
+                        .as_deref()
+                        .and_then(|name| crate::apps::resolve_icon_path(Some(name)))
+                        .as_deref()
+                        .and_then(icon_data_uri),
+                    status: WebTrayStatus::from(item.status),
+                })
+                .collect(),
+            notifications: notifications
+                .items
+                .iter()
+                .map(|item| WebNotification {
+                    id: item.id,
+                    app_name: item.app_name.clone(),
+                    summary: item.summary.clone(),
+                    body: item.body.clone(),
+                    urgency: WebNotificationUrgency::from(item.urgency),
+                    actions: item
+                        .actions
+                        .iter()
+                        .map(|action| WebNotificationAction {
+                            key: action.key.clone(),
+                            label: action.label.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl From<ShellPalette> for WebPalette {
+    fn from(value: ShellPalette) -> Self {
+        Self {
+            panel: css_color(value.panel),
+            panel_control: css_color(value.panel_control),
+            panel_text: css_color(value.panel_text),
+            dock: css_color(value.dock),
+            accent: "rgb(216, 162, 24)".to_string(),
+        }
+    }
+}
+
+impl From<&SystemStatus> for WebSystemStatus {
+    fn from(value: &SystemStatus) -> Self {
+        Self {
+            battery: value.battery.as_ref().map(WebBattery::from),
+            network: value.network.as_ref().map(WebNetwork::from),
+            audio: value.audio.as_ref().map(WebAudio::from),
+        }
+    }
+}
+
+impl From<&BatteryInfo> for WebBattery {
+    fn from(value: &BatteryInfo) -> Self {
+        Self {
+            percent: value.percent,
+            state: value.state.clone(),
+        }
+    }
+}
+
+impl From<&NetworkInfo> for WebNetwork {
+    fn from(value: &NetworkInfo) -> Self {
+        Self {
+            name: value.name.clone(),
+            wireless: value.wireless,
+        }
+    }
+}
+
+impl From<&AudioInfo> for WebAudio {
+    fn from(value: &AudioInfo) -> Self {
+        Self {
+            percent: value.percent,
+            muted: value.muted,
+        }
+    }
+}
+
+impl From<TrayItemStatus> for WebTrayStatus {
+    fn from(value: TrayItemStatus) -> Self {
+        match value {
+            TrayItemStatus::Passive => Self::Passive,
+            TrayItemStatus::Active => Self::Active,
+            TrayItemStatus::NeedsAttention => Self::NeedsAttention,
+        }
+    }
+}
+
+impl From<NotificationUrgency> for WebNotificationUrgency {
+    fn from(value: NotificationUrgency) -> Self {
+        match value {
+            NotificationUrgency::Low => Self::Low,
+            NotificationUrgency::Normal => Self::Normal,
+            NotificationUrgency::Critical => Self::Critical,
+        }
+    }
+}
+
+fn css_color(color: Color) -> String {
+    format!(
+        "rgba({}, {}, {}, {:.3})",
+        color.r,
+        color.g,
+        color.b,
+        color.a as f32 / 255.0
+    )
+}
+
+fn mode_name(mode: staccato_layout::ModeId) -> String {
+    match mode {
+        staccato_layout::ModeId::Classic => "classic",
+        staccato_layout::ModeId::Dock => "dock",
+        staccato_layout::ModeId::Panel => "panel",
+        staccato_layout::ModeId::Tiling => "tiling",
+        staccato_layout::ModeId::Browser => "browser",
+        staccato_layout::ModeId::Focus => "focus",
+        staccato_layout::ModeId::Tablet => "tablet",
+    }
+    .to_string()
+}
+
+fn commands_equal(left: &str, right: &str) -> bool {
+    left.trim() == right.trim()
+}

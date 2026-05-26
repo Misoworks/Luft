@@ -1,0 +1,451 @@
+use crate::{
+    state::BatonState,
+    window::{ResizeEdge, WindowFrameControl, WindowFrameHit, WindowGrab},
+};
+use smithay::{
+    backend::input::{
+        AbsolutePositionEvent, Axis, Event, InputBackend, InputEvent, KeyState, KeyboardKeyEvent,
+        PointerAxisEvent, PointerButtonEvent,
+    },
+    input::{
+        keyboard::{FilterResult, KeyboardHandle},
+        pointer::{AxisFrame, ButtonEvent, CursorIcon, MotionEvent, PointerHandle},
+    },
+    utils::{Physical, Size},
+};
+use staccato_layout::{ModeId, ProfileId, WorkspaceId, mode_for_profile};
+
+const BTN_LEFT: u32 = 0x110;
+const BTN_RIGHT: u32 = 0x111;
+
+pub fn handle_input_event<B>(
+    state: &mut BatonState,
+    keyboard: &KeyboardHandle<BatonState>,
+    pointer: &PointerHandle<BatonState>,
+    event: InputEvent<B>,
+    output_size: Size<i32, Physical>,
+) where
+    B: InputBackend,
+{
+    match event {
+        InputEvent::Keyboard { event } => {
+            let serial = state.next_serial();
+            let key_state = event.state();
+            let mut shortcut = ShortcutAction::Forward;
+            keyboard.input::<(), _>(
+                state,
+                event.key_code(),
+                key_state,
+                serial,
+                event.time_msec(),
+                |state, modifiers, key| {
+                    shortcut = shortcut_for_key(
+                        modifiers,
+                        key.raw_latin_sym_or_raw_current_sym(),
+                        key_state,
+                    );
+                    state.super_active = modifiers.logo;
+                    if shortcut.is_forward() {
+                        FilterResult::Forward
+                    } else {
+                        FilterResult::Intercept(())
+                    }
+                },
+            );
+            if key_state == KeyState::Pressed
+                || matches!(
+                    shortcut,
+                    ShortcutAction::SuperRelease | ShortcutAction::Consume
+                )
+            {
+                handle_shortcut(state, keyboard, shortcut);
+            }
+        }
+        InputEvent::PointerMotionAbsolute { event } => {
+            let frame_hover_before = frame_control_hover(state);
+            let location = event.position_transformed(output_size.to_logical(1));
+            state.pointer_location = location;
+            state.update_drag(location);
+            update_frame_cursor(state);
+            if frame_hover_before != frame_control_hover(state) {
+                state.mark_scene_dirty();
+            }
+
+            let serial = state.next_serial();
+            let focus = state.pointer_focus(location);
+            pointer.motion(
+                state,
+                focus,
+                &MotionEvent {
+                    location,
+                    serial,
+                    time: event.time_msec(),
+                },
+            );
+            pointer.frame(state);
+        }
+        InputEvent::PointerButton { event } => {
+            let serial = state.next_serial();
+            let hit = state.window_at_for_shell_interaction(state.pointer_location);
+            let mut frame_interaction = false;
+            let left_button = event.button_code() == BTN_LEFT;
+            let right_button = event.button_code() == BTN_RIGHT;
+
+            if state.super_active
+                && event.state().is_pressed()
+                && (left_button || right_button)
+                && let Some(surface) = hit.clone()
+            {
+                frame_interaction = true;
+                state.super_used = true;
+                state.activate_surface(keyboard, &surface);
+                if left_button {
+                    state.begin_drag(surface);
+                } else if let Some((surface, edge)) =
+                    state.modifier_resize_at(state.pointer_location)
+                {
+                    state.begin_resize(surface, edge);
+                }
+            } else if left_button && event.state().is_pressed() {
+                if let Some(frame_hit) = state.window_frame_hit(state.pointer_location) {
+                    frame_interaction = true;
+                    match frame_hit {
+                        WindowFrameHit::Titlebar { surface } => {
+                            state.activate_surface(keyboard, &surface);
+                            state.begin_drag(surface);
+                        }
+                        WindowFrameHit::Resize { surface, edge } => {
+                            state.activate_surface(keyboard, &surface);
+                            state.begin_resize(surface, edge);
+                        }
+                        WindowFrameHit::Control { id, control } => {
+                            let _ = state.handle_window_control(keyboard, id, control);
+                        }
+                    }
+                } else if let Some(surface) = hit.clone() {
+                    if !state.activate_surface(keyboard, &surface) {
+                        keyboard.set_focus(state, Some(surface.wl_surface().clone()), serial);
+                    }
+                    refresh_pointer_focus(state, pointer, serial, event.time_msec());
+                } else {
+                    keyboard.set_focus(state, state.keyboard_focus(state.pointer_location), serial);
+                }
+            }
+
+            if (left_button || right_button) && !event.state().is_pressed() {
+                frame_interaction |= state.drag.is_some();
+                state.end_drag();
+            }
+
+            update_frame_cursor(state);
+
+            if !frame_interaction {
+                pointer.button(
+                    state,
+                    &ButtonEvent {
+                        serial,
+                        time: event.time_msec(),
+                        button: event.button_code(),
+                        state: event.state(),
+                    },
+                );
+                pointer.frame(state);
+            }
+        }
+        InputEvent::PointerAxis { event } => {
+            if state.super_active {
+                if let Some(offset) = axis_workspace_offset::<B>(&event) {
+                    state.super_used = true;
+                    let _ = state.switch_relative_workspace(keyboard, offset);
+                    update_frame_cursor(state);
+                }
+                return;
+            }
+
+            let mut frame = AxisFrame::new(event.time_msec()).source(event.source());
+
+            for axis in [Axis::Horizontal, Axis::Vertical] {
+                if let Some(amount) = event.amount(axis) {
+                    frame = frame.value(axis, amount);
+                }
+                if let Some(v120) = event.amount_v120(axis) {
+                    frame = frame.v120(axis, v120.round() as i32);
+                }
+                frame = frame.relative_direction(axis, event.relative_direction(axis));
+            }
+
+            pointer.axis(state, frame);
+            pointer.frame(state);
+        }
+        _ => {}
+    }
+}
+
+fn refresh_pointer_focus(
+    state: &mut BatonState,
+    pointer: &PointerHandle<BatonState>,
+    serial: smithay::utils::Serial,
+    time: u32,
+) {
+    let location = state.pointer_location;
+    let focus = state.pointer_focus(location);
+    pointer.motion(
+        state,
+        focus,
+        &MotionEvent {
+            location,
+            serial,
+            time,
+        },
+    );
+}
+
+fn frame_control_hover(state: &BatonState) -> Option<WindowFrameControl> {
+    match state.window_frame_hit(state.pointer_location) {
+        Some(WindowFrameHit::Control { control, .. }) => Some(control),
+        _ => None,
+    }
+}
+
+fn update_frame_cursor(state: &mut BatonState) {
+    if let Some(grab) = &state.drag {
+        match grab {
+            WindowGrab::Move { .. } => state.set_frame_cursor(CursorIcon::Grabbing),
+            WindowGrab::Resize { edge, .. } => state.set_frame_cursor(resize_cursor(*edge)),
+        }
+        return;
+    }
+
+    match state.window_frame_hit(state.pointer_location) {
+        Some(WindowFrameHit::Titlebar { .. }) => state.set_frame_cursor(CursorIcon::Grab),
+        Some(WindowFrameHit::Control { .. }) => state.set_frame_cursor(CursorIcon::Pointer),
+        Some(WindowFrameHit::Resize { edge, .. }) => state.set_frame_cursor(resize_cursor(edge)),
+        None => state.clear_frame_cursor(),
+    }
+}
+
+fn resize_cursor(edge: ResizeEdge) -> CursorIcon {
+    match (edge.left, edge.right, edge.top, edge.bottom) {
+        (true, _, true, _) => CursorIcon::NwResize,
+        (_, true, true, _) => CursorIcon::NeResize,
+        (true, _, _, true) => CursorIcon::SwResize,
+        (_, true, _, true) => CursorIcon::SeResize,
+        (true, _, _, _) => CursorIcon::WResize,
+        (_, true, _, _) => CursorIcon::EResize,
+        (_, _, true, _) => CursorIcon::NResize,
+        (_, _, _, true) => CursorIcon::SResize,
+        _ => CursorIcon::Default,
+    }
+}
+
+#[derive(Debug)]
+enum ShortcutAction {
+    Forward,
+    Consume,
+    SwitchWorkspace(WorkspaceId),
+    SwitchRelativeWorkspace(i32),
+    MoveWindowToWorkspace(WorkspaceId),
+    CloseActiveWindow,
+    CycleWindow { previous: bool },
+    ToggleDebugOverlay,
+    ToggleShellStyle,
+    OpenDefaultApp(staccato_ipc::DefaultAppKind),
+    OpenLauncher,
+    RestartShell,
+    FallbackToDefaultConfig,
+    SuperPress,
+    SuperRelease,
+}
+
+impl ShortcutAction {
+    fn is_forward(&self) -> bool {
+        matches!(self, Self::Forward)
+    }
+}
+
+fn shortcut_for_key(
+    modifiers: &smithay::input::keyboard::ModifiersState,
+    key: Option<smithay::input::keyboard::Keysym>,
+    state: KeyState,
+) -> ShortcutAction {
+    let Some(raw) = key.map(|key| key.raw()) else {
+        return ShortcutAction::Forward;
+    };
+
+    if is_super_key(raw) {
+        return if state == KeyState::Pressed {
+            ShortcutAction::SuperPress
+        } else {
+            ShortcutAction::SuperRelease
+        };
+    }
+
+    if !modifiers.logo && !modifiers.ctrl && !modifiers.alt && matches!(raw, 0xffc0 | 0xffc1) {
+        if state != KeyState::Pressed {
+            return ShortcutAction::Consume;
+        }
+        return match raw {
+            0xffc0 => ShortcutAction::ToggleDebugOverlay,
+            0xffc1 => ShortcutAction::ToggleShellStyle,
+            _ => ShortcutAction::Consume,
+        };
+    }
+
+    if modifiers.alt && !modifiers.logo && !modifiers.ctrl && matches!(raw, 0xff09 | 0xfe20) {
+        return ShortcutAction::CycleWindow {
+            previous: modifiers.shift,
+        };
+    }
+
+    if !modifiers.logo || modifiers.ctrl || modifiers.alt {
+        return ShortcutAction::Forward;
+    }
+
+    if let Some(workspace) = workspace_for_raw_key(raw) {
+        if modifiers.shift {
+            return ShortcutAction::MoveWindowToWorkspace(workspace);
+        }
+
+        return ShortcutAction::SwitchWorkspace(workspace);
+    }
+
+    match raw {
+        0x20 => ShortcutAction::OpenLauncher,
+        0xff0d => ShortcutAction::OpenDefaultApp(staccato_ipc::DefaultAppKind::Terminal),
+        0x65 | 0x45 => ShortcutAction::OpenDefaultApp(staccato_ipc::DefaultAppKind::FileManager),
+        0x72 | 0x52 if modifiers.shift => ShortcutAction::RestartShell,
+        0xff08 if modifiers.shift => ShortcutAction::FallbackToDefaultConfig,
+        0x71 | 0x51 => ShortcutAction::CloseActiveWindow,
+        0xff09 | 0xfe20 => ShortcutAction::CycleWindow {
+            previous: modifiers.shift,
+        },
+        0xff51 | 0xff52 => ShortcutAction::SwitchRelativeWorkspace(-1),
+        0xff53 | 0xff54 => ShortcutAction::SwitchRelativeWorkspace(1),
+        _ => ShortcutAction::Forward,
+    }
+}
+
+fn handle_shortcut(
+    state: &mut BatonState,
+    keyboard: &KeyboardHandle<BatonState>,
+    shortcut: ShortcutAction,
+) {
+    match shortcut {
+        ShortcutAction::Forward => {}
+        ShortcutAction::Consume => {}
+        ShortcutAction::SwitchWorkspace(workspace) => {
+            state.super_used = true;
+            let _ = state.switch_workspace(keyboard, &workspace);
+        }
+        ShortcutAction::SwitchRelativeWorkspace(offset) => {
+            state.super_used = true;
+            let _ = state.switch_relative_workspace(keyboard, offset);
+        }
+        ShortcutAction::MoveWindowToWorkspace(workspace) => {
+            state.super_used = true;
+            let _ = state.move_active_window_to_workspace(keyboard, workspace);
+        }
+        ShortcutAction::CloseActiveWindow => {
+            state.super_used = true;
+            if state.close_active_window().is_some() {
+                state.focus_active_workspace(keyboard);
+            }
+        }
+        ShortcutAction::CycleWindow { previous } => {
+            state.super_used = true;
+            let _ = state.cycle_active_window(keyboard, previous);
+        }
+        ShortcutAction::ToggleDebugOverlay => {
+            state.config.compositor.debug_overlay = !state.config.compositor.debug_overlay;
+            state.mark_scene_dirty();
+        }
+        ShortcutAction::ToggleShellStyle => {
+            toggle_active_workspace_style(state);
+        }
+        ShortcutAction::OpenLauncher => {
+            state.super_used = true;
+            state.send_shell_launcher_open();
+        }
+        ShortcutAction::OpenDefaultApp(app) => {
+            state.super_used = true;
+            state.send_shell_default_app_launch(app);
+        }
+        ShortcutAction::RestartShell => {
+            state.super_used = true;
+            state.request_shell_restart();
+        }
+        ShortcutAction::FallbackToDefaultConfig => {
+            state.super_used = true;
+            state.fallback_to_default_config();
+        }
+        ShortcutAction::SuperPress => {
+            state.super_active = true;
+            state.super_used = false;
+        }
+        ShortcutAction::SuperRelease => {
+            if !state.super_used {
+                state.send_shell_overview_toggle();
+            }
+            state.super_active = false;
+            state.super_used = false;
+        }
+    }
+}
+
+fn toggle_active_workspace_style(state: &mut BatonState) {
+    let workspace = state.layout.active_workspace().clone();
+    let profile = state
+        .layout
+        .workspaces()
+        .find(|entry| entry.id == workspace)
+        .map(|entry| entry.profile_id.clone())
+        .unwrap_or_else(|| ProfileId("dock-default".to_string()));
+    let next = if mode_for_profile(&profile) == ModeId::Dock {
+        "panel-default"
+    } else {
+        "dock-default"
+    };
+
+    if state
+        .layout
+        .set_workspace_profile(&workspace, ProfileId(next.to_string()))
+        .is_ok()
+    {
+        state.apply_active_arrangement();
+        state.mark_scene_dirty();
+    }
+}
+
+fn is_super_key(raw: u32) -> bool {
+    matches!(raw, 0xffeb | 0xffec)
+}
+
+fn axis_workspace_offset<B: InputBackend>(event: &B::PointerAxisEvent) -> Option<i32> {
+    let amount = event
+        .amount_v120(Axis::Vertical)
+        .or_else(|| event.amount(Axis::Vertical))?;
+    if amount > 0.0 {
+        Some(1)
+    } else if amount < 0.0 {
+        Some(-1)
+    } else {
+        None
+    }
+}
+
+fn workspace_for_raw_key(raw: u32) -> Option<WorkspaceId> {
+    match raw {
+        0x31..=0x39 => Some(WorkspaceId(char::from_u32(raw)?.to_string())),
+        _ => None,
+    }
+}
+
+trait ButtonStateExt {
+    fn is_pressed(self) -> bool;
+}
+
+impl ButtonStateExt for smithay::backend::input::ButtonState {
+    fn is_pressed(self) -> bool {
+        matches!(self, Self::Pressed)
+    }
+}

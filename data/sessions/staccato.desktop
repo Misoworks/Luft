@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Staccato
+Comment=Staccato Desktop Environment
+Exec=staccato-session --session
+TryExec=staccato-session
+Type=Application
+DesktopNames=Staccato
+Keywords=wayland;desktop;session;

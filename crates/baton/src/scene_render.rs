@@ -1,0 +1,301 @@
+use crate::{
+    layers::LayerRenderTarget,
+    render::window_chrome_elements_for_window,
+    scene_blur::{self, SceneBlurCache},
+    state::BatonState,
+    window::ManagedWindow,
+    window_clip::{RoundedWindowElement, window_elements_for_window},
+};
+use smithay::{
+    backend::renderer::{
+        Color32F, Frame, Renderer, RendererSuper,
+        element::{memory::MemoryRenderBufferRenderElement, surface::WaylandSurfaceRenderElement},
+        gles::{GlesError, GlesRenderer, GlesTarget},
+        utils::draw_render_elements,
+    },
+    utils::{Physical, Rectangle, Size, Transform},
+};
+use staccato_layout::WorkspaceId;
+
+type SurfaceElement = WaylandSurfaceRenderElement<GlesRenderer>;
+type MemoryElement = MemoryRenderBufferRenderElement<GlesRenderer>;
+type WindowElement = RoundedWindowElement<SurfaceElement>;
+
+pub struct SceneRenderRequest<'a> {
+    pub state: &'a BatonState,
+    pub output_size: Size<i32, Physical>,
+    pub damage: &'a [Rectangle<i32, Physical>],
+    pub blur_damage: &'a [Rectangle<i32, Physical>],
+    pub blur_enabled: bool,
+    pub background: Option<MemoryElement>,
+    pub background_layer: &'a [SurfaceElement],
+    pub bottom_layer: &'a [SurfaceElement],
+    pub windows: &'a [WindowElement],
+    pub window_chrome: &'a [MemoryElement],
+    pub window_targets: &'a [LayerRenderTarget],
+    pub top_targets: &'a [LayerRenderTarget],
+    pub top_layer: &'a [SurfaceElement],
+    pub overlay_targets: &'a [LayerRenderTarget],
+    pub overlay_layer: &'a [SurfaceElement],
+    pub loading: Option<MemoryElement>,
+    pub debug: Option<MemoryElement>,
+}
+
+pub fn render_scene(
+    blur_cache: &mut SceneBlurCache,
+    renderer: &mut GlesRenderer,
+    framebuffer: &mut GlesTarget<'_>,
+    request: SceneRenderRequest<'_>,
+) -> Result<(), GlesError> {
+    if !request.blur_enabled
+        || (request.window_targets.is_empty()
+            && request.top_targets.is_empty()
+            && request.overlay_targets.is_empty())
+    {
+        return render_flat_scene(renderer, framebuffer, request);
+    }
+
+    if request.window_targets.is_empty()
+        && !blur_cache.targets_need_capture(
+            request.output_size,
+            request.top_targets,
+            request.blur_damage,
+        )
+        && !blur_cache.targets_need_capture(
+            request.output_size,
+            request.overlay_targets,
+            request.blur_damage,
+        )
+    {
+        render_flat_scene_with_cached_layer_blur(blur_cache, renderer, framebuffer, request)
+    } else {
+        render_staged_scene(blur_cache, renderer, framebuffer, request)
+    }
+}
+
+fn render_flat_scene(
+    renderer: &mut GlesRenderer,
+    framebuffer: &mut GlesTarget<'_>,
+    request: SceneRenderRequest<'_>,
+) -> Result<(), GlesError> {
+    let mut frame = renderer.render(framebuffer, request.output_size, Transform::Flipped180)?;
+    frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), request.damage)?;
+    draw_optional_memory(&mut frame, request.background.as_ref(), request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.background_layer, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.bottom_layer, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.windows, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.window_chrome, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
+    draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
+    draw_optional_memory(&mut frame, request.debug.as_ref(), request.damage)?;
+    let _ = frame.finish()?;
+    Ok(())
+}
+
+fn render_flat_scene_with_cached_layer_blur(
+    blur_cache: &SceneBlurCache,
+    renderer: &mut GlesRenderer,
+    framebuffer: &mut GlesTarget<'_>,
+    request: SceneRenderRequest<'_>,
+) -> Result<(), GlesError> {
+    let top_blur =
+        blur_cache.cached_elements(renderer, request.output_size, request.top_targets)?;
+    let overlay_blur =
+        blur_cache.cached_elements(renderer, request.output_size, request.overlay_targets)?;
+    let mut frame = renderer.render(framebuffer, request.output_size, Transform::Flipped180)?;
+    frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), request.damage)?;
+    draw_optional_memory(&mut frame, request.background.as_ref(), request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.background_layer, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.bottom_layer, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.windows, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.window_chrome, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, &top_blur, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, &overlay_blur, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
+    draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
+    draw_optional_memory(&mut frame, request.debug.as_ref(), request.damage)?;
+    let _ = frame.finish()?;
+    Ok(())
+}
+
+fn render_staged_scene(
+    blur_cache: &mut SceneBlurCache,
+    renderer: &mut GlesRenderer,
+    framebuffer: &mut GlesTarget<'_>,
+    request: SceneRenderRequest<'_>,
+) -> Result<(), GlesError> {
+    {
+        let mut frame = renderer.render(framebuffer, request.output_size, Transform::Flipped180)?;
+        frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), request.damage)?;
+        draw_optional_memory(&mut frame, request.background.as_ref(), request.damage)?;
+        draw_render_elements(&mut frame, 1.0, request.background_layer, request.damage)?;
+        draw_render_elements(&mut frame, 1.0, request.bottom_layer, request.damage)?;
+        let _ = frame.finish()?;
+    }
+
+    let mut batched_windows = Vec::new();
+    let mut batched_chrome = Vec::new();
+    for entry in scene_window_entries(request.state) {
+        let targets = targets_for_window(request.window_targets, entry.window);
+        let window =
+            window_elements_for_window(renderer, entry.window, entry.offset_x, request.output_size);
+        let chrome = window_chrome_elements_for_window(
+            renderer,
+            request.state,
+            entry.window,
+            entry.offset_x,
+        )?;
+        if targets.is_empty() {
+            batched_windows.extend(window);
+            batched_chrome.extend(chrome);
+            continue;
+        }
+
+        flush_window_batch(
+            renderer,
+            framebuffer,
+            request.output_size,
+            request.damage,
+            &mut batched_windows,
+            &mut batched_chrome,
+        )?;
+        let blur = scene_blur::capture_blur_elements(
+            blur_cache,
+            renderer,
+            framebuffer,
+            request.output_size,
+            &targets,
+            request.blur_damage,
+            request.blur_enabled,
+        )?;
+        let mut frame = renderer.render(framebuffer, request.output_size, Transform::Flipped180)?;
+        draw_render_elements(&mut frame, 1.0, &blur, request.damage)?;
+        draw_render_elements(&mut frame, 1.0, &window, request.damage)?;
+        draw_render_elements(&mut frame, 1.0, &chrome, request.damage)?;
+        let _ = frame.finish()?;
+    }
+    flush_window_batch(
+        renderer,
+        framebuffer,
+        request.output_size,
+        request.damage,
+        &mut batched_windows,
+        &mut batched_chrome,
+    )?;
+
+    let top_blur = scene_blur::capture_blur_elements(
+        blur_cache,
+        renderer,
+        framebuffer,
+        request.output_size,
+        request.top_targets,
+        request.blur_damage,
+        request.blur_enabled,
+    )?;
+    {
+        let mut frame = renderer.render(framebuffer, request.output_size, Transform::Flipped180)?;
+        draw_render_elements(&mut frame, 1.0, &top_blur, request.damage)?;
+        draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
+        let _ = frame.finish()?;
+    }
+
+    let overlay_blur = scene_blur::capture_blur_elements(
+        blur_cache,
+        renderer,
+        framebuffer,
+        request.output_size,
+        request.overlay_targets,
+        request.blur_damage,
+        request.blur_enabled,
+    )?;
+    let mut frame = renderer.render(framebuffer, request.output_size, Transform::Flipped180)?;
+    draw_render_elements(&mut frame, 1.0, &overlay_blur, request.damage)?;
+    draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
+    draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
+    draw_optional_memory(&mut frame, request.debug.as_ref(), request.damage)?;
+    let _ = frame.finish()?;
+
+    Ok(())
+}
+
+fn flush_window_batch(
+    renderer: &mut GlesRenderer,
+    framebuffer: &mut GlesTarget<'_>,
+    output_size: Size<i32, Physical>,
+    damage: &[Rectangle<i32, Physical>],
+    windows: &mut Vec<WindowElement>,
+    chrome: &mut Vec<MemoryElement>,
+) -> Result<(), GlesError> {
+    if windows.is_empty() && chrome.is_empty() {
+        return Ok(());
+    }
+
+    let mut frame = renderer.render(framebuffer, output_size, Transform::Flipped180)?;
+    draw_render_elements(&mut frame, 1.0, windows.as_slice(), damage)?;
+    draw_render_elements(&mut frame, 1.0, chrome.as_slice(), damage)?;
+    let _ = frame.finish()?;
+    windows.clear();
+    chrome.clear();
+    Ok(())
+}
+
+fn draw_optional_memory(
+    frame: &mut <GlesRenderer as RendererSuper>::Frame<'_, '_>,
+    element: Option<&MemoryElement>,
+    damage: &[Rectangle<i32, Physical>],
+) -> Result<(), GlesError> {
+    if let Some(element) = element {
+        draw_render_elements(frame, 1.0, std::slice::from_ref(element), damage)?;
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SceneWindowEntry<'a> {
+    window: &'a ManagedWindow,
+    offset_x: i32,
+}
+
+fn scene_window_entries(state: &BatonState) -> Vec<SceneWindowEntry<'_>> {
+    let mut entries = Vec::new();
+    if let Some(transition) = state.workspace_transition() {
+        let width = state.output_size.w as f64;
+        let direction = transition.direction as f64;
+        let from_offset = (-direction * width * transition.progress).round() as i32;
+        let to_offset = (direction * width * (1.0 - transition.progress)).round() as i32;
+        append_workspace_entries(state, &transition.from, from_offset, &mut entries);
+        append_workspace_entries(state, &transition.to, to_offset, &mut entries);
+    } else {
+        append_workspace_entries(state, state.layout.active_workspace(), 0, &mut entries);
+    }
+    entries
+}
+
+fn append_workspace_entries<'a>(
+    state: &'a BatonState,
+    workspace: &WorkspaceId,
+    offset_x: i32,
+    entries: &mut Vec<SceneWindowEntry<'a>>,
+) {
+    entries.extend(
+        state
+            .windows
+            .render_windows_on_workspace(workspace)
+            .map(|window| SceneWindowEntry { window, offset_x }),
+    );
+}
+
+fn targets_for_window(
+    targets: &[LayerRenderTarget],
+    window: &ManagedWindow,
+) -> Vec<LayerRenderTarget> {
+    let surface = window.surface.wl_surface();
+    targets
+        .iter()
+        .filter(|target| &target.surface == surface)
+        .cloned()
+        .collect()
+}

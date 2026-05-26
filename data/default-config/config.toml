@@ -1,0 +1,42 @@
+[general]
+default_profile = "panel-default"
+enable_effects = true
+enable_blur = true
+enable_animations = true
+safe_mode = false
+
+[compositor]
+backend = "auto"
+xwayland = true
+debug_overlay = false
+prefer_direct_scanout = true
+
+[effects]
+background_effect_protocol = true
+blur = true
+blur_quality = "balanced"
+disable_blur_on_battery = false
+
+[workspaces]
+count = 1
+restore_sessions = true
+
+[workspaces.1]
+name = "Workspace 1"
+profile = "panel-default"
+
+[recovery]
+crash_limit = 3
+crash_window_seconds = 60
+auto_safe_mode = true
+backup_before_apply = true
+
+[default_apps]
+terminal = "ghostty"
+file_manager = "nautilus"
+browser = "google-chrome-stable"
+settings = "gnome-control-center"
+launcher = "vicinae"
+
+[dock]
+customized = false
