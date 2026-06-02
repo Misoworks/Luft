@@ -229,8 +229,8 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
         if shell_layers_ready {
             shell_layers_seen_ready = true;
         }
-        let show_loading = state.shell_status != ShellStatus::Running
-            || (!shell_layers_ready && !shell_layers_seen_ready);
+        let show_loading = !shell_layers_ready
+            && (state.shell_status != ShellStatus::Running || !shell_layers_seen_ready);
         let scene_dirty = state.take_scene_dirty();
         let debug_needs_render =
             state.config.compositor.debug_overlay && debug_overlay_cache.needs_refresh();

@@ -68,11 +68,6 @@ pub fn switch_relative_workspace(offset: i32) -> Result<ShellModel, Box<dyn Erro
     }
 }
 
-pub fn set_blur(enabled: bool) -> Result<ShellModel, Box<dyn Error>> {
-    send_accepted(IpcRequest::SetBlur { enabled })?;
-    load_model()
-}
-
 pub fn set_debug_overlay(enabled: bool) -> Result<ShellModel, Box<dyn Error>> {
     send_accepted(IpcRequest::SetDebugOverlay { enabled })?;
     load_model()

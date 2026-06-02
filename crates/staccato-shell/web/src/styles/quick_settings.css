@@ -1,0 +1,316 @@
+.quick-settings {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 16px;
+}
+
+.quick-header {
+  display: grid;
+  align-items: center;
+  min-height: 36px;
+}
+
+.quick-header div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.quick-header span,
+.popover-header span {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.quick-header small,
+.popover-header small,
+.setting-tile small,
+.notification-body span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+
+.quick-status-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.quick-status-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quick-slider-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-status-grid:empty,
+.quick-slider-stack:empty {
+  display: none;
+}
+
+.setting-tile {
+  --control-scale: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  gap: 11px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.018);
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transform-origin: center;
+  transition:
+    background-color 170ms var(--ease-shell),
+    box-shadow 170ms var(--ease-shell),
+    transform 130ms var(--ease-shell);
+}
+
+.setting-tile {
+  min-width: 0;
+}
+
+.setting-tile.is-wide {
+  grid-column: 1 / -1;
+}
+
+.setting-tile.is-primary {
+  background: color-mix(in srgb, var(--accent), rgba(255, 255, 255, 0.08) 78%);
+}
+
+.setting-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.setting-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.setting-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.setting-copy,
+.setting-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-slider {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 9px 12px 10px 9px;
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.018);
+}
+
+.control-slider.is-disabled {
+  opacity: 0.58;
+}
+
+.control-slider.is-dragging {
+  background: rgba(255, 255, 255, 0.105);
+}
+
+.control-slider-icon {
+  --control-scale: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transition:
+    background-color 150ms var(--ease-shell),
+    transform 130ms var(--ease-shell);
+}
+
+.control-slider-icon:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.control-slider-icon:active {
+  --control-scale: 0.96;
+}
+
+.control-slider-icon:disabled {
+  pointer-events: none;
+}
+
+.control-slider-body {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.control-slider-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.control-slider-copy span,
+.control-slider-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-slider-copy strong {
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 600;
+}
+
+.control-slider-track {
+  --slider-thumb-size: 18px;
+  --slider-track-height: 10px;
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--slider-thumb-size);
+  border-radius: 999px;
+  background: transparent;
+  overflow: visible;
+}
+
+.control-slider-track::before {
+  content: "";
+  position: absolute;
+  inset: calc((var(--slider-thumb-size) - var(--slider-track-height)) / 2) calc(var(--slider-thumb-size) / 2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.control-slider-track:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent), white 24%);
+}
+
+.control-slider-track:disabled {
+  pointer-events: none;
+}
+
+.control-slider-fill {
+  position: absolute;
+  top: calc((var(--slider-thumb-size) - var(--slider-track-height)) / 2);
+  bottom: calc((var(--slider-thumb-size) - var(--slider-track-height)) / 2);
+  left: calc(var(--slider-thumb-size) / 2);
+  width: calc((100% - var(--slider-thumb-size)) * var(--slider-ratio));
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent), white 8%);
+  transition: width 140ms var(--ease-shell);
+}
+
+.control-slider.is-dragging .control-slider-fill {
+  transition-duration: 0ms;
+}
+
+.control-slider-thumb {
+  position: absolute;
+  top: 50%;
+  left: calc((var(--slider-thumb-size) / 2) + (100% - var(--slider-thumb-size)) * var(--slider-ratio));
+  width: var(--slider-thumb-size);
+  height: var(--slider-thumb-size);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  transform: translate3d(-50%, -50%, 0);
+  transition: left 140ms var(--ease-shell);
+}
+
+.control-slider.is-dragging .control-slider-thumb {
+  transition-duration: 0ms;
+}
+
+.quick-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding-top: 2px;
+}
+
+.round-action {
+  --control-scale: 1;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transform-origin: center;
+  transition:
+    background-color 170ms var(--ease-shell),
+    transform 130ms var(--ease-shell);
+}
+
+.round-action:hover,
+.setting-tile.is-action:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.round-action:active,
+.setting-tile.is-action:active {
+  --control-scale: 0.96;
+}
+
+#app.is-surface-opening[data-surface="quick-settings"] .quick-header,
+#app.is-surface-opening[data-surface="quick-settings"] .setting-tile,
+#app.is-surface-opening[data-surface="quick-settings"] .control-slider,
+#app.is-surface-opening[data-surface="quick-settings"] .quick-footer {
+  animation: quick-item-in 190ms var(--ease-shell) both;
+}
+
+#app.is-surface-opening[data-surface="quick-settings"] .setting-tile,
+#app.is-surface-opening[data-surface="quick-settings"] .control-slider {
+  animation-delay: calc(var(--index, 0) * 18ms);
+}
+
+#app.is-surface-opening[data-surface="quick-settings"] .quick-footer {
+  animation-delay: 112ms;
+}
+
+@keyframes quick-item-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}

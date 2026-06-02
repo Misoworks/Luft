@@ -5,8 +5,8 @@ use crate::{
     dock::{DockApp, DockAppState},
     ipc::ShellModel,
     services::{
-        notifications::{NotificationSnapshot, NotificationUrgency},
-        system_status::{AudioInfo, BatteryInfo, NetworkInfo, SystemStatus},
+        notifications::{NotificationItem, NotificationSnapshot, NotificationUrgency},
+        system_status::{AudioInfo, BatteryInfo, BrightnessInfo, NetworkInfo, SystemStatus},
         tray::{TrayItemStatus, TraySnapshot},
     },
     theme::ShellPalette,
@@ -35,7 +35,9 @@ pub struct WebShellSnapshot {
     pub applications: Vec<WebApplication>,
     pub status: WebSystemStatus,
     pub tray: Vec<WebTrayItem>,
+    pub do_not_disturb: bool,
     pub notifications: Vec<WebNotification>,
+    pub toast_notifications: Vec<WebNotification>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -47,6 +49,7 @@ pub enum WebShellSurface {
     Sidebar,
     QuickSettings,
     DateCenter,
+    NotificationToast,
     Overview,
 }
 
@@ -85,6 +88,7 @@ pub struct WebWindow {
     pub id: u64,
     pub title: String,
     pub app_id: Option<String>,
+    pub icon_uri: Option<String>,
     pub workspace: String,
     pub geometry: WebGeometry,
     pub active: bool,
@@ -127,6 +131,7 @@ pub struct WebSystemStatus {
     pub battery: Option<WebBattery>,
     pub network: Option<WebNetwork>,
     pub audio: Option<WebAudio>,
+    pub brightness: Option<WebBrightness>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -152,6 +157,12 @@ pub struct WebAudio {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WebBrightness {
+    pub percent: u8,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WebTrayItem {
     pub title: String,
     pub icon_uri: Option<String>,
@@ -171,6 +182,8 @@ pub enum WebTrayStatus {
 pub struct WebNotification {
     pub id: u32,
     pub app_name: String,
+    pub icon_uri: Option<String>,
+    pub received_at: u64,
     pub summary: String,
     pub body: String,
     pub urgency: WebNotificationUrgency,
@@ -254,6 +267,12 @@ impl WebShellSnapshot {
                         .or_else(|| window.app_id.clone())
                         .unwrap_or_else(|| "Window".to_string()),
                     app_id: window.app_id.clone(),
+                    icon_uri: window
+                        .app_id
+                        .as_deref()
+                        .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
+                        .as_deref()
+                        .and_then(icon_data_uri),
                     workspace: window.workspace.0.clone(),
                     geometry: WebGeometry {
                         x: window.geometry.x,
@@ -307,23 +326,37 @@ impl WebShellSnapshot {
                     status: WebTrayStatus::from(item.status),
                 })
                 .collect(),
+            do_not_disturb: notifications.do_not_disturb,
             notifications: notifications
                 .items
                 .iter()
-                .map(|item| WebNotification {
-                    id: item.id,
-                    app_name: item.app_name.clone(),
-                    summary: item.summary.clone(),
-                    body: item.body.clone(),
-                    urgency: WebNotificationUrgency::from(item.urgency),
-                    actions: item
-                        .actions
-                        .iter()
-                        .map(|action| WebNotificationAction {
-                            key: action.key.clone(),
-                            label: action.label.clone(),
-                        })
-                        .collect(),
+                .map(WebNotification::from)
+                .collect(),
+            toast_notifications: notifications
+                .toast_items
+                .iter()
+                .map(WebNotification::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<&NotificationItem> for WebNotification {
+    fn from(item: &NotificationItem) -> Self {
+        Self {
+            id: item.id,
+            app_name: item.app_name.clone(),
+            icon_uri: notification_icon_uri(item),
+            received_at: item.received_at,
+            summary: item.summary.clone(),
+            body: item.body.clone(),
+            urgency: WebNotificationUrgency::from(item.urgency),
+            actions: item
+                .actions
+                .iter()
+                .map(|action| WebNotificationAction {
+                    key: action.key.clone(),
+                    label: action.label.clone(),
                 })
                 .collect(),
         }
@@ -348,6 +381,7 @@ impl From<&SystemStatus> for WebSystemStatus {
             battery: value.battery.as_ref().map(WebBattery::from),
             network: value.network.as_ref().map(WebNetwork::from),
             audio: value.audio.as_ref().map(WebAudio::from),
+            brightness: value.brightness.as_ref().map(WebBrightness::from),
         }
     }
 }
@@ -375,6 +409,14 @@ impl From<&AudioInfo> for WebAudio {
         Self {
             percent: value.percent,
             muted: value.muted,
+        }
+    }
+}
+
+impl From<&BrightnessInfo> for WebBrightness {
+    fn from(value: &BrightnessInfo) -> Self {
+        Self {
+            percent: value.percent,
         }
     }
 }
@@ -424,4 +466,13 @@ fn mode_name(mode: staccato_layout::ModeId) -> String {
 
 fn commands_equal(left: &str, right: &str) -> bool {
     left.trim() == right.trim()
+}
+
+fn notification_icon_uri(item: &NotificationItem) -> Option<String> {
+    item.app_icon
+        .as_deref()
+        .and_then(|icon| crate::apps::resolve_icon_path(Some(icon)))
+        .or_else(|| crate::apps::resolve_icon_path(Some(item.app_name.as_str())))
+        .as_deref()
+        .and_then(icon_data_uri)
 }

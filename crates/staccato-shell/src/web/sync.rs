@@ -86,7 +86,7 @@ impl WebShell {
         self.chrome = chrome;
         self.surfaces
             .set_panel_taskbar(self.model.active_mode == staccato_layout::ModeId::Panel);
-        let chrome_mapped = self.chrome_visibility.mapped(self.overview_visible);
+        let chrome_mapped = self.chrome_visibility.mapped(self.overview_visible, true);
         self.surfaces
             .set_panel_visible(chrome.panel && chrome_mapped);
         self.surfaces.dock.set_visible(chrome.dock && chrome_mapped);
@@ -103,6 +103,7 @@ impl WebShell {
     }
 
     pub(super) fn sync_surfaces(&mut self) {
+        let notification_toast_visible = self.notification_toast_visible();
         let snapshot = super::model::WebShellSnapshot::from_shell(
             &self.model,
             &self.status,
@@ -117,10 +118,18 @@ impl WebShell {
         let Ok(json) = serde_json::to_string(&snapshot) else {
             return;
         };
-        if json == self.last_snapshot {
-            return;
+        if json != self.last_snapshot {
+            self.last_snapshot = json.clone();
+            self.surfaces.evaluate_snapshot(&snapshot, &json);
         }
-        self.last_snapshot = json.clone();
-        self.surfaces.evaluate_snapshot(&snapshot, &json);
+        self.surfaces
+            .set_notification_toast_visible(notification_toast_visible);
+    }
+
+    fn notification_toast_visible(&self) -> bool {
+        !self.quick_visible
+            && !self.date_visible
+            && !self.overview_visible
+            && !self.notifications.snapshot().toast_items.is_empty()
     }
 }

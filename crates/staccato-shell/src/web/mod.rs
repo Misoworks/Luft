@@ -4,25 +4,28 @@ use crate::{
     control::ShellControlServer,
     dock::{self, DockApp, dock_app_matches_window},
     ipc::{
-        ShellModel, activate_window, minimize_window, move_window_to_workspace, reload_config,
-        set_blur, set_debug_overlay, set_workspace_profile, switch_relative_workspace,
-        switch_workspace,
+        ShellModel, activate_window, minimize_window, move_window_to_workspace, set_debug_overlay,
+        set_workspace_profile, switch_relative_workspace, switch_workspace,
     },
     services::{
-        notifications::NotificationService, system_status::SystemStatus, tray::TrayService,
+        notifications::NotificationService,
+        system_status::{SystemStatus, set_audio_volume, set_brightness, toggle_audio_mute},
+        tray::TrayService,
     },
     theme::ShellPalette,
 };
 mod actions;
 mod chrome_visibility;
+mod command_actions;
 mod icons;
 mod init;
 mod model;
 mod surface;
 mod surface_layout;
+mod surface_sizing;
 mod sync;
 
-use actions::{QuickSettingsPage, WebShellAction, window_id, workspace_id};
+use actions::{QuickSettingsPage, WebShellAction, profile_id, window_id, workspace_id};
 use chrome_visibility::ChromeVisibility;
 use surface::WebSurfaces;
 
@@ -152,10 +155,15 @@ impl WebShell {
             WebShellAction::ToggleDateCenter => self.toggle_date_center(),
             WebShellAction::ToggleShellStyle => self.toggle_shell_style(),
             WebShellAction::WorkspaceSwitch { workspace } => {
-                self.apply_model_result(switch_workspace(workspace_id(workspace)))
+                self.apply_model_result(switch_workspace(workspace_id(workspace)));
+                self.hide_chrome();
             }
             WebShellAction::WorkspaceRelative { offset } => {
                 self.apply_model_result(switch_relative_workspace(offset))
+            }
+            WebShellAction::WorkspaceNew => self.new_workspace_from_overview(),
+            WebShellAction::WorkspaceSetProfile { profile } => {
+                self.set_active_workspace_profile(profile)
             }
             WebShellAction::WindowActivate { window } => self.activate_task_window(window),
             WebShellAction::WindowMove { window, workspace } => self.apply_model_result(
@@ -177,26 +185,38 @@ impl WebShell {
             WebShellAction::TrayActivate { index } => self.activate_tray(index, false),
             WebShellAction::TrayMenu { index } => self.activate_tray(index, true),
             WebShellAction::QuickOpenSettings { page } => self.open_settings_page(page),
-            WebShellAction::QuickToggleBlur => {
-                self.apply_model_result(set_blur(!self.model.blur_enabled))
+            WebShellAction::QuickSetVolume { percent } => {
+                if let Err(error) = set_audio_volume(percent) {
+                    warn!(%error, "failed to set audio volume");
+                }
+                self.refresh_status_now();
+            }
+            WebShellAction::QuickToggleMute => {
+                if let Err(error) = toggle_audio_mute() {
+                    warn!(%error, "failed to toggle audio mute");
+                }
+                self.refresh_status_now();
+            }
+            WebShellAction::QuickSetBrightness { percent } => {
+                if let Err(error) = set_brightness(percent) {
+                    warn!(%error, "failed to set brightness");
+                }
+                self.refresh_status_now();
             }
             WebShellAction::QuickToggleDebugOverlay => {
                 self.apply_model_result(set_debug_overlay(!self.model.debug_overlay))
             }
-            WebShellAction::QuickNextProfile => {
-                if let Some(profile) = self.next_profile() {
-                    self.apply_model_result(set_workspace_profile(
-                        self.model.active_workspace.clone(),
-                        profile,
-                    ));
-                }
-            }
-            WebShellAction::QuickReloadConfig => {
-                self.apply_model_result(reload_config());
-                self.reload_shell_config();
-            }
+            WebShellAction::ReloadConfig => self.reload_config_from_command(),
+            WebShellAction::OpenLogsFolder => self.open_logs_folder(),
+            WebShellAction::ToggleSafeMode => self.toggle_safe_mode(),
             WebShellAction::NotificationClose { notification } => {
                 self.notifications.close(notification);
+            }
+            WebShellAction::NotificationClearAll => {
+                self.notifications.clear_all();
+            }
+            WebShellAction::NotificationDoNotDisturb { enabled } => {
+                self.notifications.set_do_not_disturb(enabled);
             }
             WebShellAction::NotificationAction {
                 notification,
@@ -301,6 +321,27 @@ impl WebShell {
         ));
     }
 
+    fn new_workspace_from_overview(&mut self) {
+        let previous = self.model.active_workspace.clone();
+        self.apply_model_result(switch_relative_workspace(1));
+        if self.model.active_workspace != previous {
+            self.hide_chrome();
+        }
+    }
+
+    fn set_active_workspace_profile(&mut self, profile: String) {
+        let profile = profile_id(profile);
+        if profile == self.model.active_profile {
+            self.hide_chrome();
+            return;
+        }
+        self.apply_model_result(set_workspace_profile(
+            self.model.active_workspace.clone(),
+            profile,
+        ));
+        self.hide_chrome();
+    }
+
     fn hide_chrome(&mut self) {
         self.overview_visible = false;
         self.quick_visible = false;
@@ -309,23 +350,6 @@ impl WebShell {
         self.surfaces.quick.set_visible(false);
         self.surfaces.date.set_visible(false);
     }
-    fn next_profile(&self) -> Option<staccato_layout::ProfileId> {
-        if self.model.profiles.len() <= 1 {
-            return None;
-        }
-        let current = self
-            .model
-            .profiles
-            .iter()
-            .position(|profile| profile.id == self.model.active_profile)
-            .unwrap_or(0);
-        Some(
-            self.model.profiles[(current + 1) % self.model.profiles.len()]
-                .id
-                .clone(),
-        )
-    }
-
     fn activate_task_window(&mut self, window: u64) {
         let id = window_id(window);
         let result = if self

@@ -1,10 +1,11 @@
-use std::{fs, path::Path, process::Command};
+use std::{fs, io, path::Path, process::Command};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SystemStatus {
     pub battery: Option<BatteryInfo>,
     pub network: Option<NetworkInfo>,
     pub audio: Option<AudioInfo>,
+    pub brightness: Option<BrightnessInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,12 +26,18 @@ pub struct AudioInfo {
     pub muted: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BrightnessInfo {
+    pub percent: u8,
+}
+
 impl SystemStatus {
     pub fn read() -> Self {
         Self {
             battery: read_battery(),
             network: read_network(),
             audio: read_audio(),
+            brightness: read_brightness(),
         }
     }
 }
@@ -137,9 +144,51 @@ fn read_audio() -> Option<AudioInfo> {
     })
 }
 
+fn read_brightness() -> Option<BrightnessInfo> {
+    fs::read_dir("/sys/class/backlight")
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| brightness_from_path(&entry.path()))
+        .max_by_key(|brightness| brightness.percent)
+}
+
+fn brightness_from_path(path: &Path) -> Option<BrightnessInfo> {
+    let current = read_trimmed(path.join("brightness"))?.parse::<u32>().ok()?;
+    let max = read_trimmed(path.join("max_brightness"))?
+        .parse::<u32>()
+        .ok()?
+        .max(1);
+    Some(BrightnessInfo {
+        percent: ((current * 100) / max).min(100) as u8,
+    })
+}
+
+pub fn set_audio_volume(percent: u8) -> std::io::Result<()> {
+    let value = format!("{}%", percent.min(100));
+    run_command("wpctl", &["set-volume", "@DEFAULT_AUDIO_SINK@", &value])
+}
+
+pub fn toggle_audio_mute() -> std::io::Result<()> {
+    run_command("wpctl", &["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
+}
+
+pub fn set_brightness(percent: u8) -> std::io::Result<()> {
+    let value = format!("{}%", percent.min(100));
+    run_command("brightnessctl", &["set", &value])
+}
+
 fn read_trimmed(path: impl AsRef<Path>) -> Option<String> {
     fs::read_to_string(path)
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
+}
+
+fn run_command(command: &str, args: &[&str]) -> io::Result<()> {
+    let status = Command::new(command).args(args).status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!("{command} exited with {status}")))
+    }
 }

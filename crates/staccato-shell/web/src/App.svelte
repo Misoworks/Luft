@@ -2,6 +2,7 @@
   import DateCenter from "./components/DateCenter.svelte";
   import Dock from "./components/Dock.svelte";
   import DockMenu from "./components/DockMenu.svelte";
+  import NotificationToast from "./components/NotificationToast.svelte";
   import Overview from "./components/Overview.svelte";
   import QuickSettings from "./components/QuickSettings.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -55,6 +56,14 @@
       sendAction({ type: "toggle-overview" });
       return;
     }
+    if (event.key === "Escape" && surface === "quick-settings") {
+      sendAction({ type: "toggle-quick-settings" });
+      return;
+    }
+    if (event.key === "Escape" && surface === "date-center") {
+      sendAction({ type: "toggle-date-center" });
+      return;
+    }
     if (event.key === "Escape") {
       sendAction({ type: "dock-menu-close" });
     }
@@ -78,6 +87,8 @@
   <QuickSettings {snapshot} />
 {:else if surface === "date-center"}
   <DateCenter {snapshot} />
+{:else if surface === "notification-toast"}
+  <NotificationToast {snapshot} />
 {:else if surface === "overview"}
   <Overview
     {snapshot}

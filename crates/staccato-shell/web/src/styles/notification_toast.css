@@ -1,0 +1,212 @@
+.notification-toast {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 13px;
+  border-radius: 22px;
+  overflow: hidden;
+  cursor: default;
+  background: color-mix(in srgb, var(--panel), rgba(12, 12, 10, 0.66) 24%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 18px 46px rgba(0, 0, 0, 0.3);
+}
+
+.notification-toast.is-critical {
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 18px 46px rgba(0, 0, 0, 0.3);
+}
+
+.toast-avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.065);
+}
+
+.toast-open {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: 16px;
+  text-align: left;
+}
+
+.toast-avatar img {
+  width: 29px;
+  height: 29px;
+  object-fit: contain;
+}
+
+.toast-avatar svg {
+  width: 21px;
+  height: 21px;
+  stroke-width: 1.8;
+}
+
+.toast-copy {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.toast-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.toast-title-row span,
+.toast-copy strong,
+.toast-copy p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-title-row span {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.toast-title-row small {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 11px;
+}
+
+.toast-copy strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.toast-copy p {
+  display: -webkit-box;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.toast-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 58px;
+  padding-top: 2px;
+}
+
+.toast-actions button {
+  --control-scale: 1;
+  min-width: 0;
+  min-height: 27px;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 12px;
+  text-align: center;
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transition:
+    background-color 150ms var(--ease-shell),
+    transform 130ms var(--ease-shell);
+}
+
+.toast-actions button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.toast-actions button:active {
+  --control-scale: 0.96;
+}
+
+.toast-close {
+  --control-scale: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 11px;
+  color: rgba(255, 255, 255, 0.62);
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transition:
+    background-color 150ms var(--ease-shell),
+    color 150ms var(--ease-shell),
+    transform 130ms var(--ease-shell);
+}
+
+.toast-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toast-close:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.toast-close:active {
+  --control-scale: 0.96;
+}
+
+#app.is-surface-opening[data-surface="notification-toast"] .notification-toast {
+  animation: notification-toast-in 190ms var(--ease-shell) both;
+}
+
+#app.is-surface-closing[data-surface="notification-toast"] .notification-toast {
+  animation: notification-toast-out 100ms var(--ease-shell) both;
+}
+
+@keyframes notification-toast-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+    transform: translate3d(0, -8px, 0) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes notification-toast-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(1px);
+    transform: translate3d(0, -5px, 0) scale(0.99);
+  }
+}

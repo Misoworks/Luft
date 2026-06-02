@@ -1,16 +1,21 @@
 mod diagnostics;
 mod dock_cli;
+mod mode_cli;
 mod recovery_cli;
+mod workspace_cli;
 
 use clap::{Parser, Subcommand};
 use diagnostics::{
-    print_config_path, print_doctor, print_logs, print_recovery_status, validate_config,
+    open_config, print_config_path, print_doctor, print_logs, print_recovery_status,
+    validate_config,
 };
 use dock_cli::{list_dock_pins, pin_dock_app, unpin_dock_app};
+use mode_cli::list_modes;
 use recovery_cli::{list_recovery_backups, rollback_config};
 use staccato_config::{ConfigSource, load_config};
 use staccato_ipc::{IpcRequest, IpcResponse, ShellStatus, StatusPayload, send_request};
 use staccato_layout::{ProfileId, WindowId, WorkspaceId, mode_for_profile};
+use workspace_cli::{list_profiles, list_workspaces};
 
 #[derive(Debug, Parser)]
 #[command(name = "staccatoctl", about = "Control and inspect Staccato")]
@@ -48,8 +53,13 @@ enum Command {
     #[command(subcommand)]
     Dock(DockCommand),
     #[command(subcommand)]
+    #[command(alias = "modes")]
+    Mode(ModeCommand),
+    #[command(subcommand)]
+    #[command(alias = "profiles")]
     Profile(ProfileCommand),
     #[command(subcommand)]
+    #[command(alias = "workspaces")]
     Workspace(WorkspaceCommand),
     #[command(subcommand)]
     Window(WindowCommand),
@@ -59,6 +69,7 @@ enum Command {
 enum ConfigCommand {
     Path,
     Validate,
+    Open,
 }
 
 #[derive(Debug, Subcommand)]
@@ -85,7 +96,13 @@ enum DockCommand {
 }
 
 #[derive(Debug, Subcommand)]
+enum ModeCommand {
+    List,
+}
+
+#[derive(Debug, Subcommand)]
 enum EffectsCommand {
+    Status,
     Blur { state: ToggleState },
 }
 
@@ -96,6 +113,8 @@ enum DebugCommand {
 
 #[derive(Debug, Subcommand)]
 enum SafeModeCommand {
+    Enable,
+    Disable,
     Set { state: ToggleState },
 }
 
@@ -107,16 +126,25 @@ enum ShellCommand {
 #[derive(Debug, Subcommand)]
 enum ProfileCommand {
     List,
+    SetWorkspace { workspace: String, profile: String },
 }
 
 #[derive(Debug, Subcommand)]
 enum WorkspaceCommand {
     List,
-    Switch { workspace: String },
+    Switch {
+        workspace: String,
+    },
     Next,
     Previous,
-    Profile { workspace: String, profile: String },
-    Style { style: WorkspaceStyle },
+    #[command(alias = "set-profile")]
+    Profile {
+        workspace: String,
+        profile: String,
+    },
+    Style {
+        style: WorkspaceStyle,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -131,7 +159,9 @@ enum WindowCommand {
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 enum ToggleState {
+    #[value(alias = "enable", alias = "enabled")]
     On,
+    #[value(alias = "disable", alias = "disabled")]
     Off,
 }
 
@@ -178,6 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Command::Recovery(RecoveryCommand::Defaults) => {
             accepted(send_request(&IpcRequest::FallbackToDefaultConfig)?)?
         }
+        Command::Effects(EffectsCommand::Status) => print_effects_status(cli.json)?,
         Command::Effects(EffectsCommand::Blur { state }) => {
             accepted(send_request(&IpcRequest::SetBlur {
                 enabled: state.enabled(),
@@ -193,11 +224,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 enabled: state.enabled(),
             })?)?
         }
+        Command::SafeMode(SafeModeCommand::Enable) => {
+            accepted(send_request(&IpcRequest::SetSafeMode { enabled: true })?)?
+        }
+        Command::SafeMode(SafeModeCommand::Disable) => {
+            accepted(send_request(&IpcRequest::SetSafeMode { enabled: false })?)?
+        }
         Command::Shell(ShellCommand::Restart) => {
             accepted(send_request(&IpcRequest::RestartShell)?)?
         }
         Command::Config(ConfigCommand::Path) => print_config_path(cli.json)?,
         Command::Config(ConfigCommand::Validate) => validate_config(cli.json)?,
+        Command::Config(ConfigCommand::Open) => open_config(cli.json)?,
         Command::Dock(DockCommand::List) => list_dock_pins(cli.json)?,
         Command::Dock(DockCommand::Pin {
             command,
@@ -205,7 +243,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             icon,
         }) => pin_dock_app(command, label, icon, cli.json)?,
         Command::Dock(DockCommand::Unpin { app }) => unpin_dock_app(app, cli.json)?,
+        Command::Mode(ModeCommand::List) => list_modes(cli.json)?,
         Command::Profile(ProfileCommand::List) => list_profiles(cli.json)?,
+        Command::Profile(ProfileCommand::SetWorkspace { workspace, profile }) => {
+            set_workspace_profile(workspace, profile)?
+        }
         Command::Workspace(WorkspaceCommand::List) => list_workspaces(cli.json)?,
         Command::Workspace(WorkspaceCommand::Switch { workspace }) => switch_workspace(workspace)?,
         Command::Workspace(WorkspaceCommand::Next) => switch_relative_workspace(1)?,
@@ -260,6 +302,49 @@ fn print_status(json: bool) -> Result<(), Box<dyn std::error::Error>> {
     print_status_payload(json, status, source)
 }
 
+fn print_effects_status(json: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let (blur_enabled, debug_overlay, safe_mode, source) =
+        if let Ok(IpcResponse::Status(status)) = send_request(&IpcRequest::Status) {
+            (
+                status.blur_enabled,
+                status.debug_overlay,
+                status.safe_mode,
+                "live Baton IPC".to_string(),
+            )
+        } else {
+            let loaded = load_config()?;
+            let source = match loaded.source {
+                ConfigSource::User(path) => path.display().to_string(),
+                ConfigSource::Defaults => "built-in defaults".to_string(),
+            };
+            (
+                loaded.config.general.enable_blur && loaded.config.effects.blur,
+                loaded.config.compositor.debug_overlay,
+                loaded.config.general.safe_mode,
+                source,
+            )
+        };
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "blurEnabled": blur_enabled,
+                "debugOverlay": debug_overlay,
+                "safeMode": safe_mode,
+                "source": source,
+            }))?
+        );
+    } else {
+        println!("Blur enabled: {blur_enabled}");
+        println!("Debug overlay: {debug_overlay}");
+        println!("Safe mode: {safe_mode}");
+        println!("Source: {source}");
+    }
+
+    Ok(())
+}
+
 fn print_status_payload(
     json: bool,
     status: StatusPayload,
@@ -283,43 +368,6 @@ fn print_status_payload(
     }
 
     Ok(())
-}
-
-fn list_workspaces(json: bool) -> Result<(), Box<dyn std::error::Error>> {
-    match send_request(&IpcRequest::ListWorkspaces)? {
-        IpcResponse::Workspaces { workspaces } => {
-            if json {
-                println!("{}", serde_json::to_string_pretty(&workspaces)?);
-            } else {
-                for workspace in workspaces {
-                    println!(
-                        "{}\t{}\t{}\t{:?}",
-                        workspace.id.0, workspace.name, workspace.profile.0, workspace.mode
-                    );
-                }
-            }
-            Ok(())
-        }
-        IpcResponse::Error { message } => Err(message.into()),
-        response => Err(format!("unexpected response: {response:?}").into()),
-    }
-}
-
-fn list_profiles(json: bool) -> Result<(), Box<dyn std::error::Error>> {
-    match send_request(&IpcRequest::ListProfiles)? {
-        IpcResponse::Profiles { profiles } => {
-            if json {
-                println!("{}", serde_json::to_string_pretty(&profiles)?);
-            } else {
-                for profile in profiles {
-                    println!("{}\t{}\t{:?}", profile.id.0, profile.name, profile.mode);
-                }
-            }
-            Ok(())
-        }
-        IpcResponse::Error { message } => Err(message.into()),
-        response => Err(format!("unexpected response: {response:?}").into()),
-    }
 }
 
 fn switch_workspace(workspace: String) -> Result<(), Box<dyn std::error::Error>> {

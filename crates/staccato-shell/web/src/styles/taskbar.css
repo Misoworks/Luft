@@ -10,8 +10,7 @@
   animation: taskbar-surface-in 220ms var(--ease-shell);
   transition:
     opacity 170ms var(--ease-shell),
-    transform 210ms var(--ease-shell),
-    filter 170ms var(--ease-shell);
+    transform 210ms var(--ease-shell);
 }
 
 .shell-taskbar::before {
@@ -35,8 +34,7 @@
 
 .shell-taskbar.is-chrome-hidden {
   opacity: 0;
-  filter: blur(2px);
-  transform: translateY(56px) scaleX(0.98);
+  transform: translateY(56px);
   pointer-events: none;
 }
 
@@ -47,7 +45,6 @@
   place-items: center;
   min-height: 36px;
   border-radius: 12px;
-  transform: translate3d(0, 0, 0) scale(1);
   transform-origin: center;
   transition:
     background-color 150ms var(--ease-shell),
@@ -94,13 +91,13 @@
 }
 
 .taskbar-launcher:active {
-  transform: translate3d(0, 0, 0) scale(0.96);
+  transform: scale(0.96);
 }
 
 .taskbar-status:active,
 .taskbar-clock:active {
   opacity: 0.86;
-  transform: translate3d(0, 0, 0) scale(0.96);
+  transform: scale(0.96);
 }
 
 .taskbar-status {
@@ -115,6 +112,9 @@
   height: 36px;
   padding: 0 8px;
   z-index: 1;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .taskbar-clock {
@@ -126,13 +126,17 @@
   padding: 0 8px;
   text-align: right;
   z-index: 1;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .taskbar-clock span,
 .taskbar-clock strong {
   display: block;
   font-size: 11px;
-  line-height: 1.05;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .taskbar-clock strong {
@@ -152,11 +156,11 @@
 @keyframes taskbar-surface-in {
   from {
     opacity: 0;
-    transform: translateY(16px) scaleX(0.92);
+    transform: translateY(16px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0) scaleX(1);
+    transform: translateY(0);
   }
 }

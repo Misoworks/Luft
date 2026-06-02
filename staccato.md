@@ -1405,10 +1405,6 @@ disable_blur_on_battery = false
 count = 1
 restore_sessions = true
 
-[workspaces.1]
-name = "Workspace 1"
-profile = "panel-default"
-
 [default_apps]
 terminal = "ghostty"
 file_manager = "nautilus"

@@ -269,7 +269,9 @@ fn reload_config(state: &mut BatonState) -> IpcResult {
     match load_config() {
         Ok(loaded) => {
             let mutated = state.config != loaded.config;
-            state.config = loaded.config;
+            if mutated {
+                state.replace_config(loaded.config, None);
+            }
             debug!("ipc reloaded configuration");
             IpcResult::accepted(mutated)
         }

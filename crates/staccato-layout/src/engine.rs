@@ -58,7 +58,9 @@ impl LayoutEngine {
     }
 
     pub fn workspaces(&self) -> impl Iterator<Item = &Workspace> {
-        self.workspaces.values()
+        self.ordered_workspace_ids()
+            .into_iter()
+            .filter_map(|id| self.workspaces.get(&id))
     }
 
     pub fn ensure_workspace(
@@ -74,7 +76,7 @@ impl LayoutEngine {
 
     pub fn relative_workspace(&mut self, offset: i32) -> Option<WorkspaceId> {
         self.normalize_dynamic_workspaces();
-        let workspaces = self.workspaces.keys().cloned().collect::<Vec<_>>();
+        let workspaces = self.ordered_workspace_ids();
         let current = workspaces
             .iter()
             .position(|workspace| workspace == &self.active_workspace)?;
@@ -89,7 +91,7 @@ impl LayoutEngine {
             return None;
         }
 
-        let id = WorkspaceId((workspaces.len() + 1).to_string());
+        let id = self.next_numeric_workspace_id();
         let profile = self
             .workspaces
             .get(&self.active_workspace)
@@ -277,14 +279,14 @@ impl LayoutEngine {
             return;
         }
 
-        let Some(last) = self.workspaces.keys().last().cloned() else {
+        let Some(last) = self.ordered_workspace_ids().last().cloned() else {
             return;
         };
         if self.workspace_is_empty(&last) {
             return;
         }
 
-        let id = WorkspaceId((self.workspaces.len() + 1).to_string());
+        let id = self.next_numeric_workspace_id();
         let profile = self
             .workspaces
             .get(&last)
@@ -295,7 +297,7 @@ impl LayoutEngine {
 
     fn prune_extra_trailing_empty_workspaces(&mut self) {
         loop {
-            let ids = self.workspaces.keys().cloned().collect::<Vec<_>>();
+            let ids = self.ordered_workspace_ids();
             if ids.len() <= 1 {
                 return;
             }
@@ -329,12 +331,38 @@ impl LayoutEngine {
             .all(|window| &window.workspace != workspace)
     }
 
+    fn ordered_workspace_ids(&self) -> Vec<WorkspaceId> {
+        let mut ids = self.workspaces.keys().cloned().collect::<Vec<_>>();
+        ids.sort_by(compare_workspace_ids);
+        ids
+    }
+
+    fn next_numeric_workspace_id(&self) -> WorkspaceId {
+        let next = self
+            .workspaces
+            .keys()
+            .filter_map(|workspace| workspace.0.parse::<u32>().ok())
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
+        WorkspaceId(next.to_string())
+    }
+
     fn mode_for_workspace(&self, workspace: &WorkspaceId) -> Result<crate::ModeId, LayoutError> {
         let workspace = self
             .workspaces
             .get(workspace)
             .ok_or_else(|| LayoutError::UnknownWorkspace(workspace.clone()))?;
         Ok(mode_for_profile(&workspace.profile_id))
+    }
+}
+
+fn compare_workspace_ids(left: &WorkspaceId, right: &WorkspaceId) -> std::cmp::Ordering {
+    match (left.0.parse::<u32>(), right.0.parse::<u32>()) {
+        (Ok(left), Ok(right)) => left.cmp(&right),
+        (Ok(_), Err(_)) => std::cmp::Ordering::Less,
+        (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
+        (Err(_), Err(_)) => left.0.cmp(&right.0),
     }
 }
 

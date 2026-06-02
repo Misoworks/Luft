@@ -1,5 +1,3 @@
-use crate::dock::DockApp;
-
 use super::{
     actions::WebShellAction,
     model::{WebShellSnapshot, WebShellSurface},
@@ -7,7 +5,9 @@ use super::{
         PANEL_HEIGHT, PANEL_WIDTH_HINT, configure_content_size, configure_panel_window,
         configure_popover_window, configure_window, fixed_size, panel_size,
     },
+    surface_sizing::{notification_toast_size, quick_settings_size},
 };
+use crate::dock::DockApp;
 use gtk::glib;
 use gtk::prelude::*;
 use std::{cell::Cell, env, error::Error, rc::Rc, sync::mpsc::Sender, time::Duration};
@@ -17,7 +17,7 @@ use wry::{WebView, WebViewBuilder, WebViewBuilderExtUnix, WebViewExtUnix};
 
 const DOCK_MENU_WIDTH: i32 = 184;
 const DOCK_MENU_HEIGHT: i32 = 128;
-const SURFACE_EXIT_DURATION: Duration = Duration::from_millis(70);
+const SURFACE_EXIT_DURATION: Duration = Duration::from_millis(100);
 const SURFACE_OPEN_SCRIPT: &str = r#"
 (() => {
   const app = document.getElementById("app");
@@ -29,7 +29,7 @@ const SURFACE_OPEN_SCRIPT: &str = r#"
   window.clearTimeout(window.__staccatoSurfaceAnimation);
   window.__staccatoSurfaceAnimation = window.setTimeout(() => {
     app.classList.remove("is-surface-opening");
-  }, 130);
+  }, 320);
 })();
 "#;
 const SURFACE_CLOSE_SCRIPT: &str = r#"
@@ -47,6 +47,7 @@ pub struct WebSurfaces {
     pub overview: LazyWebSurface,
     pub quick: LazyWebSurface,
     pub date: LazyWebSurface,
+    pub notification_toast: LazyWebSurface,
     dock_menu: LazyWebSurface,
     panel: WebSurface,
 }
@@ -67,7 +68,7 @@ impl WebSurfaces {
             )?,
             dock: WebSurface::new(
                 WebShellSurface::Dock,
-                dock_size(dock_apps),
+                super::surface_layout::dock_size(dock_apps),
                 true,
                 &actions_tx,
                 snapshot,
@@ -82,13 +83,19 @@ impl WebSurfaces {
             overview: LazyWebSurface::new(WebShellSurface::Overview, (1, 1), &actions_tx, snapshot),
             quick: LazyWebSurface::new(
                 WebShellSurface::QuickSettings,
-                (390, 350),
+                quick_settings_size(snapshot),
                 &actions_tx,
                 snapshot,
             ),
             date: LazyWebSurface::new(
                 WebShellSurface::DateCenter,
-                (760, 392),
+                (780, 430),
+                &actions_tx,
+                snapshot,
+            ),
+            notification_toast: LazyWebSurface::new(
+                WebShellSurface::NotificationToast,
+                notification_toast_size(),
                 &actions_tx,
                 snapshot,
             ),
@@ -97,6 +104,7 @@ impl WebSurfaces {
         surfaces.quick.ensure_created();
         surfaces.date.ensure_created();
         surfaces.dock_menu.ensure_created();
+        surfaces.notification_toast.ensure_created();
         Ok(surfaces)
     }
 
@@ -106,8 +114,10 @@ impl WebSurfaces {
         self.dock_menu.evaluate_snapshot(snapshot, json);
         self.sidebar.evaluate_snapshot(snapshot, json);
         self.overview.evaluate_snapshot(snapshot, json);
+        self.quick.resize(quick_settings_size(snapshot));
         self.quick.evaluate_snapshot(snapshot, json);
         self.date.evaluate_snapshot(snapshot, json);
+        self.notification_toast.evaluate_snapshot(snapshot, json);
     }
 
     pub fn set_panel_visible(&mut self, visible: bool) {
@@ -119,14 +129,19 @@ impl WebSurfaces {
         self.dock_menu.set_panel_taskbar(taskbar);
         self.quick.set_panel_taskbar(taskbar);
         self.date.set_panel_taskbar(taskbar);
+        self.notification_toast.set_panel_taskbar(taskbar);
     }
 
     pub fn resize_dock(&mut self, apps: &[DockApp]) {
-        self.dock.resize(dock_size(apps));
+        self.dock.resize(super::surface_layout::dock_size(apps));
     }
 
     pub fn set_dock_menu_visible(&mut self, visible: bool) {
         self.dock_menu.set_visible(visible);
+    }
+
+    pub fn set_notification_toast_visible(&mut self, visible: bool) {
+        self.notification_toast.set_visible(visible);
     }
 }
 
@@ -211,6 +226,16 @@ impl LazyWebSurface {
         }
         if let Some(surface) = &mut self.surface {
             surface.evaluate_snapshot(json);
+        }
+    }
+
+    fn resize(&mut self, size: (i32, i32)) {
+        if self.size == size {
+            return;
+        }
+        self.size = size;
+        if let Some(surface) = &mut self.surface {
+            surface.resize(size);
         }
     }
 
@@ -356,7 +381,8 @@ impl WebSurface {
             }
             WebShellSurface::DockMenu
             | WebShellSurface::QuickSettings
-            | WebShellSurface::DateCenter => {
+            | WebShellSurface::DateCenter
+            | WebShellSurface::NotificationToast => {
                 configure_popover_window(&self.window, self.kind, taskbar);
             }
             _ => {}
@@ -402,6 +428,7 @@ fn animated_surface(kind: WebShellSurface) -> bool {
         WebShellSurface::DockMenu
             | WebShellSurface::QuickSettings
             | WebShellSurface::DateCenter
+            | WebShellSurface::NotificationToast
             | WebShellSurface::Overview
     )
 }
@@ -443,8 +470,4 @@ fn shell_html(kind: WebShellSurface) -> String {
     }
 
     include_str!("../../web/dist/index.html").to_string()
-}
-
-pub fn dock_size(apps: &[DockApp]) -> (i32, i32) {
-    super::surface_layout::dock_size(apps)
 }

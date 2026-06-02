@@ -1,9 +1,13 @@
 use serde::Serialize;
-use staccato_config::{ConfigPaths, ConfigSource, list_config_backups, load_config};
+use staccato_config::{
+    ConfigPaths, ConfigSource, StaccatoConfig, list_config_backups, load_config,
+    save_config_to_path,
+};
 use staccato_ipc::{IpcRequest, IpcResponse, ShellStatus, XwaylandStatus, send_request};
 use std::{
     env, fs, io,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 const DEFAULT_LOG_LINES: usize = 80;
@@ -88,6 +92,35 @@ pub fn validate_config(json: bool) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+pub fn open_config(json: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let paths = ConfigPaths::discover()?;
+    if !paths.config_file.exists() {
+        save_config_to_path(&paths.config_file, &StaccatoConfig::default())?;
+    }
+    let opener = config_opener();
+    let status = Command::new("sh")
+        .arg("-lc")
+        .arg("exec ${VISUAL:-${EDITOR:-xdg-open}} \"$1\"")
+        .arg("staccatoctl-open-config")
+        .arg(&paths.config_file)
+        .status()?;
+    if !status.success() {
+        return Err(format!("{opener} exited with {status}").into());
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "configFile": paths.config_file,
+                "opener": opener,
+            })
+        );
+    } else {
+        println!("{}", paths.config_file.display());
+    }
+    Ok(())
+}
+
 pub fn print_doctor(json: bool) -> Result<(), Box<dyn std::error::Error>> {
     let checks = doctor_checks();
     if json {
@@ -152,6 +185,15 @@ fn selected_components(
         COMPONENTS.join(", ")
     )
     .into())
+}
+
+fn config_opener() -> String {
+    env::var("VISUAL")
+        .ok()
+        .or_else(|| env::var("EDITOR").ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "xdg-open".to_string())
 }
 
 fn log_snapshot(paths: &ConfigPaths, component: &str, lines: usize) -> LogSnapshot {

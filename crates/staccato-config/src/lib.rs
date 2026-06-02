@@ -150,16 +150,10 @@ pub struct WorkspacesConfig {
 
 impl Default for WorkspacesConfig {
     fn default() -> Self {
-        let mut entries = BTreeMap::new();
-        entries.insert(
-            "1".to_string(),
-            WorkspaceConfig::new("Workspace 1", "panel-default"),
-        );
-
         Self {
             count: 1,
             restore_sessions: true,
-            entries,
+            entries: BTreeMap::new(),
         }
     }
 }

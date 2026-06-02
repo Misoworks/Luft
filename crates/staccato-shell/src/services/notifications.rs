@@ -1,3 +1,7 @@
+use super::notification_metadata::{
+    action_pairs, clean_app_name, clean_icon_name, current_unix_time, strip_markup,
+    urgency_from_hints,
+};
 use std::{
     collections::HashMap,
     sync::{
@@ -21,12 +25,16 @@ const WORKER_TICK: Duration = Duration::from_millis(250);
 #[derive(Debug, Clone, Default)]
 pub struct NotificationSnapshot {
     pub items: Vec<NotificationItem>,
+    pub toast_items: Vec<NotificationItem>,
+    pub do_not_disturb: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct NotificationItem {
     pub id: u32,
     pub app_name: String,
+    pub app_icon: Option<String>,
+    pub received_at: u64,
     pub summary: String,
     pub body: String,
     pub urgency: NotificationUrgency,
@@ -89,33 +97,52 @@ impl NotificationService {
 
     pub fn close(&mut self, id: u32) {
         self.snapshot.items.retain(|item| item.id != id);
+        self.snapshot.toast_items.retain(|item| item.id != id);
         let _ = self.commands.send(NotificationCommand::Close(id));
+    }
+
+    pub fn clear_all(&mut self) {
+        self.snapshot.items.clear();
+        self.snapshot.toast_items.clear();
+        let _ = self.commands.send(NotificationCommand::ClearAll);
     }
 
     pub fn invoke(&mut self, id: u32, action_key: String) {
         self.snapshot.items.retain(|item| item.id != id);
+        self.snapshot.toast_items.retain(|item| item.id != id);
         let _ = self
             .commands
             .send(NotificationCommand::Invoke { id, action_key });
+    }
+
+    pub fn set_do_not_disturb(&mut self, enabled: bool) {
+        self.snapshot.do_not_disturb = enabled;
+        let _ = self
+            .commands
+            .send(NotificationCommand::SetDoNotDisturb(enabled));
     }
 }
 
 #[derive(Debug)]
 enum NotificationCommand {
     Close(u32),
+    ClearAll,
+    SetDoNotDisturb(bool),
     Invoke { id: u32, action_key: String },
 }
 
 #[derive(Debug)]
 struct NotificationState {
     next_id: u32,
+    do_not_disturb: bool,
     items: Vec<StoredNotification>,
 }
 
 #[derive(Debug, Clone)]
 struct StoredNotification {
     item: NotificationItem,
-    expires_at: Option<Instant>,
+    toast_until: Option<Instant>,
+    toast_visible: bool,
 }
 
 #[derive(Clone)]
@@ -205,7 +232,7 @@ impl NotificationShared {
         &self,
         app_name: String,
         replaces_id: u32,
-        _app_icon: String,
+        app_icon: String,
         summary: String,
         body: String,
         actions: Vec<String>,
@@ -222,9 +249,16 @@ impl NotificationShared {
             id
         };
         let urgency = urgency_from_hints(&hints);
+        if state.do_not_disturb && urgency != NotificationUrgency::Critical {
+            remove_stored(&mut state.items, id);
+            let _ = self.changed.send(());
+            return id;
+        }
         let item = NotificationItem {
             id,
-            app_name,
+            app_name: clean_app_name(&app_name),
+            app_icon: clean_icon_name(&app_icon),
+            received_at: current_unix_time(),
             summary: strip_markup(&summary),
             body: strip_markup(&body),
             urgency,
@@ -232,7 +266,8 @@ impl NotificationShared {
         };
         let stored = StoredNotification {
             item,
-            expires_at: expiration_for(expire_timeout, urgency),
+            toast_until: expiration_for(expire_timeout, urgency),
+            toast_visible: true,
         };
 
         if let Some(existing) = state
@@ -263,30 +298,44 @@ impl NotificationShared {
     }
 
     fn snapshot(&self) -> NotificationSnapshot {
+        let now = Instant::now();
         let state = self.state.lock().expect("notification state poisoned");
         NotificationSnapshot {
+            do_not_disturb: state.do_not_disturb,
             items: state
                 .items
                 .iter()
                 .map(|notification| notification.item.clone())
                 .collect(),
+            toast_items: state
+                .items
+                .iter()
+                .filter(|notification| notification.toast_visible)
+                .filter(|notification| {
+                    notification
+                        .toast_until
+                        .is_none_or(|expires_at| expires_at > now)
+                })
+                .map(|notification| notification.item.clone())
+                .collect(),
         }
     }
 
-    fn expire_due(&self) -> Vec<u32> {
+    fn expire_toasts(&self) -> bool {
         let now = Instant::now();
         let mut state = self.state.lock().expect("notification state poisoned");
-        let mut expired = Vec::new();
-        state.items.retain(|notification| {
-            let keep = notification
-                .expires_at
-                .is_none_or(|expires_at| expires_at > now);
-            if !keep {
-                expired.push(notification.item.id);
+        let mut changed = false;
+        for notification in &mut state.items {
+            if notification.toast_visible
+                && notification
+                    .toast_until
+                    .is_some_and(|expires_at| expires_at <= now)
+            {
+                notification.toast_visible = false;
+                changed = true;
             }
-            keep
-        });
-        expired
+        }
+        changed
     }
 }
 
@@ -298,6 +347,7 @@ fn run_notification_worker(
     let shared = NotificationShared {
         state: Arc::new(Mutex::new(NotificationState {
             next_id: 1,
+            do_not_disturb: false,
             items: Vec::new(),
         })),
         changed: changed_tx,
@@ -319,10 +369,7 @@ fn run_notification_worker(
         while let Ok(command) = commands.try_recv() {
             dirty |= handle_command(&connection, &shared, command);
         }
-        for id in shared.expire_due() {
-            emit_closed(&connection, id, 1);
-            dirty = true;
-        }
+        dirty |= shared.expire_toasts();
         dirty |= changed_rx.recv_timeout(WORKER_TICK).is_ok();
         if dirty {
             let _ = updates.send(shared.snapshot());
@@ -343,6 +390,29 @@ fn handle_command(
             }
             false
         }
+        NotificationCommand::ClearAll => {
+            let ids = {
+                let mut state = shared.state.lock().expect("notification state poisoned");
+                let ids = state
+                    .items
+                    .iter()
+                    .map(|notification| notification.item.id)
+                    .collect::<Vec<_>>();
+                state.items.clear();
+                ids
+            };
+            for id in ids {
+                emit_closed(connection, id, 2);
+            }
+            true
+        }
+        NotificationCommand::SetDoNotDisturb(enabled) => {
+            {
+                let mut state = shared.state.lock().expect("notification state poisoned");
+                state.do_not_disturb = enabled;
+            }
+            true
+        }
         NotificationCommand::Invoke { id, action_key } => {
             emit_action(connection, id, &action_key);
             if shared.remove(id) {
@@ -351,6 +421,15 @@ fn handle_command(
             }
             false
         }
+    }
+}
+
+fn remove_stored(items: &mut Vec<StoredNotification>, id: u32) {
+    if let Some(index) = items
+        .iter()
+        .position(|notification| notification.item.id == id)
+    {
+        items.remove(index);
     }
 }
 
@@ -374,17 +453,6 @@ fn emit_action(connection: &zbus::blocking::Connection, id: u32, action_key: &st
     );
 }
 
-fn urgency_from_hints(hints: &Hints) -> NotificationUrgency {
-    match hints
-        .get("urgency")
-        .and_then(|value| u8::try_from(value.clone()).ok())
-    {
-        Some(0) => NotificationUrgency::Low,
-        Some(2) => NotificationUrgency::Critical,
-        _ => NotificationUrgency::Normal,
-    }
-}
-
 fn expiration_for(timeout: i32, urgency: NotificationUrgency) -> Option<Instant> {
     if timeout == 0 || urgency == NotificationUrgency::Critical {
         return None;
@@ -396,35 +464,4 @@ fn expiration_for(timeout: i32, urgency: NotificationUrgency) -> Option<Instant>
         Duration::from_millis(timeout as u64)
     };
     Some(Instant::now() + timeout)
-}
-
-fn action_pairs(actions: Vec<String>) -> Vec<NotificationAction> {
-    actions
-        .chunks(2)
-        .filter_map(|pair| {
-            let key = pair.first()?.trim();
-            let label = pair.get(1)?.trim();
-            (!key.is_empty() && !label.is_empty()).then(|| NotificationAction {
-                key: key.to_string(),
-                label: strip_markup(label),
-            })
-        })
-        .collect()
-}
-
-fn strip_markup(text: &str) -> String {
-    let mut output = String::new();
-    let mut inside_tag = false;
-    for character in text.chars() {
-        match character {
-            '<' => inside_tag = true,
-            '>' => inside_tag = false,
-            _ if !inside_tag => output.push(character),
-            _ => {}
-        }
-    }
-    output
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&")
 }

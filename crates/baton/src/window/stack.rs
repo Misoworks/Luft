@@ -134,12 +134,6 @@ impl WindowStack {
         true
     }
 
-    pub fn set_all_workspace(&mut self, workspace: WorkspaceId) {
-        for window in &mut self.windows {
-            window.workspace = workspace.clone();
-        }
-    }
-
     pub fn window(&self, id: WindowId) -> Option<&ManagedWindow> {
         self.windows.iter().find(|window| window.id == id)
     }

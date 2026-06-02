@@ -109,6 +109,40 @@ fn relative_workspace_does_not_create_past_empty_workspace() {
 }
 
 #[test]
+fn relative_workspace_uses_numeric_order_after_nine() {
+    let mut engine = LayoutEngine::with_default_workspaces();
+    for index in 2..=10 {
+        let id = WorkspaceId(index.to_string());
+        engine.ensure_workspace(
+            id,
+            format!("Workspace {index}"),
+            ProfileId("panel-default".to_string()),
+        );
+    }
+    let ninth = WorkspaceId("9".to_string());
+    engine.switch_workspace(&ninth).unwrap();
+    engine
+        .register_window(WindowInfo::new(
+            WindowId(0),
+            ninth,
+            crate::Rect::new(10, 20, 640, 480),
+        ))
+        .unwrap();
+
+    assert_eq!(
+        engine.relative_workspace(1),
+        Some(WorkspaceId("10".to_string()))
+    );
+    assert_eq!(
+        engine
+            .workspaces()
+            .map(|workspace| workspace.id.0.clone())
+            .collect::<Vec<_>>(),
+        (1..=10).map(|index| index.to_string()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn tiling_profile_arranges_windows_in_grid() {
     let mut engine = LayoutEngine::with_default_workspaces();
     let workspace = WorkspaceId("3".to_string());

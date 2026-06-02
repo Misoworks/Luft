@@ -1,4 +1,12 @@
-export type ShellSurface = "panel" | "dock" | "dock-menu" | "sidebar" | "quick-settings" | "date-center" | "overview";
+export type ShellSurface =
+  | "panel"
+  | "dock"
+  | "dock-menu"
+  | "sidebar"
+  | "quick-settings"
+  | "date-center"
+  | "notification-toast"
+  | "overview";
 
 export type ShellSnapshot = {
   surface?: ShellSurface;
@@ -19,7 +27,9 @@ export type ShellSnapshot = {
   applications: ApplicationItem[];
   status: SystemStatus;
   tray: TrayItem[];
+  doNotDisturb: boolean;
   notifications: NotificationItem[];
+  toastNotifications: NotificationItem[];
 };
 
 export type ShellPalette = {
@@ -49,6 +59,7 @@ export type WindowItem = {
   id: number;
   title: string;
   appId?: string;
+  iconUri?: string;
   workspace: string;
   geometry: Geometry;
   active: boolean;
@@ -82,6 +93,7 @@ export type Geometry = {
 export type SystemStatus = {
   network?: { name: string; wireless: boolean };
   audio?: { percent: number; muted: boolean };
+  brightness?: { percent: number };
   battery?: { percent: number; state: string };
 };
 
@@ -94,6 +106,8 @@ export type TrayItem = {
 export type NotificationItem = {
   id: number;
   appName: string;
+  iconUri?: string;
+  receivedAt: number;
   summary: string;
   body: string;
   urgency: "low" | "normal" | "critical";
@@ -108,6 +122,8 @@ export type ShellAction =
   | { type: "toggle-shell-style" }
   | { type: "workspace-switch"; workspace: string }
   | { type: "workspace-relative"; offset: number }
+  | { type: "workspace-new" }
+  | { type: "workspace-set-profile"; profile: string }
   | { type: "window-activate"; window: number }
   | { type: "window-move"; window: number; workspace: string }
   | { type: "dock-launch"; command: string }
@@ -119,11 +135,16 @@ export type ShellAction =
   | { type: "tray-activate"; index: number }
   | { type: "tray-menu"; index: number }
   | { type: "quick-open-settings"; page: "network" | "audio" | "power" }
-  | { type: "quick-toggle-blur" }
+  | { type: "quick-set-volume"; percent: number }
+  | { type: "quick-toggle-mute" }
+  | { type: "quick-set-brightness"; percent: number }
   | { type: "quick-toggle-debug-overlay" }
-  | { type: "quick-next-profile" }
-  | { type: "quick-reload-config" }
+  | { type: "reload-config" }
+  | { type: "open-logs-folder" }
+  | { type: "toggle-safe-mode" }
   | { type: "notification-close"; notification: number }
+  | { type: "notification-clear-all" }
+  | { type: "notification-do-not-disturb"; enabled: boolean }
   | { type: "notification-action"; notification: number; action: string };
 
 export const emptySnapshot = (): ShellSnapshot => {
@@ -156,6 +177,8 @@ export const emptySnapshot = (): ShellSnapshot => {
     applications: [],
     status: {},
     tray: [],
+    doNotDisturb: false,
     notifications: [],
+    toastNotifications: [],
   };
 };

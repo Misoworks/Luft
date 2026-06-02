@@ -21,10 +21,6 @@ disable_blur_on_battery = false
 count = 1
 restore_sessions = true
 
-[workspaces.1]
-name = "Workspace 1"
-profile = "panel-default"
-
 [recovery]
 crash_limit = 3
 crash_window_seconds = 60

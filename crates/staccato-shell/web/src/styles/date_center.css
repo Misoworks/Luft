@@ -1,166 +1,52 @@
 .date-center {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 292px;
-  gap: 22px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
   min-height: 100%;
+  padding: 18px;
 }
 
-.notifications {
-  display: grid;
-  gap: 10px;
-  min-height: 100%;
-  align-items: stretch;
+#app.is-surface-opening[data-surface="date-center"] .notification-group,
+#app.is-surface-opening[data-surface="date-center"] .notification-empty,
+#app.is-surface-opening[data-surface="date-center"] .notification-header,
+#app.is-surface-opening[data-surface="date-center"] .calendar-header,
+#app.is-surface-opening[data-surface="date-center"] .calendar-month,
+#app.is-surface-opening[data-surface="date-center"] .calendar-grid span:not(:nth-child(-n + 7)) {
+  animation: date-item-in 190ms var(--ease-shell) both;
 }
 
-.notification-empty {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  height: 100%;
-  min-height: 320px;
-  gap: 14px;
-  color: rgba(255, 255, 255, 0.56);
-  font-weight: 600;
+#app.is-surface-opening[data-surface="date-center"] .notification-group {
+  animation-delay: calc(var(--index, 0) * 18ms);
 }
 
-.notification-empty svg {
-  width: 60px;
-  height: 60px;
-  stroke-width: 1.4;
+#app.is-surface-opening[data-surface="date-center"] .calendar-header {
+  animation-delay: 36ms;
 }
 
-.notification {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
-  gap: 12px;
-  min-height: 74px;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.08);
+#app.is-surface-opening[data-surface="date-center"] .calendar-month {
+  animation-delay: 54ms;
 }
 
-.notification.critical {
-  box-shadow: inset 3px 0 0 var(--accent);
+@keyframes date-item-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 7px, 0) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
 }
 
-.notification-body {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-}
+@keyframes calendar-page-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 5px, 0);
+  }
 
-.notification-body strong,
-.notification-body span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.notification-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.notification-action {
-  --control-scale: 1;
-  min-width: 0;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 10px;
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 12px;
-  transform: translate3d(0, 0, 0) scale(var(--control-scale));
-  transform-origin: center;
-  transition:
-    background-color 150ms var(--ease-shell),
-    transform 150ms var(--ease-shell);
-}
-
-.notification-action:hover {
-  background: rgba(255, 255, 255, 0.13);
-}
-
-.notification-action:active {
-  --control-scale: 0.96;
-}
-
-.icon-button {
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-}
-
-.calendar {
-  display: grid;
-  align-content: start;
-  gap: 16px;
-  padding-left: 22px;
-  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.1);
-}
-
-.calendar-header {
-  display: grid;
-  gap: 2px;
-}
-
-.calendar-header span {
-  color: rgba(255, 255, 255, 0.52);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.calendar-header strong {
-  font-size: 20px;
-  font-weight: 650;
-}
-
-.calendar-month {
-  display: flex;
-  align-items: center;
-  min-height: 28px;
-}
-
-.calendar-month strong {
-  font-size: 15px;
-  font-weight: 650;
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
-  text-align: center;
-}
-
-.calendar-grid span {
-  display: grid;
-  place-items: center;
-  min-width: 31px;
-  min-height: 31px;
-  border-radius: 999px;
-  text-align: center;
-}
-
-.calendar-grid > span:nth-child(-n + 7) {
-  color: rgba(255, 255, 255, 0.48);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.calendar-grid span:not(:nth-child(-n + 7)) {
-  color: rgba(255, 255, 255, 0.86);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.calendar-grid span.outside {
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.calendar-grid span.today {
-  background: var(--accent);
-  color: rgba(24, 20, 12, 0.96);
-  font-weight: 700;
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }

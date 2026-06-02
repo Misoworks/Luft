@@ -76,6 +76,7 @@ function isSurface(value: string | null): value is ShellSurface {
     value === "sidebar" ||
     value === "quick-settings" ||
     value === "date-center" ||
+    value === "notification-toast" ||
     value === "overview"
   );
 }

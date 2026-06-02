@@ -1,0 +1,115 @@
+.calendar {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding-left: 18px;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+.calendar-header {
+  display: grid;
+  gap: 2px;
+}
+
+.calendar-header span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+
+.calendar-header strong {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.calendar-month {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  animation: calendar-page-in 150ms var(--ease-shell) both;
+}
+
+.calendar-current,
+.calendar-nav {
+  --control-scale: 1;
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  border-radius: 12px;
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transition:
+    background-color 150ms var(--ease-shell),
+    transform 130ms var(--ease-shell);
+}
+
+.calendar-current {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.calendar-nav {
+  width: 34px;
+  min-width: 34px;
+}
+
+.calendar-current:hover,
+.calendar-nav:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.calendar-current:active,
+.calendar-nav:active {
+  --control-scale: 0.96;
+}
+
+.calendar-nav svg {
+  width: 17px;
+  height: 17px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+  text-align: center;
+  animation: calendar-page-in 170ms var(--ease-shell) both;
+}
+
+.calendar-grid span {
+  display: grid;
+  place-items: center;
+  min-width: 31px;
+  min-height: 31px;
+  border-radius: 999px;
+  text-align: center;
+  transition:
+    background-color 140ms var(--ease-shell),
+    color 140ms var(--ease-shell),
+    transform 140ms var(--ease-shell);
+}
+
+.calendar-grid > span:nth-child(-n + 7) {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.calendar-grid span:not(:nth-child(-n + 7)) {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.calendar-grid span.outside {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.calendar-grid span.today {
+  background: var(--accent);
+  color: rgba(24, 20, 12, 0.96);
+  font-weight: 700;
+}

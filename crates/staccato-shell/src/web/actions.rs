@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use staccato_layout::{WindowId, WorkspaceId};
+use staccato_layout::{ProfileId, WindowId, WorkspaceId};
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -14,6 +14,10 @@ pub enum WebShellAction {
     },
     WorkspaceRelative {
         offset: i32,
+    },
+    WorkspaceNew,
+    WorkspaceSetProfile {
+        profile: String,
     },
     WindowActivate {
         window: u64,
@@ -49,12 +53,23 @@ pub enum WebShellAction {
     QuickOpenSettings {
         page: QuickSettingsPage,
     },
-    QuickToggleBlur,
+    QuickSetVolume {
+        percent: u8,
+    },
+    QuickToggleMute,
+    QuickSetBrightness {
+        percent: u8,
+    },
     QuickToggleDebugOverlay,
-    QuickNextProfile,
-    QuickReloadConfig,
+    ReloadConfig,
+    OpenLogsFolder,
+    ToggleSafeMode,
     NotificationClose {
         notification: u32,
+    },
+    NotificationClearAll,
+    NotificationDoNotDisturb {
+        enabled: bool,
     },
     NotificationAction {
         notification: u32,
@@ -82,6 +97,10 @@ impl QuickSettingsPage {
 
 pub fn workspace_id(value: String) -> WorkspaceId {
     WorkspaceId(value)
+}
+
+pub fn profile_id(value: String) -> ProfileId {
+    ProfileId(value)
 }
 
 pub fn window_id(value: u64) -> WindowId {

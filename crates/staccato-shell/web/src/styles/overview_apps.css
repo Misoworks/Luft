@@ -1,0 +1,92 @@
+.overview-apps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(92px, 4.9vw, 128px), clamp(108px, 5.7vw, 146px)));
+  justify-content: center;
+  gap: clamp(14px, 1vw, 20px) clamp(10px, 0.8vw, 18px);
+  max-height: min(42vh, 580px);
+  max-width: min(2600px, calc(100vw - 72px));
+  margin: clamp(6px, 1.4vh, 18px) auto 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: 36px 16px 36px;
+  scroll-padding-top: 34px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.overview-apps::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.overview-app {
+  --control-scale: 1;
+  --overview-app-y: 0px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  min-height: clamp(96px, 5.9vw, 126px);
+  border-radius: 18px;
+  text-align: center;
+  transform: translate3d(0, var(--overview-app-y), 0) scale(var(--control-scale));
+  transform-origin: center;
+  transition:
+    background-color 180ms var(--ease-shell),
+    transform 180ms var(--ease-shell);
+}
+
+.overview-app.is-pinned::after {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  content: "";
+  transform: translateX(-50%);
+}
+
+.overview-app:hover {
+  --overview-app-y: -6px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.overview-app.is-selected {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent), white 14%);
+}
+
+.overview-app img,
+.overview-app svg {
+  width: clamp(42px, 2.6vw, 56px);
+  height: clamp(42px, 2.6vw, 56px);
+}
+
+.overview-app span {
+  max-width: min(104px, 100%);
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 120px;
+  color: rgba(255, 255, 255, 0.58);
+  font-weight: 600;
+}
+
+.overview-empty svg {
+  width: 32px;
+  height: 32px;
+  stroke-width: 1.6;
+}

@@ -1,0 +1,107 @@
+.overview-results {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  width: min(720px, calc(100vw - 72px));
+  max-height: min(42vh, 470px);
+  margin: clamp(8px, 1.5vh, 22px) auto 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.overview-results::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.overview-result {
+  --control-scale: 1;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 10px;
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.018);
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transform-origin: center;
+  transition:
+    background-color 170ms var(--ease-shell),
+    box-shadow 170ms var(--ease-shell),
+    transform 130ms var(--ease-shell);
+}
+
+.overview-result:hover,
+.overview-result.is-selected {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--accent), white 12%),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.overview-result:active {
+  --control-scale: 0.96;
+}
+
+.overview-result-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.085);
+}
+
+.overview-result-icon img,
+.overview-result-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.overview-result-icon img {
+  object-fit: contain;
+}
+
+.overview-result-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.overview-result-copy strong,
+.overview-result-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-result-copy strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.overview-result-copy small,
+.overview-result-kind {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+
+.overview-result-kind {
+  min-width: 76px;
+  text-align: right;
+  text-transform: capitalize;
+}
+
+#app.is-surface-opening[data-surface="overview"] .overview-result {
+  animation: overview-item-in 210ms var(--ease-shell) both;
+  animation-delay: calc(45ms + var(--index, 0) * 16ms);
+}

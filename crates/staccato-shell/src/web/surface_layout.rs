@@ -24,6 +24,7 @@ impl WebShellSurface {
             Self::Sidebar => "sidebar",
             Self::QuickSettings => "quick-settings",
             Self::DateCenter => "date-center",
+            Self::NotificationToast => "notification-toast",
             Self::Overview => "overview",
         }
     }
@@ -36,6 +37,7 @@ impl WebShellSurface {
             Self::Sidebar => "staccato-sidebar",
             Self::QuickSettings => "staccato-quick-settings",
             Self::DateCenter => "staccato-date-center",
+            Self::NotificationToast => "staccato-notification-toast",
             Self::Overview => "staccato-overview",
         }
     }
@@ -80,7 +82,9 @@ pub(crate) fn configure_window(window: &gtk::Window, kind: WebShellSurface, size
         WebShellSurface::Dock => configure_dock_window(window),
         WebShellSurface::DockMenu => configure_dock_menu_window(window, false),
         WebShellSurface::Sidebar => configure_sidebar_window(window),
-        WebShellSurface::QuickSettings | WebShellSurface::DateCenter => {
+        WebShellSurface::QuickSettings
+        | WebShellSurface::DateCenter
+        | WebShellSurface::NotificationToast => {
             configure_popover_window(window, kind, false);
         }
         WebShellSurface::Overview => configure_overview_window(window),
@@ -128,6 +132,16 @@ pub(crate) fn configure_popover_window(window: &gtk::Window, kind: WebShellSurfa
             window.set_layer_shell_margin(Edge::Bottom, TASKBAR_POPOVER_GAP);
             window.set_layer_shell_margin(Edge::Right, 12);
         }
+        (WebShellSurface::NotificationToast, false) => {
+            anchor(window, &[Edge::Top, Edge::Right]);
+            window.set_layer_shell_margin(Edge::Top, PANEL_HEIGHT + 12);
+            window.set_layer_shell_margin(Edge::Right, 12);
+        }
+        (WebShellSurface::NotificationToast, true) => {
+            anchor(window, &[Edge::Bottom, Edge::Right]);
+            window.set_layer_shell_margin(Edge::Bottom, TASKBAR_HEIGHT + 12);
+            window.set_layer_shell_margin(Edge::Right, 12);
+        }
         _ => {}
     }
 }
@@ -164,6 +178,7 @@ pub(crate) fn fixed_size(kind: WebShellSurface) -> bool {
             | WebShellSurface::DockMenu
             | WebShellSurface::QuickSettings
             | WebShellSurface::DateCenter
+            | WebShellSurface::NotificationToast
     )
 }
 

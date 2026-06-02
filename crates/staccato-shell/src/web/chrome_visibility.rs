@@ -8,10 +8,19 @@ pub(super) struct ChromeVisibility {
 }
 
 impl ChromeVisibility {
-    pub fn mapped(&mut self, hidden: bool) -> bool {
+    pub fn reset(&mut self) {
+        self.unmap_at = None;
+    }
+
+    pub fn mapped(&mut self, hidden: bool, animate_exit: bool) -> bool {
         if !hidden {
-            self.unmap_at = None;
+            self.reset();
             return true;
+        }
+
+        if !animate_exit {
+            self.reset();
+            return false;
         }
 
         let deadline = *self
