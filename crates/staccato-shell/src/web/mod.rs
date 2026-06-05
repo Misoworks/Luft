@@ -31,7 +31,6 @@ use actions::{
 use chrome_visibility::ChromeVisibility;
 use surface::WebSurfaces;
 
-use gtk::glib;
 use staccato_config::StaccatoConfig;
 use std::{
     cell::RefCell,
@@ -39,6 +38,7 @@ use std::{
     process::Child,
     rc::Rc,
     sync::mpsc::{self, Receiver},
+    thread,
     time::{Duration, Instant},
 };
 use tracing::{debug, warn};
@@ -50,31 +50,25 @@ const ACTION_TICK: Duration = Duration::from_millis(16);
 const MAINTENANCE_TICK: Duration = Duration::from_millis(100);
 
 pub fn run(config: StaccatoConfig) -> Result<(), Box<dyn Error>> {
-    gtk::init()?;
-
     let (actions_tx, actions_rx) = mpsc::channel();
     let shell = Rc::new(RefCell::new(WebShell::new(config, actions_tx, actions_rx)?));
     shell.borrow_mut().sync_surfaces();
 
-    let action_shell = Rc::clone(&shell);
-    glib::timeout_add_local(ACTION_TICK, move || {
-        action_shell.borrow_mut().tick_actions();
-        glib::ControlFlow::Continue
-    });
-
-    let tick_shell = Rc::clone(&shell);
-    glib::timeout_add_local(MAINTENANCE_TICK, move || {
-        tick_shell.borrow_mut().tick();
-        glib::ControlFlow::Continue
-    });
-
-    gtk::main();
-    Ok(())
+    let mut last_maintenance = Instant::now();
+    loop {
+        shell.borrow_mut().tick_actions();
+        if last_maintenance.elapsed() >= MAINTENANCE_TICK {
+            shell.borrow_mut().tick();
+            last_maintenance = Instant::now();
+        }
+        thread::sleep(ACTION_TICK);
+    }
 }
 
 struct WebShell {
     config: StaccatoConfig,
     palette: ShellPalette,
+    wallpaper_uri: Option<String>,
     model: ShellModel,
     status: SystemStatus,
     chrome: ShellChrome,
@@ -112,6 +106,7 @@ impl WebShell {
             self.sync_chrome();
             self.sync_surfaces();
         }
+        self.surfaces.tick();
     }
 
     fn tick(&mut self) {
@@ -371,6 +366,7 @@ impl WebShell {
         self.overview_visible = false;
         self.quick_visible = false;
         self.date_visible = false;
+        self.close_dock_menu();
         self.surfaces.overview.set_visible(false);
         self.surfaces.quick.set_visible(false);
         self.surfaces.date.set_visible(false);
@@ -392,6 +388,7 @@ impl WebShell {
     }
 
     fn activate_dock_command(&mut self, command: String) {
+        self.close_dock_menu();
         let Some(app) = self
             .dock_apps
             .iter()

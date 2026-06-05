@@ -3,7 +3,7 @@ use staccato_config::{IGNORE_USER_CONFIG_ENV, StaccatoConfig};
 use staccato_ipc::{SHELL_SOCKET_ENV, SOCKET_ENV, ShellStatus};
 use std::{
     collections::VecDeque,
-    env,
+    env, io,
     path::{Path, PathBuf},
     process::{Child, Command},
     time::{Duration, Instant},
@@ -37,6 +37,9 @@ impl ShellProcess {
         shell_socket: &Path,
         recovery: RecoveryPolicy,
     ) -> Self {
+        if let Err(error) = ensure_dev_shell_built() {
+            warn!(%error, "failed to build staccato-shell helper");
+        }
         let binary = shell_binary();
         if binary.is_none() {
             warn!("staccato-shell binary was not found beside baton");
@@ -224,6 +227,54 @@ fn shell_binary() -> Option<std::path::PathBuf> {
     let mut path = std::env::current_exe().ok()?;
     path.set_file_name("staccato-shell");
     path.exists().then_some(path)
+}
+
+fn ensure_dev_shell_built() -> io::Result<()> {
+    let Some(workspace) = dev_workspace() else {
+        return Ok(());
+    };
+
+    let mut command = Command::new("cargo");
+    command
+        .arg("build")
+        .arg("--manifest-path")
+        .arg(&workspace.manifest)
+        .arg("--bin")
+        .arg("staccato-shell");
+    if workspace.release {
+        command.arg("--release");
+    }
+
+    let status = command.status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "cargo failed to build staccato-shell: {status}"
+        )))
+    }
+}
+
+struct DevWorkspace {
+    manifest: PathBuf,
+    release: bool,
+}
+
+fn dev_workspace() -> Option<DevWorkspace> {
+    let exe = env::current_exe().ok()?;
+    let target = exe
+        .ancestors()
+        .find(|path| path.file_name() == Some("target".as_ref()))?;
+    let manifest = target.parent()?.join("Cargo.toml");
+    if !manifest.is_file() {
+        return None;
+    }
+    let release = exe
+        .strip_prefix(target)
+        .ok()?
+        .components()
+        .any(|component| component.as_os_str() == "release");
+    Some(DevWorkspace { manifest, release })
 }
 
 fn shell_command(binary: &Path) -> Command {

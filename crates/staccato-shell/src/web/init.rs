@@ -14,6 +14,7 @@ impl WebShell {
         actions_rx: Receiver<WebShellAction>,
     ) -> Result<Self, Box<dyn Error>> {
         let palette = shell_palette(&config);
+        let wallpaper_uri = super::model::wallpaper_uri(&config);
         let model = load_model()?;
         let status = SystemStatus::read();
         let chrome = ShellChrome::for_mode(model.active_mode);
@@ -29,12 +30,17 @@ impl WebShell {
             &dock_apps,
             None,
             &applications,
+            wallpaper_uri.clone(),
             palette,
             config.general.safe_mode,
             false,
         );
-        let mut surfaces = WebSurfaces::new(actions_tx, &snapshot, &dock_apps)?;
-        surfaces.set_panel_taskbar(model.active_mode == staccato_layout::ModeId::Panel);
+        let mut surfaces = WebSurfaces::new(
+            actions_tx,
+            &snapshot,
+            &dock_apps,
+            model.active_mode == staccato_layout::ModeId::Panel,
+        )?;
         surfaces.set_panel_visible(chrome.panel);
         surfaces.dock.set_visible(chrome.dock);
         surfaces.sidebar.set_visible(chrome.sidebar);
@@ -43,6 +49,7 @@ impl WebShell {
             launcher_command: config.default_apps.launcher.clone(),
             config,
             palette,
+            wallpaper_uri,
             model,
             status,
             chrome,

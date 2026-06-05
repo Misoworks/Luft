@@ -148,18 +148,6 @@
     </button>
   </div>
 
-  <footer class="quick-footer">
-    <button type="button" class="round-action" aria-label="Open launcher" onclick={() => sendAction({ type: "open-launcher" })}>
-      <Icon name="search" />
-    </button>
-    <button type="button" class="round-action" aria-label="Open overview" onclick={() => sendAction({ type: "toggle-overview" })}>
-      <Icon name="app" />
-    </button>
-    <button type="button" class="round-action" aria-label="Open notifications" onclick={() => sendAction({ type: "toggle-date-center" })}>
-      <Icon name="calendar" />
-    </button>
-  </footer>
-
   {#if snapshot.debugOverlay}
     <DebugMeter surface="QS" />
   {/if}

@@ -10,6 +10,7 @@
 
   let { snapshot }: { snapshot: ShellSnapshot } = $props();
   let calendarMonthOffset = $state(0);
+  let selectedDay = $state<string | undefined>();
   let dismissingNotifications = $state<number[]>([]);
   let expandedGroups = $state<string[]>([]);
 
@@ -25,6 +26,7 @@
   const monthLabel = $derived(month.toLocaleDateString([], { month: "long", year: "numeric" }));
   const todayLabel = $derived(today.toLocaleDateString([], { weekday: "long" }));
   const todayFull = $derived(today.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }));
+  const activeDay = $derived(selectedDay ?? calendarKey(today));
 
   function scrollMonth(event: WheelEvent) {
     event.preventDefault();
@@ -41,6 +43,24 @@
 
   function resetMonth() {
     calendarMonthOffset = 0;
+  }
+
+  function selectDay(date: Date) {
+    selectedDay = calendarKey(date);
+    calendarMonthOffset = (date.getFullYear() - today.getFullYear()) * 12 + date.getMonth() - today.getMonth();
+  }
+
+  function calendarKey(date: Date) {
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  }
+
+  function calendarLabel(date: Date) {
+    return date.toLocaleDateString([], {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
   }
 
   function calendarCurrentKeydown(event: KeyboardEvent) {
@@ -148,7 +168,7 @@
   }
 </script>
 
-<section class="popover date-center">
+<section class="popover date-center" class:is-empty={groups.length === 0}>
   <section class="notification-center">
     <header class="notification-header">
       <div>
@@ -298,7 +318,18 @@
           <span>{day}</span>
         {/each}
         {#each cells as cell (`${cell.date.toISOString()}-${cell.outside}`)}
-          <span class:outside={cell.outside} class:today={sameDay(cell.date, today)}>{cell.date.getDate()}</span>
+          <button
+            type="button"
+            class="calendar-day"
+            class:outside={cell.outside}
+            class:today={sameDay(cell.date, today)}
+            class:is-selected={calendarKey(cell.date) === activeDay}
+            aria-label={calendarLabel(cell.date)}
+            aria-pressed={calendarKey(cell.date) === activeDay}
+            onclick={() => selectDay(cell.date)}
+          >
+            {cell.date.getDate()}
+          </button>
         {/each}
       </div>
     {/key}

@@ -4,9 +4,10 @@ use smithay::{
     utils::{Clock, Monotonic},
     wayland::{
         cursor_shape::CursorShapeManagerState, fractional_scale::FractionalScaleManagerState,
-        presentation::PresentationState, shell::xdg::decoration::XdgDecorationState,
-        text_input::TextInputManagerState, viewporter::ViewporterState,
-        xdg_activation::XdgActivationState, xdg_toplevel_icon::XdgToplevelIconManager,
+        output::OutputManagerState, presentation::PresentationState,
+        shell::xdg::decoration::XdgDecorationState, text_input::TextInputManagerState,
+        viewporter::ViewporterState, xdg_activation::XdgActivationState,
+        xdg_toplevel_icon::XdgToplevelIconManager,
     },
 };
 
@@ -19,6 +20,7 @@ pub struct ProtocolState {
     _xdg_toplevel_icon: XdgToplevelIconManager,
     _text_input: TextInputManagerState,
     _presentation: PresentationState,
+    _output: OutputManagerState,
     _background_effect: BackgroundEffectGlobal,
 }
 
@@ -41,6 +43,7 @@ impl ProtocolState {
                 display,
                 Clock::<Monotonic>::new().id() as u32,
             ),
+            _output: OutputManagerState::new_with_xdg_output::<BatonState>(display),
             _background_effect: BackgroundEffectGlobal::new(display),
         }
     }

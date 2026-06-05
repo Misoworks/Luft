@@ -72,6 +72,7 @@ impl WebShell {
 
     fn apply_shell_config(&mut self, config: StaccatoConfig) {
         self.palette = shell_palette(&config);
+        self.wallpaper_uri = super::model::wallpaper_uri(&config);
         self.dock_apps = dock_apps(&config);
         self.applications = launcher_apps(&config, &self.dock_apps);
         self.launcher_command = config.default_apps.launcher.clone();
@@ -90,7 +91,9 @@ impl WebShell {
         self.surfaces
             .set_panel_visible(chrome.panel && chrome_mapped);
         self.surfaces.dock.set_visible(chrome.dock && chrome_mapped);
-        if !chrome.dock || self.overview_visible {
+        let dock_menu_supported =
+            chrome.dock || self.model.active_mode == staccato_layout::ModeId::Panel;
+        if !dock_menu_supported || self.overview_visible {
             self.close_dock_menu();
         }
         self.surfaces.sidebar.set_visible(chrome.sidebar);
@@ -112,6 +115,7 @@ impl WebShell {
             &self.dock_apps,
             self.dock_menu_command.as_deref(),
             &self.applications,
+            self.wallpaper_uri.clone(),
             self.palette,
             self.config.general.safe_mode,
             self.overview_visible,

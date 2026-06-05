@@ -256,15 +256,16 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                 .windows
                 .fullscreen_on_workspace(state.layout.active_workspace())
                 .is_some();
+            let panel_taskbar = state.layout.active_mode() == staccato_layout::ModeId::Panel;
             let top_targets = if fullscreen_active {
                 Vec::new()
             } else {
-                layers::render_targets(&state.output, Layer::Top)
+                layers::render_targets(&state.output, Layer::Top, panel_taskbar)
             };
             let overlay_targets = if fullscreen_active {
                 Vec::new()
             } else {
-                layers::render_targets(&state.output, Layer::Overlay)
+                layers::render_targets(&state.output, Layer::Overlay, panel_taskbar)
             };
             let background_element = if show_loading {
                 background.blurred_render_element(renderer, output.size)?

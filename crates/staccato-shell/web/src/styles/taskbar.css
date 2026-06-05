@@ -7,7 +7,6 @@
   background: transparent;
   overflow: visible;
   isolation: isolate;
-  animation: taskbar-surface-in 220ms var(--ease-shell);
   transition:
     opacity 170ms var(--ease-shell),
     transform 210ms var(--ease-shell);
@@ -53,11 +52,25 @@
 }
 
 .taskbar-launcher {
-  position: absolute;
-  bottom: 6px;
-  left: 10px;
-  width: 38px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
   z-index: 1;
+}
+
+.taskbar-launcher svg {
+  width: 28px;
+  height: 28px;
+  transition: transform 145ms var(--ease-shell);
+}
+
+.taskbar-launcher:hover svg {
+  transform: translateY(-10px);
+  will-change: transform;
+}
+
+.taskbar-launcher:active svg {
+  transform: translateY(0);
 }
 
 .taskbar-apps {
@@ -149,16 +162,4 @@
   left: 8px;
   right: auto;
   bottom: 3px;
-}
-
-@keyframes taskbar-surface-in {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }

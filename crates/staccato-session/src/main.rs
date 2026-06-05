@@ -61,6 +61,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let backend = selected_backend(&args, loaded.config.compositor.backend);
+    let explicit_baton = args.baton.is_some() || env::var_os("STACCATO_BATON").is_some();
+    if !args.dry_run && !explicit_baton {
+        ensure_dev_helpers_built()?;
+    }
     let baton = resolve_baton(args.baton);
     let environment = SessionEnvironment::default();
     let mut command = session_command(&baton, backend);
@@ -129,6 +133,56 @@ fn sibling_binary(name: &str) -> Option<PathBuf> {
     let mut path = env::current_exe().ok()?;
     path.set_file_name(name);
     path.exists().then_some(path)
+}
+
+fn ensure_dev_helpers_built() -> io::Result<()> {
+    let Some(workspace) = dev_workspace() else {
+        return Ok(());
+    };
+
+    let mut command = Command::new("cargo");
+    command
+        .arg("build")
+        .arg("--manifest-path")
+        .arg(&workspace.manifest)
+        .arg("--bin")
+        .arg("baton")
+        .arg("--bin")
+        .arg("staccato-shell");
+    if workspace.release {
+        command.arg("--release");
+    }
+
+    let status = command.status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "cargo failed to build Staccato helper binaries: {status}"
+        )))
+    }
+}
+
+struct DevWorkspace {
+    manifest: PathBuf,
+    release: bool,
+}
+
+fn dev_workspace() -> Option<DevWorkspace> {
+    let exe = env::current_exe().ok()?;
+    let target = exe
+        .ancestors()
+        .find(|path| path.file_name() == Some("target".as_ref()))?;
+    let manifest = target.parent()?.join("Cargo.toml");
+    if !manifest.is_file() {
+        return None;
+    }
+    let release = exe
+        .strip_prefix(target)
+        .ok()?
+        .components()
+        .any(|component| component.as_os_str() == "release");
+    Some(DevWorkspace { manifest, release })
 }
 
 fn selected_backend(args: &SessionArgs, preference: BackendPreference) -> BatonBackend {

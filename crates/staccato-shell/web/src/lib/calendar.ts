@@ -5,9 +5,11 @@ export type CalendarCell = {
 
 export function calendarCells(month: Date): CalendarCell[] {
   const monthStart = new Date(month.getFullYear(), month.getMonth(), 1);
+  const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
   const gridStart = new Date(monthStart);
+  const cellCount = Math.max(35, Math.ceil((monthStart.getDay() + monthEnd.getDate()) / 7) * 7);
   gridStart.setDate(monthStart.getDate() - monthStart.getDay());
-  return Array.from({ length: 42 }, (_, index) => {
+  return Array.from({ length: cellCount }, (_, index) => {
     const date = new Date(gridStart);
     date.setDate(gridStart.getDate() + index);
     return {

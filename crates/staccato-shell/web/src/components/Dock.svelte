@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppButton from "./AppButton.svelte";
   import DebugMeter from "./DebugMeter.svelte";
+  import { workspaceWheelOffset } from "../lib/workspace_wheel";
   import { sendAction } from "../shell/bridge";
   import type { ShellSnapshot } from "../shell/model";
 
@@ -16,7 +17,9 @@
   }
 
   function workspaceScroll(event: WheelEvent) {
-    sendAction({ type: "workspace-relative", offset: event.deltaY > 0 ? 1 : -1 });
+    const offset = workspaceWheelOffset(event);
+    if (offset === 0) return;
+    sendAction({ type: "workspace-relative", offset });
   }
 </script>
 

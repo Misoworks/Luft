@@ -11,12 +11,11 @@ pub(crate) fn quick_settings_size(snapshot: &WebShellSnapshot) -> (i32, i32) {
     let status_rows = (status_tiles + 1) / 2;
     let sliders = i32::from(snapshot.status.audio.is_some())
         + i32::from(snapshot.status.brightness.is_some());
-    let mut height = 32 + 38 + 14 + status_rows * 56 + (status_rows - 1) * 8;
+    let mut height = 32 + 38 + 14 + status_rows * 58 + (status_rows - 1) * 10;
     if sliders > 0 {
         height += 14 + sliders * 58 + (sliders - 1) * 10;
     }
-    height += 14 + 42;
-    (QUICK_SETTINGS_WIDTH, height.max(280))
+    (QUICK_SETTINGS_WIDTH, height.max(230))
 }
 
 pub(crate) fn notification_toast_size() -> (i32, i32) {

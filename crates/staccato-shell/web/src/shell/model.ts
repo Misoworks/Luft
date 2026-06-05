@@ -15,10 +15,12 @@ export type ShellSnapshot = {
   activeWorkspace: string;
   activeProfile: string;
   activeMode: string;
+  panelTaskbar: boolean;
   blurEnabled: boolean;
   debugOverlay: boolean;
   safeMode: boolean;
   chromeHidden: boolean;
+  wallpaperUri?: string;
   palette: ShellPalette;
   profiles: ProfileItem[];
   workspaces: WorkspaceItem[];
@@ -162,10 +164,12 @@ export const emptySnapshot = (): ShellSnapshot => {
     activeWorkspace: "1",
     activeProfile: "panel-default",
     activeMode: "panel",
+    panelTaskbar: true,
     blurEnabled: true,
     debugOverlay: false,
     safeMode: false,
     chromeHidden: false,
+    wallpaperUri: undefined,
     palette: {
       panel: "rgba(22, 22, 20, 0.62)",
       panelControl: "rgba(255, 255, 255, 0.08)",

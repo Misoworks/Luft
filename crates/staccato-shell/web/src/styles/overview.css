@@ -1,51 +1,59 @@
 .shell-overview {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  row-gap: clamp(18px, 2.4vh, 32px);
   width: 100%;
   height: 100%;
-  padding: clamp(26px, 3vw, 58px) clamp(28px, 3.6vw, 92px) clamp(30px, 3.2vw, 64px);
+  padding: clamp(24px, 3vw, 54px) clamp(28px, 3.6vw, 92px) clamp(26px, 3vw, 56px);
   overflow: hidden;
-  background: color-mix(in srgb, var(--panel), rgba(10, 10, 9, 0.58) 42%);
+  background: rgba(38, 37, 34, 0.98);
   transform-origin: center;
 }
 
+.shell-overview::before,
+.shell-overview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.shell-overview::before {
+  z-index: -2;
+  background-image: var(--wallpaper-image);
+  background-position: center;
+  background-size: cover;
+  filter: blur(26px) saturate(0.84) brightness(0.72);
+  opacity: 0.9;
+  transform: scale(1.045);
+}
+
+.shell-overview::after {
+  z-index: -1;
+  background: rgba(24, 23, 21, 0.3);
+}
+
 #app.is-surface-opening[data-surface="overview"] .shell-overview {
-  animation: overview-surface-in 150ms var(--ease-shell) both;
+  animation: overview-surface-in 240ms var(--ease-shell) both;
 }
 
 #app.is-surface-closing[data-surface="overview"] .shell-overview {
-  animation: overview-surface-out 90ms var(--ease-shell) both;
+  pointer-events: none;
+  animation: overview-surface-out 180ms var(--ease-shell) both;
 }
 
 .overview-top {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(300px, 620px) minmax(180px, 1fr);
+  grid-template-columns: minmax(300px, 680px);
   align-items: center;
+  justify-content: center;
   gap: 18px;
   height: 54px;
-  margin: 0 auto 18px;
+  margin: 0 auto;
   max-width: min(2320px, calc(100vw - 72px));
-}
-
-.overview-title {
-  display: grid;
-  gap: 4px;
-}
-
-.overview-title strong {
-  font-size: 22px;
-  font-weight: 650;
-}
-
-.overview-title span,
-.workspace-label span {
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 12px;
-}
-
-.overview-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-self: end;
+  width: 100%;
 }
 
 .overview-search {
@@ -121,61 +129,33 @@
   opacity: 1;
 }
 
-.overview-close {
-  --control-scale: 1;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  transform: translate3d(0, 0, 0) scale(var(--control-scale));
-  transform-origin: center;
-  transition: background-color 180ms var(--ease-shell), transform 180ms var(--ease-shell);
-}
-
-.overview-close:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.overview-close:active,
-.overview-app:active,
-.workspace-preview:active {
+.overview-app:active {
   --control-scale: 0.96;
 }
 
-#app.is-surface-opening[data-surface="overview"] .overview-title,
 #app.is-surface-opening[data-surface="overview"] .overview-search,
-#app.is-surface-opening[data-surface="overview"] .overview-actions,
-#app.is-surface-opening[data-surface="overview"] .workspace-preview,
 #app.is-surface-opening[data-surface="overview"] .overview-app,
+#app.is-surface-opening[data-surface="overview"] .overview-pagination,
 #app.is-surface-opening[data-surface="overview"] .overview-empty {
-  animation: overview-item-in 230ms var(--ease-shell) both;
+  animation: overview-item-in 260ms var(--ease-shell) both;
 }
 
 #app.is-surface-opening[data-surface="overview"] .overview-search {
   animation-delay: 24ms;
 }
 
-#app.is-surface-opening[data-surface="overview"] .overview-actions {
-  animation-delay: 36ms;
+#app.is-surface-opening[data-surface="overview"] .overview-pagination {
+  animation-delay: 68ms;
 }
 
-#app.is-surface-opening[data-surface="overview"] .workspace-preview,
 #app.is-surface-opening[data-surface="overview"] .overview-app {
-  animation-delay: calc(45ms + var(--index, 0) * 16ms);
-}
-
-#app.is-surface-opening[data-surface="overview"] .overview-window {
-  animation: overview-fade-in 210ms var(--ease-shell) both;
-  animation-delay: calc(80ms + var(--index, 0) * 14ms);
+  animation-delay: calc(42ms + var(--index, 0) * 7ms);
 }
 
 @keyframes overview-surface-in {
   from {
     opacity: 0;
-    transform: scale(1.012);
+    transform: scale(1.018);
   }
 
   to {
@@ -187,10 +167,12 @@
 @keyframes overview-surface-out {
   from {
     opacity: 1;
+    transform: scale(1);
   }
 
   to {
     opacity: 0;
+    transform: scale(1.006);
   }
 }
 
@@ -203,16 +185,6 @@
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes overview-fade-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
   }
 }
 

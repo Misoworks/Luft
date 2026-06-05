@@ -12,6 +12,8 @@ use crate::{
     theme::ShellPalette,
 };
 use serde::Serialize;
+use staccato_config::StaccatoConfig;
+use std::{fmt::Write, os::unix::ffi::OsStrExt, path::Path};
 use time::{OffsetDateTime, macros::format_description};
 
 #[derive(Debug, Clone, Serialize)]
@@ -23,10 +25,12 @@ pub struct WebShellSnapshot {
     pub active_workspace: String,
     pub active_profile: String,
     pub active_mode: String,
+    pub panel_taskbar: bool,
     pub blur_enabled: bool,
     pub debug_overlay: bool,
     pub safe_mode: bool,
     pub chrome_hidden: bool,
+    pub wallpaper_uri: Option<String>,
     pub palette: WebPalette,
     pub profiles: Vec<WebProfile>,
     pub workspaces: Vec<WebWorkspace>,
@@ -215,6 +219,7 @@ impl WebShellSnapshot {
         dock_apps: &[DockApp],
         dock_menu_command: Option<&str>,
         applications: &[AppEntry],
+        wallpaper_uri: Option<String>,
         palette: ShellPalette,
         safe_mode: bool,
         chrome_hidden: bool,
@@ -233,10 +238,12 @@ impl WebShellSnapshot {
             active_workspace: model.active_workspace.0.clone(),
             active_profile: model.active_profile.0.clone(),
             active_mode: mode_name(model.active_mode),
+            panel_taskbar: model.active_mode == staccato_layout::ModeId::Panel,
             blur_enabled: model.blur_enabled,
             debug_overlay: model.debug_overlay,
             safe_mode,
             chrome_hidden,
+            wallpaper_uri,
             palette: WebPalette::from(palette),
             profiles: model
                 .profiles
@@ -342,6 +349,31 @@ impl WebShellSnapshot {
                 .collect(),
         }
     }
+}
+
+pub(super) fn wallpaper_uri(config: &StaccatoConfig) -> Option<String> {
+    config
+        .compositor
+        .background_image
+        .as_deref()
+        .filter(|path| path.exists())
+        .map(local_file_uri)
+}
+
+fn local_file_uri(path: &Path) -> String {
+    let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let mut uri = String::from("file://");
+    for byte in path.as_os_str().as_bytes() {
+        match *byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
+                uri.push(*byte as char);
+            }
+            byte => {
+                let _ = write!(uri, "%{byte:02X}");
+            }
+        }
+    }
+    uri
 }
 
 impl From<&NotificationItem> for WebNotification {

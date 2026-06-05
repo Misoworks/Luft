@@ -86,6 +86,20 @@
   min-height: 31px;
   border-radius: 999px;
   text-align: center;
+}
+
+.calendar-day {
+  --control-scale: 1;
+  display: grid;
+  place-items: center;
+  min-width: 31px;
+  min-height: 31px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
   transition:
     background-color 140ms var(--ease-shell),
     color 140ms var(--ease-shell),
@@ -98,18 +112,34 @@
   font-weight: 650;
 }
 
-.calendar-grid span:not(:nth-child(-n + 7)) {
-  color: rgba(255, 255, 255, 0.86);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.calendar-grid span.outside {
+.calendar-day.outside {
   color: rgba(255, 255, 255, 0.3);
 }
 
-.calendar-grid span.today {
+.calendar-day:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.calendar-day:active {
+  --control-scale: 0.95;
+}
+
+.calendar-day:focus-visible {
+  outline: 0;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent), white 16%);
+}
+
+.calendar-day.is-selected:not(.today) {
+  background: rgba(255, 255, 255, 0.13);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.calendar-day.today {
   background: var(--accent);
   color: rgba(24, 20, 12, 0.96);
   font-weight: 700;
+}
+
+.calendar-day.today:hover {
+  background: color-mix(in srgb, var(--accent), white 10%);
 }

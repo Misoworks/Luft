@@ -1,9 +1,49 @@
 .date-center {
+  --popover-width: 360px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 18px;
-  min-height: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 16px;
+  align-items: start;
   padding: 18px;
+  overflow: hidden;
+}
+
+.date-center:not(.is-empty) {
+  height: auto;
+}
+
+.date-center.is-empty {
+  height: auto;
+}
+
+.date-center .notification-center {
+  gap: 10px;
+  min-height: 0;
+}
+
+.date-center .notifications {
+  align-content: start;
+  height: auto;
+  max-height: clamp(96px, calc(100vh - 420px), 250px);
+}
+
+.date-center .notification-empty {
+  grid-template-columns: 36px minmax(0, 1fr);
+  place-items: center start;
+  min-height: 54px;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.date-center .notification-empty svg {
+  width: 32px;
+  height: 32px;
+}
+
+.date-center .calendar {
+  padding-left: 0;
+  box-shadow: none;
 }
 
 #app.is-surface-opening[data-surface="date-center"] .notification-group,
@@ -11,7 +51,7 @@
 #app.is-surface-opening[data-surface="date-center"] .notification-header,
 #app.is-surface-opening[data-surface="date-center"] .calendar-header,
 #app.is-surface-opening[data-surface="date-center"] .calendar-month,
-#app.is-surface-opening[data-surface="date-center"] .calendar-grid span:not(:nth-child(-n + 7)) {
+#app.is-surface-opening[data-surface="date-center"] .calendar-day {
   animation: date-item-in 190ms var(--ease-shell) both;
 }
 

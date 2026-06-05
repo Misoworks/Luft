@@ -21,6 +21,11 @@ struct ShellArgs {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let raw_args = env::args().collect::<Vec<_>>();
+    if fenestra_cef::run_fenestra_host_from_args(&raw_args) {
+        return Ok(());
+    }
+
     disable_accessibility_bridge();
     init_logging();
 

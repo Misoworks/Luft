@@ -3,6 +3,7 @@
   import DebugMeter from "./DebugMeter.svelte";
   import Icon from "./Icon.svelte";
   import StatusCluster from "./StatusCluster.svelte";
+  import { workspaceWheelOffset } from "../lib/workspace_wheel";
   import { sendAction } from "../shell/bridge";
   import { shortDate } from "../lib/labels";
   import type { ShellSnapshot } from "../shell/model";
@@ -18,16 +19,17 @@
   }
 
   function workspaceScroll(event: WheelEvent) {
-    sendAction({ type: "workspace-relative", offset: event.deltaY > 0 ? 1 : -1 });
+    const offset = workspaceWheelOffset(event);
+    if (offset === 0) return;
+    sendAction({ type: "workspace-relative", offset });
   }
 </script>
 
-<section class="shell-taskbar" class:is-chrome-hidden={snapshot.chromeHidden}>
-  <button type="button" class="taskbar-launcher" aria-label="Open overview" onclick={() => sendAction({ type: "toggle-overview" })}>
-    <Icon name="app" />
-  </button>
-
-  <nav class="taskbar-apps" aria-label="Pinned applications" onwheel={workspaceScroll}>
+<section class="shell-taskbar" class:is-chrome-hidden={snapshot.chromeHidden} onwheel={workspaceScroll}>
+  <nav class="taskbar-apps" aria-label="Pinned applications">
+    <button type="button" class="taskbar-launcher" aria-label="Open overview" onclick={() => sendAction({ type: "toggle-overview" })}>
+      <Icon name="app" />
+    </button>
     {#each snapshot.dockApps as app (app.command)}
       <AppButton {app} variant="taskbar" onlaunch={launch} onmenu={openMenu} />
     {/each}

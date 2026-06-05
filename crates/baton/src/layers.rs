@@ -94,15 +94,23 @@ pub fn has_layer_above_windows(output: &Output, point: Point<f64, Logical>) -> b
         .any(|layer| pointer_focus_on_layer(output, point, layer).is_some())
 }
 
-pub fn render_targets(output: &Output, layer: Layer) -> Vec<LayerRenderTarget> {
+pub fn render_targets(
+    output: &Output,
+    layer: Layer,
+    panel_taskbar: bool,
+) -> Vec<LayerRenderTarget> {
     let layer_map = layer_map_for_output(output);
     layer_map
         .layers_on(layer)
         .filter_map(|surface| {
             let geometry = layer_map.layer_geometry(surface)?;
             let material = material_for(surface.namespace())?;
-            let (location, size) =
-                material_geometry(surface.namespace(), geometry.loc, geometry.size);
+            let (location, size) = material_geometry(
+                surface.namespace(),
+                geometry.loc,
+                geometry.size,
+                panel_taskbar,
+            );
             Some(LayerRenderTarget {
                 surface: surface.wl_surface().clone(),
                 material,
@@ -130,6 +138,13 @@ pub fn render_surfaces(output: &Output, layer: Layer) -> Vec<LayerRenderSurface>
 const DOCK_BLUR_HEIGHT: i32 = 50;
 const DOCK_BLUR_RADIUS: i32 = 18;
 const TASKBAR_BLUR_HEIGHT: i32 = 48;
+const POPOVER_RIGHT_MARGIN: i32 = 12;
+const POPOVER_TOP_MARGIN: i32 = 42;
+const POPOVER_TASKBAR_BOTTOM_MARGIN: i32 = 8;
+const QUICK_SETTINGS_BLUR_WIDTH: i32 = 420;
+const QUICK_SETTINGS_BLUR_HEIGHT: i32 = 230;
+const DATE_CENTER_BLUR_WIDTH: i32 = 360;
+const DATE_CENTER_BLUR_HEIGHT: i32 = 470;
 
 #[derive(Debug, Clone)]
 pub struct LayerPointerFocus {
@@ -178,12 +193,33 @@ fn material_geometry(
     namespace: &str,
     location: Point<i32, Logical>,
     size: smithay::utils::Size<i32, Logical>,
+    panel_taskbar: bool,
 ) -> (Point<i32, Logical>, smithay::utils::Size<i32, Logical>) {
     if namespace == "staccato-panel" && size.h > TASKBAR_BLUR_HEIGHT {
         let vertical_inset = (size.h - TASKBAR_BLUR_HEIGHT).max(0);
         return (
             (location.x, location.y + vertical_inset).into(),
             (size.w, TASKBAR_BLUR_HEIGHT).into(),
+        );
+    }
+
+    if namespace == "staccato-quick-settings" {
+        return popover_material_geometry(
+            location,
+            size,
+            QUICK_SETTINGS_BLUR_WIDTH,
+            QUICK_SETTINGS_BLUR_HEIGHT,
+            panel_taskbar,
+        );
+    }
+
+    if namespace == "staccato-date-center" {
+        return popover_material_geometry(
+            location,
+            size,
+            DATE_CENTER_BLUR_WIDTH,
+            DATE_CENTER_BLUR_HEIGHT,
+            panel_taskbar,
         );
     }
 
@@ -196,6 +232,31 @@ fn material_geometry(
         (location.x, location.y + vertical_inset).into(),
         (size.w, DOCK_BLUR_HEIGHT).into(),
     )
+}
+
+fn popover_material_geometry(
+    location: Point<i32, Logical>,
+    size: smithay::utils::Size<i32, Logical>,
+    preferred_width: i32,
+    preferred_height: i32,
+    panel_taskbar: bool,
+) -> (Point<i32, Logical>, smithay::utils::Size<i32, Logical>) {
+    let width = preferred_width.min(size.w).max(1);
+    let vertical_margin = if panel_taskbar {
+        POPOVER_TASKBAR_BOTTOM_MARGIN
+    } else {
+        POPOVER_TOP_MARGIN
+    };
+    let available_height = (size.h - vertical_margin).max(1);
+    let height = preferred_height.min(available_height).max(1);
+    let x = location.x + (size.w - width - POPOVER_RIGHT_MARGIN).max(0);
+    let y = if panel_taskbar {
+        location.y + (size.h - height - POPOVER_TASKBAR_BOTTOM_MARGIN).max(0)
+    } else {
+        location.y + POPOVER_TOP_MARGIN.min((size.h - height).max(0))
+    };
+
+    ((x, y).into(), (width, height).into())
 }
 
 fn pointer_focus_on_layer(

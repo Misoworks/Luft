@@ -13,6 +13,7 @@ import {
   Globe,
   Headphones,
   Lock,
+  LayoutGrid,
   Moon,
   Network,
   Plus,
@@ -34,7 +35,7 @@ import {
 } from "lucide";
 
 const icons: Record<string, IconNode> = {
-  app: AppWindow,
+  app: LayoutGrid,
   battery: Battery,
   bell: Bell,
   "bell-off": BellOff,

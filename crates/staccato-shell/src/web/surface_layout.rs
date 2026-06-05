@@ -1,19 +1,19 @@
 use super::model::WebShellSurface;
-use gtk::prelude::*;
-use gtk_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use fenestra_cef::{
+    ShellSurfaceAnchor, ShellSurfaceKeyboardInteractivity, ShellSurfaceLayer, ShellSurfaceMargin,
+    ShellSurfaceOptions,
+};
 
 pub(crate) const PANEL_WIDTH_HINT: i32 = 1;
 pub(crate) const PANEL_HEIGHT: i32 = 34;
-pub(crate) const TASKBAR_HEIGHT: i32 = 48;
 
+const TASKBAR_HEIGHT: i32 = 48;
 const TASKBAR_SURFACE_HEIGHT: i32 = 96;
 const DOCK_SURFACE_HEIGHT: i32 = 64;
 const DOCK_HEIGHT: i32 = 50;
 const DOCK_ITEM: i32 = 40;
 const DOCK_GAP: i32 = 10;
 const DOCK_PADDING: i32 = 22;
-const DOCK_MENU_BOTTOM_MARGIN: i32 = 84;
-const TASKBAR_POPOVER_GAP: i32 = 6;
 
 impl WebShellSurface {
     pub(crate) fn as_str(self) -> &'static str {
@@ -28,8 +28,10 @@ impl WebShellSurface {
             Self::Overview => "overview",
         }
     }
+}
 
-    fn namespace(self) -> &'static str {
+impl WebShellSurface {
+    pub(crate) fn namespace(self) -> &'static str {
         match self {
             Self::Panel => "staccato-panel",
             Self::Dock => "staccato-dock",
@@ -37,7 +39,7 @@ impl WebShellSurface {
             Self::Sidebar => "staccato-sidebar",
             Self::QuickSettings => "staccato-quick-settings",
             Self::DateCenter => "staccato-date-center",
-            Self::NotificationToast => "staccato-notification-toast",
+            Self::NotificationToast => "staccato-notifications",
             Self::Overview => "staccato-overview",
         }
     }
@@ -61,179 +63,99 @@ pub(crate) fn dock_size(apps: &[crate::dock::DockApp]) -> (i32, i32) {
     (width.max(DOCK_HEIGHT), DOCK_SURFACE_HEIGHT)
 }
 
-pub(crate) fn configure_window(window: &gtk::Window, kind: WebShellSurface, size: (i32, i32)) {
-    window.set_decorated(false);
-    window.set_resizable(false);
-    window.set_app_paintable(true);
-    window.set_default_size(size.0, size.1);
-    if fixed_size(kind) || kind == WebShellSurface::Panel {
-        window.set_size_request(size.0, size.1);
-    }
-    apply_rgba_visual(window);
-    window.init_layer_shell();
-    window.set_namespace(kind.namespace());
-    window.set_keyboard_mode(match kind {
-        WebShellSurface::Overview => KeyboardMode::OnDemand,
-        _ => KeyboardMode::None,
-    });
-
-    match kind {
-        WebShellSurface::Panel => configure_panel_window(window, false),
-        WebShellSurface::Dock => configure_dock_window(window),
-        WebShellSurface::DockMenu => configure_dock_menu_window(window, false),
-        WebShellSurface::Sidebar => configure_sidebar_window(window),
-        WebShellSurface::QuickSettings
-        | WebShellSurface::DateCenter
-        | WebShellSurface::NotificationToast => {
-            configure_popover_window(window, kind, false);
-        }
-        WebShellSurface::Overview => configure_overview_window(window),
-    }
-}
-
-pub(crate) fn configure_panel_window(window: &gtk::Window, taskbar: bool) {
-    window.set_layer(Layer::Top);
-    window.set_exclusive_zone(if taskbar {
-        TASKBAR_HEIGHT
-    } else {
-        PANEL_HEIGHT
-    });
-    clear_margins(window);
-    if taskbar {
-        anchor(window, &[Edge::Bottom, Edge::Left, Edge::Right]);
-    } else {
-        anchor(window, &[Edge::Top, Edge::Left, Edge::Right]);
-    }
-}
-
-pub(crate) fn configure_popover_window(window: &gtk::Window, kind: WebShellSurface, taskbar: bool) {
-    window.set_layer(Layer::Overlay);
-    window.set_exclusive_zone(0);
-    clear_margins(window);
-    match (kind, taskbar) {
-        (WebShellSurface::DockMenu, false) => configure_dock_menu_window(window, false),
-        (WebShellSurface::DockMenu, true) => configure_dock_menu_window(window, true),
-        (WebShellSurface::QuickSettings, false) => {
-            anchor(window, &[Edge::Top, Edge::Right]);
-            window.set_layer_shell_margin(Edge::Top, PANEL_HEIGHT + 8);
-            window.set_layer_shell_margin(Edge::Right, 12);
-        }
-        (WebShellSurface::QuickSettings, true) => {
-            anchor(window, &[Edge::Bottom, Edge::Right]);
-            window.set_layer_shell_margin(Edge::Bottom, TASKBAR_POPOVER_GAP);
-            window.set_layer_shell_margin(Edge::Right, 12);
-        }
-        (WebShellSurface::DateCenter, false) => {
-            anchor(window, &[Edge::Top]);
-            window.set_layer_shell_margin(Edge::Top, PANEL_HEIGHT + 8);
-        }
-        (WebShellSurface::DateCenter, true) => {
-            anchor(window, &[Edge::Bottom, Edge::Right]);
-            window.set_layer_shell_margin(Edge::Bottom, TASKBAR_POPOVER_GAP);
-            window.set_layer_shell_margin(Edge::Right, 12);
-        }
-        (WebShellSurface::NotificationToast, false) => {
-            anchor(window, &[Edge::Top, Edge::Right]);
-            window.set_layer_shell_margin(Edge::Top, PANEL_HEIGHT + 12);
-            window.set_layer_shell_margin(Edge::Right, 12);
-        }
-        (WebShellSurface::NotificationToast, true) => {
-            anchor(window, &[Edge::Bottom, Edge::Right]);
-            window.set_layer_shell_margin(Edge::Bottom, TASKBAR_HEIGHT + 12);
-            window.set_layer_shell_margin(Edge::Right, 12);
-        }
-        _ => {}
-    }
-}
-
-pub(crate) fn configure_content_size(
-    container: &gtk::Box,
+pub(crate) fn shell_surface(
     kind: WebShellSurface,
     size: (i32, i32),
-) {
-    if kind == WebShellSurface::Panel {
-        container.set_size_request(-1, size.1);
-        container.set_hexpand(true);
-        container.set_vexpand(false);
-        return;
-    }
-    if kind == WebShellSurface::Sidebar {
-        container.set_size_request(size.0, -1);
-        container.set_hexpand(false);
-        container.set_vexpand(true);
-        return;
-    }
-    if !fixed_size(kind) {
-        return;
-    }
-    container.set_size_request(size.0, size.1);
-    container.set_hexpand(false);
-    container.set_vexpand(false);
-}
-
-pub(crate) fn fixed_size(kind: WebShellSurface) -> bool {
-    matches!(
+    panel_taskbar: bool,
+) -> ShellSurfaceOptions {
+    let mut shell_surface = ShellSurfaceOptions::new(kind.namespace())
+        .layer(layer(kind))
+        .anchor(anchor(kind, panel_taskbar))
+        .margin(margin(kind, panel_taskbar))
+        .keyboard_interactivity(keyboard_interactivity(kind));
+    if !matches!(
         kind,
-        WebShellSurface::Dock
-            | WebShellSurface::DockMenu
-            | WebShellSurface::QuickSettings
-            | WebShellSurface::DateCenter
-            | WebShellSurface::NotificationToast
-    )
+        WebShellSurface::Overview | WebShellSurface::QuickSettings | WebShellSurface::DateCenter
+    ) {
+        let (width, height) = shell_size(kind, size, panel_taskbar);
+        shell_surface = shell_surface.size(width, height);
+    }
+    if let Some(exclusive_zone) = exclusive_zone(kind, panel_taskbar) {
+        shell_surface = shell_surface.exclusive_zone(exclusive_zone);
+    }
+    shell_surface
 }
 
-fn configure_dock_window(window: &gtk::Window) {
-    window.set_layer(Layer::Top);
-    anchor(window, &[Edge::Bottom]);
-    clear_margins(window);
-    window.set_layer_shell_margin(Edge::Bottom, 12);
-    window.set_exclusive_zone(0);
-}
-
-fn configure_dock_menu_window(window: &gtk::Window, taskbar: bool) {
-    window.set_layer(Layer::Overlay);
-    anchor(window, &[Edge::Bottom]);
-    clear_margins(window);
-    let margin = if taskbar {
-        TASKBAR_POPOVER_GAP
-    } else {
-        DOCK_MENU_BOTTOM_MARGIN
+fn shell_size(kind: WebShellSurface, size: (i32, i32), panel_taskbar: bool) -> (u32, u32) {
+    let size = match kind {
+        WebShellSurface::Panel => (0, panel_size(panel_taskbar).1),
+        WebShellSurface::Sidebar => (size.0, 0),
+        WebShellSurface::Overview => (0, 0),
+        _ => size,
     };
-    window.set_layer_shell_margin(Edge::Bottom, margin);
-    window.set_exclusive_zone(0);
+    (size.0.max(0) as u32, size.1.max(0) as u32)
 }
 
-fn configure_sidebar_window(window: &gtk::Window) {
-    window.set_layer(Layer::Top);
-    anchor(window, &[Edge::Top, Edge::Bottom, Edge::Left]);
-    clear_margins(window);
-    window.set_exclusive_zone(108);
-}
-
-fn configure_overview_window(window: &gtk::Window) {
-    window.set_layer(Layer::Overlay);
-    anchor(window, &[Edge::Top, Edge::Right, Edge::Bottom, Edge::Left]);
-    clear_margins(window);
-    window.set_exclusive_zone(0);
-}
-
-fn anchor(window: &gtk::Window, edges: &[Edge]) {
-    for edge in [Edge::Left, Edge::Right, Edge::Top, Edge::Bottom] {
-        window.set_anchor(edge, edges.contains(&edge));
+fn layer(kind: WebShellSurface) -> ShellSurfaceLayer {
+    match kind {
+        WebShellSurface::Overview
+        | WebShellSurface::DockMenu
+        | WebShellSurface::QuickSettings
+        | WebShellSurface::DateCenter
+        | WebShellSurface::NotificationToast => ShellSurfaceLayer::Overlay,
+        _ => ShellSurfaceLayer::Top,
     }
 }
 
-fn clear_margins(window: &gtk::Window) {
-    for edge in [Edge::Left, Edge::Right, Edge::Top, Edge::Bottom] {
-        window.set_layer_shell_margin(edge, 0);
+fn anchor(kind: WebShellSurface, panel_taskbar: bool) -> ShellSurfaceAnchor {
+    match kind {
+        WebShellSurface::Panel if panel_taskbar => {
+            ShellSurfaceAnchor::BOTTOM | ShellSurfaceAnchor::horizontal()
+        }
+        WebShellSurface::Panel => ShellSurfaceAnchor::TOP | ShellSurfaceAnchor::horizontal(),
+        WebShellSurface::Dock | WebShellSurface::DockMenu => ShellSurfaceAnchor::BOTTOM,
+        WebShellSurface::Sidebar => ShellSurfaceAnchor::LEFT | ShellSurfaceAnchor::vertical(),
+        WebShellSurface::QuickSettings | WebShellSurface::DateCenter => ShellSurfaceAnchor::ALL,
+        WebShellSurface::NotificationToast if panel_taskbar => {
+            ShellSurfaceAnchor::BOTTOM | ShellSurfaceAnchor::RIGHT
+        }
+        WebShellSurface::NotificationToast => ShellSurfaceAnchor::TOP | ShellSurfaceAnchor::RIGHT,
+        WebShellSurface::Overview => ShellSurfaceAnchor::ALL,
     }
 }
 
-fn apply_rgba_visual(window: &gtk::Window) {
-    let Some(screen) = gtk::prelude::WidgetExt::screen(window) else {
-        return;
-    };
-    if let Some(visual) = screen.rgba_visual() {
-        window.set_visual(Some(&visual));
+fn margin(kind: WebShellSurface, panel_taskbar: bool) -> ShellSurfaceMargin {
+    match kind {
+        WebShellSurface::Dock => ShellSurfaceMargin::new(0, 0, 12, 0),
+        WebShellSurface::DockMenu if panel_taskbar => ShellSurfaceMargin::new(0, 0, 6, 0),
+        WebShellSurface::DockMenu => ShellSurfaceMargin::new(0, 0, 84, 0),
+        WebShellSurface::QuickSettings | WebShellSurface::DateCenter => ShellSurfaceMargin::ZERO,
+        WebShellSurface::NotificationToast if panel_taskbar => {
+            ShellSurfaceMargin::new(0, 12, TASKBAR_HEIGHT + 12, 0)
+        }
+        WebShellSurface::NotificationToast => ShellSurfaceMargin::new(PANEL_HEIGHT + 12, 12, 0, 0),
+        _ => ShellSurfaceMargin::ZERO,
+    }
+}
+
+fn exclusive_zone(kind: WebShellSurface, panel_taskbar: bool) -> Option<i32> {
+    match kind {
+        WebShellSurface::Panel if panel_taskbar => Some(TASKBAR_HEIGHT),
+        WebShellSurface::Panel => Some(PANEL_HEIGHT),
+        WebShellSurface::Sidebar => Some(108),
+        _ => None,
+    }
+}
+
+fn keyboard_interactivity(kind: WebShellSurface) -> ShellSurfaceKeyboardInteractivity {
+    match kind {
+        WebShellSurface::Panel
+        | WebShellSurface::Dock
+        | WebShellSurface::Sidebar
+        | WebShellSurface::NotificationToast => ShellSurfaceKeyboardInteractivity::None,
+        WebShellSurface::Overview => ShellSurfaceKeyboardInteractivity::Exclusive,
+        WebShellSurface::DockMenu
+        | WebShellSurface::QuickSettings
+        | WebShellSurface::DateCenter => ShellSurfaceKeyboardInteractivity::OnDemand,
     }
 }

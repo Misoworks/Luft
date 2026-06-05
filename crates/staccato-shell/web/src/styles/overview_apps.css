@@ -1,27 +1,36 @@
 .overview-apps {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(clamp(92px, 4.9vw, 128px), clamp(108px, 5.7vw, 146px)));
-  justify-content: center;
-  gap: clamp(14px, 1vw, 20px) clamp(10px, 0.8vw, 18px);
-  max-height: min(42vh, 580px);
-  max-width: min(2600px, calc(100vw - 72px));
-  margin: clamp(6px, 1.4vh, 18px) auto 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  align-self: stretch;
+  width: min(1900px, calc(100vw - 72px));
+  min-height: 0;
+  height: 100%;
+  margin: 0 auto;
+  overflow: hidden;
   overscroll-behavior: contain;
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
-  padding: 36px 16px 36px;
-  scroll-padding-top: 34px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  touch-action: pan-x;
 }
 
-.overview-apps::-webkit-scrollbar {
-  width: 0 !important;
-  height: 0 !important;
-  display: none;
-  background: transparent;
+.overview-app-pages {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transform: translate3d(var(--page-offset, 0%), 0, 0);
+  transition: transform 260ms var(--ease-shell);
+  will-change: transform;
+}
+
+.overview-app-page {
+  --overview-app-size: clamp(128px, min(9vw, 18vh), 176px);
+  display: grid;
+  flex: 0 0 100%;
+  grid-template-columns: repeat(8, minmax(96px, 1fr));
+  grid-template-rows: repeat(var(--page-rows, 3), minmax(var(--overview-app-size), 1fr));
+  align-content: stretch;
+  justify-content: center;
+  place-items: center;
+  gap: clamp(18px, 2.4vh, 34px) clamp(18px, 1.45vw, 34px);
+  min-width: 0;
+  height: 100%;
+  padding: 0 clamp(12px, 2.2vw, 46px);
 }
 
 .overview-app {
@@ -31,9 +40,12 @@
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 9px;
-  min-height: clamp(96px, 5.9vw, 126px);
-  border-radius: 18px;
+  gap: 11px;
+  width: var(--overview-app-size);
+  height: var(--overview-app-size);
+  min-width: 0;
+  min-height: 0;
+  border-radius: 20px;
   text-align: center;
   transform: translate3d(0, var(--overview-app-y), 0) scale(var(--control-scale));
   transform-origin: center;
@@ -44,9 +56,9 @@
 
 .overview-app.is-pinned::after {
   position: absolute;
-  bottom: 8px;
+  bottom: 6px;
   left: 50%;
-  width: 18px;
+  width: 20px;
   height: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.58);
@@ -66,16 +78,98 @@
 
 .overview-app img,
 .overview-app svg {
-  width: clamp(42px, 2.6vw, 56px);
-  height: clamp(42px, 2.6vw, 56px);
+  width: clamp(58px, min(4.2vw, 8.5vh), 82px);
+  height: clamp(58px, min(4.2vw, 8.5vh), 82px);
+}
+
+.overview-app img {
+  object-fit: contain;
 }
 
 .overview-app span {
-  max-width: min(104px, 100%);
+  max-width: min(150px, 100%);
   overflow: hidden;
-  font-size: 12px;
+  font-size: clamp(12px, 0.78vw, 14px);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.overview-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 34px;
+  margin: 4px auto 0;
+}
+
+.overview-page-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.overview-page-control,
+.overview-page-dot {
+  --control-scale: 1;
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 999px;
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transition:
+    background-color 150ms var(--ease-shell),
+    opacity 150ms var(--ease-shell),
+    transform 130ms var(--ease-shell);
+}
+
+.overview-page-control {
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.overview-page-control:hover:not(:disabled),
+.overview-page-dot:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.overview-page-control:disabled {
+  opacity: 0.34;
+}
+
+.overview-page-control:active:not(:disabled),
+.overview-page-dot:active {
+  --control-scale: 0.96;
+}
+
+.overview-page-control svg {
+  width: 16px;
+  height: 16px;
+}
+
+.overview-page-dot {
+  width: 30px;
+  height: 30px;
+}
+
+.overview-page-dot span {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.38);
+  transition:
+    width 170ms var(--ease-shell),
+    background-color 170ms var(--ease-shell);
+}
+
+.overview-page-dot.is-active span {
+  width: 18px;
+  background: color-mix(in srgb, var(--accent), white 10%);
 }
 
 .overview-empty {
@@ -92,4 +186,23 @@
   width: 32px;
   height: 32px;
   stroke-width: 1.6;
+}
+
+@media (max-width: 900px) {
+  .overview-apps {
+    width: min(100%, calc(100vw - 48px));
+  }
+
+  .overview-app-page {
+    --overview-app-size: 112px;
+    grid-template-columns: repeat(3, minmax(88px, 112px));
+    grid-template-rows: repeat(var(--mobile-page-rows, 8), minmax(94px, 1fr));
+    padding-inline: 16px;
+  }
+
+  .overview-app img,
+  .overview-app svg {
+    width: 50px;
+    height: 50px;
+  }
 }

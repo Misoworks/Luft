@@ -1,45 +1,26 @@
 use super::{
     actions::WebShellAction,
     model::{WebShellSnapshot, WebShellSurface},
-    surface_layout::{
-        PANEL_HEIGHT, PANEL_WIDTH_HINT, configure_content_size, configure_panel_window,
-        configure_popover_window, configure_window, fixed_size, panel_size,
-    },
+    surface_layout::{PANEL_HEIGHT, PANEL_WIDTH_HINT, panel_size, shell_surface},
     surface_sizing::{notification_toast_size, quick_settings_size},
 };
 use crate::dock::DockApp;
-use gtk::glib;
-use gtk::prelude::*;
-use std::{cell::Cell, env, error::Error, rc::Rc, sync::mpsc::Sender, time::Duration};
+use fenestra_cef::{
+    BridgeCommandDescriptor, BridgeError, BridgeResponse, CefProcess, CefWindow, RuntimeConfig,
+    RuntimeMode, ShellSurfaceOptions, WebViewSecurity,
+};
+use serde_json::json;
+use std::{
+    env,
+    error::Error,
+    path::PathBuf,
+    sync::{Arc, Mutex, mpsc::Sender},
+    time::{Duration, Instant},
+};
 use tracing::{debug, warn};
-use webkit2gtk::{HardwareAccelerationPolicy, LoadEvent, SettingsExt, WebViewExt};
-use wry::{WebView, WebViewBuilder, WebViewBuilderExtUnix, WebViewExtUnix};
 
 const DOCK_MENU_WIDTH: i32 = 184;
 const DOCK_MENU_HEIGHT: i32 = 128;
-const SURFACE_EXIT_DURATION: Duration = Duration::from_millis(100);
-const SURFACE_OPEN_SCRIPT: &str = r#"
-(() => {
-  const app = document.getElementById("app");
-  if (!app) return;
-  app.classList.remove("is-surface-closing");
-  app.classList.remove("is-surface-opening");
-  void app.offsetWidth;
-  app.classList.add("is-surface-opening");
-  window.clearTimeout(window.__staccatoSurfaceAnimation);
-  window.__staccatoSurfaceAnimation = window.setTimeout(() => {
-    app.classList.remove("is-surface-opening");
-  }, 320);
-})();
-"#;
-const SURFACE_CLOSE_SCRIPT: &str = r#"
-(() => {
-  const app = document.getElementById("app");
-  if (!app) return;
-  app.classList.remove("is-surface-opening");
-  app.classList.add("is-surface-closing");
-})();
-"#;
 
 pub struct WebSurfaces {
     pub dock: WebSurface,
@@ -57,12 +38,15 @@ impl WebSurfaces {
         actions_tx: Sender<WebShellAction>,
         snapshot: &WebShellSnapshot,
         dock_apps: &[DockApp],
+        panel_taskbar: bool,
     ) -> Result<Self, Box<dyn Error>> {
         let mut surfaces = Self {
             panel: WebSurface::new(
                 WebShellSurface::Panel,
                 (PANEL_WIDTH_HINT, PANEL_HEIGHT),
                 true,
+                false,
+                panel_taskbar,
                 &actions_tx,
                 snapshot,
             )?,
@@ -70,51 +54,68 @@ impl WebSurfaces {
                 WebShellSurface::Dock,
                 super::surface_layout::dock_size(dock_apps),
                 true,
+                false,
+                false,
                 &actions_tx,
                 snapshot,
             )?,
             dock_menu: LazyWebSurface::new(
                 WebShellSurface::DockMenu,
                 (DOCK_MENU_WIDTH, DOCK_MENU_HEIGHT),
+                panel_taskbar,
                 &actions_tx,
                 snapshot,
             ),
-            sidebar: LazyWebSurface::new(WebShellSurface::Sidebar, (108, 1), &actions_tx, snapshot),
-            overview: LazyWebSurface::new(WebShellSurface::Overview, (1, 1), &actions_tx, snapshot),
+            sidebar: LazyWebSurface::new(
+                WebShellSurface::Sidebar,
+                (108, 1),
+                false,
+                &actions_tx,
+                snapshot,
+            ),
+            overview: LazyWebSurface::new(
+                WebShellSurface::Overview,
+                (1, 1),
+                false,
+                &actions_tx,
+                snapshot,
+            ),
             quick: LazyWebSurface::new(
                 WebShellSurface::QuickSettings,
                 quick_settings_size(snapshot),
+                panel_taskbar,
                 &actions_tx,
                 snapshot,
             ),
             date: LazyWebSurface::new(
                 WebShellSurface::DateCenter,
                 (780, 430),
+                panel_taskbar,
                 &actions_tx,
                 snapshot,
             ),
             notification_toast: LazyWebSurface::new(
                 WebShellSurface::NotificationToast,
                 notification_toast_size(),
+                panel_taskbar,
                 &actions_tx,
                 snapshot,
             ),
         };
-        surfaces.overview.ensure_created();
-        surfaces.quick.ensure_created();
-        surfaces.date.ensure_created();
+        surfaces.overview.prewarm();
+        surfaces.quick.prewarm();
+        surfaces.date.prewarm();
         surfaces.dock_menu.ensure_created();
         surfaces.notification_toast.ensure_created();
         Ok(surfaces)
     }
 
     pub fn evaluate_snapshot(&mut self, snapshot: &WebShellSnapshot, json: &str) {
-        self.panel.evaluate_snapshot(json);
-        self.dock.evaluate_snapshot(json);
+        self.panel.evaluate_snapshot(snapshot, json);
+        self.dock.evaluate_snapshot(snapshot, json);
         self.dock_menu.evaluate_snapshot(snapshot, json);
         self.sidebar.evaluate_snapshot(snapshot, json);
         self.overview.evaluate_snapshot(snapshot, json);
-        self.quick.resize(quick_settings_size(snapshot));
         self.quick.evaluate_snapshot(snapshot, json);
         self.date.evaluate_snapshot(snapshot, json);
         self.notification_toast.evaluate_snapshot(snapshot, json);
@@ -143,6 +144,15 @@ impl WebSurfaces {
     pub fn set_notification_toast_visible(&mut self, visible: bool) {
         self.notification_toast.set_visible(visible);
     }
+
+    pub fn tick(&mut self) {
+        self.dock_menu.tick();
+        self.sidebar.tick();
+        self.overview.tick();
+        self.quick.tick();
+        self.date.tick();
+        self.notification_toast.tick();
+    }
 }
 
 pub struct LazyWebSurface {
@@ -152,6 +162,7 @@ pub struct LazyWebSurface {
     snapshot: WebShellSnapshot,
     snapshot_json: String,
     visible: bool,
+    hide_at: Option<Instant>,
     panel_taskbar: bool,
     surface: Option<WebSurface>,
 }
@@ -160,6 +171,7 @@ impl LazyWebSurface {
     fn new(
         kind: WebShellSurface,
         size: (i32, i32),
+        panel_taskbar: bool,
         actions_tx: &Sender<WebShellAction>,
         snapshot: &WebShellSnapshot,
     ) -> Self {
@@ -170,20 +182,36 @@ impl LazyWebSurface {
             snapshot: snapshot.clone(),
             snapshot_json: serde_json::to_string(snapshot).unwrap_or_default(),
             visible: false,
-            panel_taskbar: false,
+            hide_at: None,
+            panel_taskbar,
             surface: None,
         }
     }
 
     pub fn set_visible(&mut self, visible: bool) {
         if !visible {
+            if !self.visible {
+                if self.hide_at.is_some() {
+                    return;
+                }
+                if self.surface.as_ref().is_none_or(|surface| !surface.visible) {
+                    return;
+                }
+            }
             self.visible = false;
             if let Some(surface) = &mut self.surface {
-                surface.set_visible(false);
+                if let Some(delay) = close_animation_duration(self.kind) {
+                    surface.emit_surface_close();
+                    self.hide_at = Some(Instant::now() + delay);
+                } else {
+                    self.hide_at = None;
+                    surface.set_visible(false);
+                }
             }
             return;
         }
 
+        let was_closing = self.hide_at.take().is_some();
         if self.surface.is_none() {
             self.ensure_created();
             if self.surface.is_none() {
@@ -193,7 +221,25 @@ impl LazyWebSurface {
 
         self.visible = true;
         if let Some(surface) = &mut self.surface {
+            if was_closing {
+                surface.emit_surface_open();
+            }
             surface.set_visible(true);
+        }
+    }
+
+    fn tick(&mut self) {
+        let Some(hide_at) = self.hide_at else {
+            return;
+        };
+        if Instant::now() < hide_at {
+            return;
+        }
+        self.hide_at = None;
+        if !self.visible {
+            if let Some(surface) = &mut self.surface {
+                surface.set_visible(false);
+            }
         }
     }
 
@@ -205,17 +251,26 @@ impl LazyWebSurface {
             self.kind,
             self.size,
             false,
+            true,
+            self.panel_taskbar,
             &self.actions_tx,
             &self.snapshot,
         ) {
             Ok(mut surface) => {
                 surface.set_panel_taskbar(self.panel_taskbar);
-                surface.evaluate_snapshot(&self.snapshot_json);
+                surface.evaluate_snapshot(&self.snapshot, &self.snapshot_json);
                 self.surface = Some(surface);
             }
             Err(error) => {
                 warn!(%error, surface = self.kind.as_str(), "failed to create web shell surface");
             }
+        }
+    }
+
+    fn prewarm(&mut self) {
+        self.ensure_created();
+        if let Some(surface) = &mut self.surface {
+            surface.prewarm();
         }
     }
 
@@ -225,17 +280,7 @@ impl LazyWebSurface {
             self.snapshot_json = json.to_string();
         }
         if let Some(surface) = &mut self.surface {
-            surface.evaluate_snapshot(json);
-        }
-    }
-
-    fn resize(&mut self, size: (i32, i32)) {
-        if self.size == size {
-            return;
-        }
-        self.size = size;
-        if let Some(surface) = &mut self.surface {
-            surface.resize(size);
+            surface.evaluate_snapshot(snapshot, json);
         }
     }
 
@@ -249,13 +294,13 @@ impl LazyWebSurface {
 
 pub struct WebSurface {
     kind: WebShellSurface,
-    window: gtk::Window,
-    container: gtk::Box,
-    webview: WebView,
+    size: (i32, i32),
+    actions_tx: Sender<WebShellAction>,
+    snapshot: Arc<Mutex<WebShellSnapshot>>,
     visible: bool,
-    loaded: Rc<Cell<bool>>,
-    requested_visible: Rc<Cell<bool>>,
+    keep_alive_when_hidden: bool,
     panel_taskbar: bool,
+    process: Option<CefProcess>,
     pending_snapshot: String,
     rendered_snapshot: String,
 }
@@ -265,64 +310,26 @@ impl WebSurface {
         kind: WebShellSurface,
         size: (i32, i32),
         visible: bool,
+        keep_alive_when_hidden: bool,
+        panel_taskbar: bool,
         actions_tx: &Sender<WebShellAction>,
         snapshot: &WebShellSnapshot,
     ) -> Result<Self, Box<dyn Error>> {
-        let window = gtk::Window::new(gtk::WindowType::Toplevel);
-        configure_window(&window, kind, size);
-        let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        configure_content_size(&container, kind, size);
-        window.add(&container);
-
         let initial = serde_json::to_string(snapshot)?;
-        let surface = serde_json::to_string(kind.as_str())?;
-        let init = format!(
-            "window.__STACCATO_SURFACE__={surface};window.__STACCATO_INITIAL_STATE__={initial};"
-        );
-        let tx = actions_tx.clone();
-        let webview = WebViewBuilder::new()
-            .with_html(shell_html(kind))
-            .with_transparent(true)
-            .with_background_color((0, 0, 0, 0))
-            .with_initialization_script(init)
-            .with_ipc_handler(move |request| match serde_json::from_str(request.body()) {
-                Ok(action) => {
-                    let _ = tx.send(action);
-                }
-                Err(error) => warn!(%error, "ignored invalid web shell action"),
-            })
-            .build_gtk(&container)?;
-        configure_webview(&webview);
-        resize_webview(&webview, kind, size);
-        let loaded = Rc::new(Cell::new(false));
-        let requested_visible = Rc::new(Cell::new(visible));
-        let native = webview.webview();
-        let load_window = window.clone();
-        let load_ready = Rc::clone(&loaded);
-        let load_requested = Rc::clone(&requested_visible);
-        native.connect_load_changed(move |_, event| {
-            if event != LoadEvent::Finished {
-                return;
-            }
-            load_ready.set(true);
-            if load_requested.get() {
-                load_window.show_all();
-                load_window.present();
-            }
-        });
-        window.hide();
-        Ok(Self {
+        let mut surface = Self {
             kind,
-            window,
-            container,
-            webview,
-            visible,
-            loaded,
-            requested_visible,
-            panel_taskbar: false,
-            pending_snapshot: initial.clone(),
-            rendered_snapshot: initial,
-        })
+            size,
+            actions_tx: actions_tx.clone(),
+            snapshot: Arc::new(Mutex::new(snapshot.clone())),
+            visible: false,
+            keep_alive_when_hidden,
+            panel_taskbar,
+            process: None,
+            pending_snapshot: initial,
+            rendered_snapshot: String::new(),
+        };
+        surface.set_visible(visible);
+        Ok(surface)
     }
 
     pub fn set_visible(&mut self, visible: bool) {
@@ -330,43 +337,19 @@ impl WebSurface {
             return;
         }
         self.visible = visible;
-        self.requested_visible.set(visible);
         if visible {
-            if self.loaded.get() {
-                self.window.show_all();
-                self.window.present();
-                self.run_animation_script(SURFACE_OPEN_SCRIPT);
-            }
-            self.flush_snapshot();
-        } else if self.loaded.get() && animated_surface(self.kind) {
-            self.run_animation_script(SURFACE_CLOSE_SCRIPT);
-            let window = self.window.clone();
-            let requested_visible = Rc::clone(&self.requested_visible);
-            glib::timeout_add_local(SURFACE_EXIT_DURATION, move || {
-                if !requested_visible.get() {
-                    window.hide();
-                }
-                glib::ControlFlow::Break
-            });
+            self.show_process();
         } else {
-            self.window.hide();
+            self.hide_process();
         }
     }
 
-    pub fn resize(&self, size: (i32, i32)) {
-        self.window.set_default_size(size.0, size.1);
-        resize_webview(&self.webview, self.kind, size);
-        if self.kind == WebShellSurface::Panel {
-            self.window.set_size_request(1, size.1);
-            self.container.set_size_request(-1, size.1);
-            self.window.resize(1, size.1);
+    pub fn resize(&mut self, size: (i32, i32)) {
+        if self.size == size {
             return;
         }
-        if fixed_size(self.kind) || self.kind == WebShellSurface::Panel {
-            self.window.set_size_request(size.0, size.1);
-            self.container.set_size_request(size.0, size.1);
-        }
-        self.window.resize(size.0, size.1);
+        self.size = size;
+        self.restart_for_geometry_change();
     }
 
     fn set_panel_taskbar(&mut self, taskbar: bool) {
@@ -374,100 +357,255 @@ impl WebSurface {
             return;
         }
         self.panel_taskbar = taskbar;
-        match self.kind {
-            WebShellSurface::Panel => {
-                configure_panel_window(&self.window, taskbar);
-                self.resize(panel_size(taskbar));
-            }
-            WebShellSurface::DockMenu
-            | WebShellSurface::QuickSettings
-            | WebShellSurface::DateCenter
-            | WebShellSurface::NotificationToast => {
-                configure_popover_window(&self.window, self.kind, taskbar);
-            }
-            _ => {}
+        if self.kind == WebShellSurface::Panel {
+            self.resize(panel_size(taskbar));
+        } else {
+            self.restart_for_geometry_change();
         }
     }
 
-    fn evaluate_snapshot(&mut self, json: &str) {
+    fn evaluate_snapshot(&mut self, snapshot: &WebShellSnapshot, json: &str) {
+        if let Ok(mut current) = self.snapshot.lock() {
+            *current = snapshot.clone();
+        }
         if self.pending_snapshot != json {
             self.pending_snapshot = json.to_string();
         }
         self.flush_snapshot();
     }
 
-    fn flush_snapshot(&mut self) {
-        if !self.visible || self.pending_snapshot == self.rendered_snapshot {
+    fn launch(&mut self) {
+        if self.process.is_some() {
+            self.flush_snapshot();
             return;
         }
-        let script = format!(
-            "window.staccatoShell?.setSnapshot({});",
-            self.pending_snapshot
-        );
-        match self.webview.evaluate_script(&script) {
-            Ok(()) => self.rendered_snapshot.clone_from(&self.pending_snapshot),
+
+        let window = self.build_window();
+        match window.launch_or_install() {
+            Ok(process) => {
+                debug!(
+                    pid = process.id(),
+                    surface = self.kind.as_str(),
+                    "launched Fenestra shell surface"
+                );
+                self.process = Some(process);
+            }
             Err(error) => {
-                debug!(%error, "failed to update web shell surface");
+                warn!(%error, surface = self.kind.as_str(), "failed to launch Fenestra shell surface");
             }
         }
     }
 
-    fn run_animation_script(&self, script: &str) {
-        if !animated_surface(self.kind) {
+    fn prewarm(&mut self) {
+        if self.process.is_none() {
+            self.launch();
+        }
+        if !self.visible {
+            self.hide_process();
+        }
+    }
+
+    fn show_process(&mut self) {
+        let had_process = self.process.is_some();
+        if had_process {
+            self.flush_snapshot();
+        }
+        let restored = self
+            .process
+            .as_ref()
+            .is_some_and(|process| process.set_shell_surface_visible(true));
+        if had_process && !restored {
+            self.process = None;
+            self.rendered_snapshot.clear();
+        }
+        if self.process.is_none() {
+            self.launch();
+        }
+        self.flush_snapshot();
+        self.emit_surface_open();
+    }
+
+    fn hide_process(&mut self) {
+        if !self.keep_alive_when_hidden {
+            self.process = None;
+            self.rendered_snapshot.clear();
             return;
         }
-        if let Err(error) = self.webview.evaluate_script(script) {
-            debug!(%error, surface = self.kind.as_str(), "failed to run shell surface animation");
+        if self
+            .process
+            .as_ref()
+            .is_none_or(|process| process.set_shell_surface_visible(false))
+        {
+            return;
+        }
+        self.process = None;
+        self.rendered_snapshot.clear();
+    }
+
+    fn build_window(&self) -> CefWindow {
+        let snapshot = Arc::clone(&self.snapshot);
+        let action_tx = self.actions_tx.clone();
+        let kind = self.kind;
+        let shell_options = shell_surface(kind, self.size, self.panel_taskbar);
+        let (width, height) = cef_initial_size(&shell_options, self.size);
+
+        let window = CefWindow::new()
+            .title(format!("Staccato {}", kind.as_str()))
+            .fixed_size(width, height)
+            .frameless()
+            .transparent(true)
+            .always_on_top(true)
+            .shell_surface(shell_options)
+            .visible(self.visible)
+            .active(self.visible && kind == WebShellSurface::Overview)
+            .runtime(runtime_config())
+            .security(WebViewSecurity::default())
+            .bridge_descriptor_handler(
+                BridgeCommandDescriptor::new("staccato.ready").target("desktop"),
+                move |_| {
+                    let snapshot = snapshot
+                        .lock()
+                        .map_err(|_| BridgeError::new("failed to read staccato shell snapshot"))?;
+                    Ok(BridgeResponse::json(json!({
+                        "surface": kind.as_str(),
+                        "snapshot": &*snapshot,
+                    })))
+                },
+            )
+            .bridge_descriptor_handler(
+                BridgeCommandDescriptor::new("staccato.action").target("desktop"),
+                move |command| match serde_json::from_value::<WebShellAction>(command.params) {
+                    Ok(action) => {
+                        action_tx.send(action).map_err(|_| {
+                            BridgeError::new("staccato shell action channel closed")
+                        })?;
+                        Ok(BridgeResponse::json(json!({ "ok": true })))
+                    }
+                    Err(error) => Err(BridgeError::new(format!(
+                        "invalid staccato shell action: {error}"
+                    ))),
+                },
+            );
+
+        match shell_entry(kind) {
+            ShellEntry::Dev(url) => window.dev_url(url),
+            ShellEntry::File(path) => window.entry(path),
         }
     }
-}
 
-fn animated_surface(kind: WebShellSurface) -> bool {
-    matches!(
-        kind,
-        WebShellSurface::DockMenu
-            | WebShellSurface::QuickSettings
-            | WebShellSurface::DateCenter
-            | WebShellSurface::NotificationToast
-            | WebShellSurface::Overview
-    )
-}
-
-fn configure_webview(webview: &WebView) {
-    let native = webview.webview();
-    if let Some(settings) = WebViewExt::settings(&native) {
-        settings.set_hardware_acceleration_policy(HardwareAccelerationPolicy::Always);
+    fn flush_snapshot(&mut self) {
+        if !self.visible || self.pending_snapshot == self.rendered_snapshot {
+            return;
+        }
+        let Some(process) = &self.process else {
+            return;
+        };
+        let Ok(snapshot) = self.snapshot.lock() else {
+            return;
+        };
+        let Ok(value) = serde_json::to_value(&*snapshot) else {
+            return;
+        };
+        if process.emit_bridge_event("staccato.snapshot", value) {
+            self.rendered_snapshot.clone_from(&self.pending_snapshot);
+        }
     }
-}
 
-fn resize_webview(webview: &WebView, kind: WebShellSurface, size: (i32, i32)) {
-    let native = webview.webview();
-    if kind == WebShellSurface::Panel {
-        native.set_size_request(-1, size.1);
-        return;
-    }
-    if fixed_size(kind) {
-        native.set_size_request(size.0, size.1);
-    }
-}
-
-fn shell_dev_url(kind: WebShellSurface) -> Option<String> {
-    if let Ok(url) = env::var("STACCATO_SHELL_WEB_DEV_URL") {
-        return Some(format!(
-            "{}?surface={}",
-            url.trim_end_matches('/'),
-            kind.as_str()
-        ));
-    }
-    None
-}
-
-fn shell_html(kind: WebShellSurface) -> String {
-    if let Some(url) = shell_dev_url(kind) {
-        return format!(
-            r#"<!doctype html><meta charset="utf-8"><script>location.replace({url:?});</script>"#
+    fn emit_surface_open(&self) {
+        let Some(process) = &self.process else {
+            return;
+        };
+        let _ = process.emit_bridge_event(
+            "staccato.surface-open",
+            json!({ "surface": self.kind.as_str() }),
         );
     }
 
-    include_str!("../../web/dist/index.html").to_string()
+    fn emit_surface_close(&self) {
+        let Some(process) = &self.process else {
+            return;
+        };
+        let _ = process.emit_bridge_event(
+            "staccato.surface-close",
+            json!({ "surface": self.kind.as_str() }),
+        );
+    }
+
+    fn restart_for_geometry_change(&mut self) {
+        let was_running = self.process.is_some();
+        if !self.visible && (!self.keep_alive_when_hidden || !was_running) {
+            return;
+        }
+        self.process = None;
+        self.rendered_snapshot.clear();
+        self.launch();
+        if !self.visible {
+            self.hide_process();
+        }
+    }
+}
+
+fn close_animation_duration(kind: WebShellSurface) -> Option<Duration> {
+    match kind {
+        WebShellSurface::Overview => Some(Duration::from_millis(190)),
+        WebShellSurface::QuickSettings | WebShellSurface::DateCenter => {
+            Some(Duration::from_millis(150))
+        }
+        WebShellSurface::Panel
+        | WebShellSurface::Dock
+        | WebShellSurface::DockMenu
+        | WebShellSurface::Sidebar
+        | WebShellSurface::NotificationToast => None,
+    }
+}
+
+fn runtime_config() -> RuntimeConfig {
+    RuntimeConfig {
+        mode: RuntimeMode::SharedPreferred,
+        allow_user_install: true,
+        bundled_dir: Some(workspace_root()),
+        ..RuntimeConfig::default()
+    }
+}
+
+enum ShellEntry {
+    Dev(String),
+    File(String),
+}
+
+fn shell_entry(kind: WebShellSurface) -> ShellEntry {
+    if let Ok(url) = env::var("STACCATO_SHELL_WEB_DEV_URL") {
+        return ShellEntry::Dev(append_shell_query(url.trim_end_matches('/'), kind));
+    }
+    ShellEntry::File(append_shell_query(
+        &manifest_dir()
+            .join("web/dist/index.html")
+            .display()
+            .to_string(),
+        kind,
+    ))
+}
+
+fn append_shell_query(base: &str, kind: WebShellSurface) -> String {
+    let separator = if base.contains('?') { '&' } else { '?' };
+    format!("{base}{separator}surface={}&fenestra=1", kind.as_str())
+}
+
+fn cef_initial_size(shell_surface: &ShellSurfaceOptions, fallback: (i32, i32)) -> (u32, u32) {
+    let (width, height) = shell_surface
+        .size
+        .unwrap_or((fallback.0.max(1) as u32, fallback.1.max(1) as u32));
+    (width.max(1), height.max(1))
+}
+
+fn workspace_root() -> PathBuf {
+    manifest_dir()
+        .parent()
+        .and_then(|path| path.parent())
+        .map(PathBuf::from)
+        .unwrap_or_else(manifest_dir)
+}
+
+fn manifest_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
