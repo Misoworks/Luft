@@ -234,11 +234,13 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
         let scene_dirty = state.take_scene_dirty();
         let debug_needs_render =
             state.config.compositor.debug_overlay && debug_overlay_cache.needs_refresh();
+        let blur_animating = blur_cache.is_animating();
         let content_render_needed = force_full_damage
             || scene_dirty
             || removed_windows
             || finished_window_closes
             || state.animations_active()
+            || blur_animating
             || show_loading;
         let render_needed = content_render_needed || debug_needs_render;
         if !render_needed {
@@ -286,8 +288,9 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                 blur_targets.extend(overlay_targets.iter().cloned());
                 blur_cache.retain_targets(&blur_targets);
             } else {
-                blur_cache.retain_targets(&[]);
+                blur_cache.clear();
             }
+            let blur_animating = blur_cache.is_animating();
             let windows = window_elements(renderer, &state);
             let window_chrome = window_chrome_elements(renderer, &state)?;
             let top_layer = if fullscreen_active {
@@ -356,7 +359,12 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                     loading_overlay.as_ref(),
                     debug_overlay.as_ref(),
                 );
-                damage_tracker.plan(output.size, buffer_age, force_full_damage, &damage_elements)
+                damage_tracker.plan(
+                    output.size,
+                    buffer_age,
+                    force_full_damage || blur_animating,
+                    &damage_elements,
+                )
             };
             let blur_damage_plan = {
                 let blur_damage_elements = blur_damage_elements(
@@ -368,7 +376,7 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                 blur_damage_tracker.plan(
                     output.size,
                     buffer_age,
-                    force_full_damage,
+                    force_full_damage || blur_animating,
                     &blur_damage_elements,
                 )
             };

@@ -3,11 +3,11 @@ use smithay::{
     reexports::wayland_server::DisplayHandle,
     utils::{Clock, Monotonic},
     wayland::{
-        cursor_shape::CursorShapeManagerState, fractional_scale::FractionalScaleManagerState,
-        output::OutputManagerState, presentation::PresentationState,
-        shell::xdg::decoration::XdgDecorationState, text_input::TextInputManagerState,
-        viewporter::ViewporterState, xdg_activation::XdgActivationState,
-        xdg_toplevel_icon::XdgToplevelIconManager,
+        alpha_modifier::AlphaModifierState, cursor_shape::CursorShapeManagerState,
+        fractional_scale::FractionalScaleManagerState, output::OutputManagerState,
+        presentation::PresentationState, shell::xdg::decoration::XdgDecorationState,
+        text_input::TextInputManagerState, viewporter::ViewporterState,
+        xdg_activation::XdgActivationState, xdg_toplevel_icon::XdgToplevelIconManager,
     },
 };
 
@@ -22,6 +22,7 @@ pub struct ProtocolState {
     _presentation: PresentationState,
     _output: OutputManagerState,
     _background_effect: BackgroundEffectGlobal,
+    _alpha_modifier: AlphaModifierState,
 }
 
 impl ProtocolState {
@@ -45,6 +46,7 @@ impl ProtocolState {
             ),
             _output: OutputManagerState::new_with_xdg_output::<BatonState>(display),
             _background_effect: BackgroundEffectGlobal::new(display),
+            _alpha_modifier: AlphaModifierState::new::<BatonState>(display),
         }
     }
 }

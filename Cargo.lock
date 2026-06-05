@@ -1021,6 +1021,7 @@ dependencies = [
  "layershellev",
  "libc",
  "pollster",
+ "raw-window-handle",
  "serde_json",
  "stuk-platform",
  "stuk-platform-shell",

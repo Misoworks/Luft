@@ -9,6 +9,7 @@
   padding: clamp(24px, 3vw, 54px) clamp(28px, 3.6vw, 92px) clamp(26px, 3vw, 56px);
   overflow: hidden;
   background: rgba(38, 37, 34, 0.98);
+  contain: layout paint style;
   transform-origin: center;
 }
 
@@ -36,12 +37,14 @@
 }
 
 #app.is-surface-opening[data-surface="overview"] .shell-overview {
-  animation: overview-surface-in 240ms var(--ease-shell) both;
+  animation: overview-surface-in 130ms var(--ease-shell) both;
+  will-change: opacity;
 }
 
 #app.is-surface-closing[data-surface="overview"] .shell-overview {
   pointer-events: none;
-  animation: overview-surface-out 180ms var(--ease-shell) both;
+  animation: overview-surface-out 105ms var(--ease-shell) both;
+  will-change: opacity;
 }
 
 .overview-top {
@@ -108,45 +111,36 @@
 }
 
 #app.is-surface-opening[data-surface="overview"] .overview-search,
-#app.is-surface-opening[data-surface="overview"] .overview-app,
 #app.is-surface-opening[data-surface="overview"] .overview-pagination,
 #app.is-surface-opening[data-surface="overview"] .overview-empty {
-  animation: overview-item-in 260ms var(--ease-shell) both;
+  animation: overview-item-in 170ms var(--ease-shell) both;
 }
 
 #app.is-surface-opening[data-surface="overview"] .overview-search {
-  animation-delay: 24ms;
+  animation-delay: 10ms;
 }
 
 #app.is-surface-opening[data-surface="overview"] .overview-pagination {
-  animation-delay: 68ms;
-}
-
-#app.is-surface-opening[data-surface="overview"] .overview-app {
-  animation-delay: calc(42ms + var(--index, 0) * 7ms);
+  animation-delay: 28ms;
 }
 
 @keyframes overview-surface-in {
   from {
     opacity: 0;
-    transform: scale(1.018);
   }
 
   to {
     opacity: 1;
-    transform: scale(1);
   }
 }
 
 @keyframes overview-surface-out {
   from {
     opacity: 1;
-    transform: scale(1);
   }
 
   to {
     opacity: 0;
-    transform: scale(1.006);
   }
 }
 

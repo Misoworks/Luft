@@ -1,9 +1,16 @@
 use smithay::{
-    desktop::{LayerSurface, WindowSurfaceType, layer_map_for_output},
+    desktop::{
+        LayerSurface, WindowSurfaceType, layer_map_for_output, utils::bbox_from_surface_tree,
+    },
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{Logical, Point},
-    wayland::shell::wlr_layer::{Layer, LayerSurface as WlrLayerSurface},
+    wayland::{
+        alpha_modifier::AlphaModifierSurfaceCachedState,
+        compositor::{self, BufferAssignment, SurfaceAttributes},
+        shell::wlr_layer::{Layer, LayerSurface as WlrLayerSurface},
+        shm,
+    },
 };
 use tracing::debug;
 
@@ -103,6 +110,9 @@ pub fn render_targets(
     layer_map
         .layers_on(layer)
         .filter_map(|surface| {
+            if bbox_from_surface_tree(surface.wl_surface(), (0, 0)).is_empty() {
+                return None;
+            }
             let geometry = layer_map.layer_geometry(surface)?;
             let material = material_for(surface.namespace())?;
             let (location, size) = material_geometry(
@@ -111,9 +121,17 @@ pub fn render_targets(
                 geometry.size,
                 panel_taskbar,
             );
+            let opacity = material_opacity(
+                surface.namespace(),
+                surface.wl_surface(),
+                (location.x - geometry.loc.x, location.y - geometry.loc.y).into(),
+                size,
+            );
             Some(LayerRenderTarget {
                 surface: surface.wl_surface().clone(),
+                blur_layer: BlurLayer::from_shell_layer(layer)?,
                 material,
+                opacity,
                 location,
                 size,
             })
@@ -145,6 +163,8 @@ const QUICK_SETTINGS_BLUR_WIDTH: i32 = 420;
 const QUICK_SETTINGS_BLUR_HEIGHT: i32 = 230;
 const DATE_CENTER_BLUR_WIDTH: i32 = 360;
 const DATE_CENTER_BLUR_HEIGHT: i32 = 470;
+const MATERIAL_FULL_BLUR_ALPHA: f32 = 120.0;
+const MATERIAL_VISIBLE_ALPHA_FLOOR: f32 = 4.0;
 
 #[derive(Debug, Clone)]
 pub struct LayerPointerFocus {
@@ -155,7 +175,9 @@ pub struct LayerPointerFocus {
 #[derive(Debug, Clone)]
 pub struct LayerRenderTarget {
     pub surface: WlSurface,
+    pub blur_layer: BlurLayer,
     pub material: LayerMaterial,
+    pub opacity: f32,
     pub location: Point<i32, Logical>,
     pub size: smithay::utils::Size<i32, Logical>,
 }
@@ -172,6 +194,23 @@ pub enum LayerMaterial {
     RoundRect { radius: i32 },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlurLayer {
+    Window,
+    Top,
+    Overlay,
+}
+
+impl BlurLayer {
+    fn from_shell_layer(layer: Layer) -> Option<Self> {
+        match layer {
+            Layer::Top => Some(Self::Top),
+            Layer::Overlay => Some(Self::Overlay),
+            _ => None,
+        }
+    }
+}
+
 fn material_for(namespace: &str) -> Option<LayerMaterial> {
     match namespace {
         "staccato-panel" => Some(LayerMaterial::Rect),
@@ -181,7 +220,6 @@ fn material_for(namespace: &str) -> Option<LayerMaterial> {
         "staccato-dock-menu" => Some(LayerMaterial::RoundRect { radius: 16 }),
         "staccato-date-center" => Some(LayerMaterial::RoundRect { radius: 26 }),
         "staccato-launcher" => Some(LayerMaterial::RoundRect { radius: 22 }),
-        "staccato-overview" => Some(LayerMaterial::Rect),
         "staccato-quick-settings" => Some(LayerMaterial::RoundRect { radius: 26 }),
         "staccato-sidebar" => Some(LayerMaterial::Rect),
         "staccato-notifications" => Some(LayerMaterial::RoundRect { radius: 18 }),
@@ -232,6 +270,101 @@ fn material_geometry(
         (location.x, location.y + vertical_inset).into(),
         (size.w, DOCK_BLUR_HEIGHT).into(),
     )
+}
+
+fn material_opacity(
+    namespace: &str,
+    surface: &WlSurface,
+    location: Point<i32, Logical>,
+    size: smithay::utils::Size<i32, Logical>,
+) -> f32 {
+    let alpha = surface_alpha_multiplier(surface);
+    match namespace {
+        "staccato-dock-menu" | "staccato-date-center" | "staccato-quick-settings" => {
+            alpha
+                * sampled_surface_opacity(surface, location, size)
+                    .unwrap_or(1.0)
+                    .clamp(0.0, 1.0)
+        }
+        _ => alpha,
+    }
+}
+
+fn surface_alpha_multiplier(surface: &WlSurface) -> f32 {
+    compositor::with_states(surface, |states| {
+        if !states.cached_state.has::<AlphaModifierSurfaceCachedState>() {
+            return 1.0;
+        }
+        let mut alpha_state = states.cached_state.get::<AlphaModifierSurfaceCachedState>();
+        alpha_state.current().multiplier_f32().unwrap_or(1.0)
+    })
+}
+
+fn sampled_surface_opacity(
+    surface: &WlSurface,
+    location: Point<i32, Logical>,
+    size: smithay::utils::Size<i32, Logical>,
+) -> Option<f32> {
+    let buffer = compositor::with_states(surface, |states| {
+        let mut attributes = states.cached_state.get::<SurfaceAttributes>();
+        match attributes.current().buffer.as_ref()? {
+            BufferAssignment::NewBuffer(buffer) => Some(buffer.clone()),
+            BufferAssignment::Removed => None,
+        }
+    })?;
+
+    shm::with_buffer_contents(&buffer, |ptr, len, data| {
+        sample_argb8888_material_opacity(ptr, len, data, location, size)
+    })
+    .ok()
+    .flatten()
+}
+
+fn sample_argb8888_material_opacity(
+    ptr: *const u8,
+    len: usize,
+    data: shm::BufferData,
+    location: Point<i32, Logical>,
+    size: smithay::utils::Size<i32, Logical>,
+) -> Option<f32> {
+    if data.format != smithay::reexports::wayland_server::protocol::wl_shm::Format::Argb8888 {
+        return None;
+    }
+    let left = location.x.clamp(0, data.width.saturating_sub(1));
+    let top = location.y.clamp(0, data.height.saturating_sub(1));
+    let right = (location.x + size.w).clamp(left + 1, data.width);
+    let bottom = (location.y + size.h).clamp(top + 1, data.height);
+    let sample_columns = 20.min((right - left).max(1));
+    let sample_rows = 20.min((bottom - top).max(1));
+    let mut alpha_total = 0_u32;
+    let mut samples = 0_u32;
+
+    for row in 0..sample_rows {
+        let y = top + ((bottom - top - 1) * row / sample_rows.max(1));
+        for column in 0..sample_columns {
+            let x = left + ((right - left - 1) * column / sample_columns.max(1));
+            let offset = data.offset as isize + (y * data.stride + x * 4 + 3) as isize;
+            if offset < 0 || offset as usize >= len {
+                continue;
+            }
+            let alpha = unsafe { ptr.offset(offset).read() };
+            alpha_total += u32::from(alpha);
+            samples += 1;
+        }
+    }
+
+    if samples == 0 {
+        return None;
+    }
+    Some(material_blur_opacity(alpha_total as f32 / samples as f32))
+}
+
+fn material_blur_opacity(average_alpha: f32) -> f32 {
+    if average_alpha <= MATERIAL_VISIBLE_ALPHA_FLOOR {
+        return 0.0;
+    }
+    let opacity = (average_alpha / MATERIAL_FULL_BLUR_ALPHA).clamp(0.0, 1.0);
+    opacity * opacity
 }
 
 fn popover_material_geometry(

@@ -20,7 +20,8 @@
   const rootElement = document.querySelector<HTMLElement>("#app");
   let surfaceAnimationTimer: number | undefined;
   let surfaceAnimationFrame: number | undefined;
-  let surfacePresented = false;
+  let surfaceAnimationPhase: "opening" | "closing" | undefined;
+  let lastSurfaceAnimationAt = 0;
 
   onMount(() => {
     applySnapshot(snapshot);
@@ -69,13 +70,12 @@
 
   function runSurfaceAnimation(phase: "opening" | "closing") {
     if (!rootElement) return;
-    if (phase === "opening" && surfacePresented && !rootElement.classList.contains("is-surface-closing")) {
+    const now = performance.now();
+    if (surfaceAnimationPhase === phase && now - lastSurfaceAnimationAt < 80) {
       return;
     }
-    if (phase === "closing" && !surfacePresented && !rootElement.classList.contains("is-surface-opening")) {
-      return;
-    }
-    surfacePresented = phase === "opening";
+    surfaceAnimationPhase = phase;
+    lastSurfaceAnimationAt = now;
     const activeClass = phase === "opening" ? "is-surface-opening" : "is-surface-closing";
     const inactiveClass = phase === "opening" ? "is-surface-closing" : "is-surface-opening";
     rootElement.classList.remove(activeClass, inactiveClass);
@@ -85,25 +85,30 @@
       window.clearTimeout(surfaceAnimationTimer);
     }
     surfaceAnimationTimer = window.setTimeout(
-      () => rootElement.classList.remove(activeClass),
-      phase === "opening" ? 560 : 240,
+      () => {
+        rootElement.classList.remove(activeClass);
+      if (surfaceAnimationPhase === phase) {
+        surfaceAnimationPhase = undefined;
+      }
+    },
+      phase === "opening" ? 280 : 150,
     );
   }
 
   function scheduleSurfaceAnimation(phase: "opening" | "closing") {
     if (phase === "closing") {
+      if (surfaceAnimationFrame) {
+        window.cancelAnimationFrame(surfaceAnimationFrame);
+        surfaceAnimationFrame = undefined;
+      }
       runSurfaceAnimation(phase);
       return;
     }
     if (surfaceAnimationFrame) {
       window.cancelAnimationFrame(surfaceAnimationFrame);
     }
-    surfaceAnimationFrame = window.requestAnimationFrame(() => {
-      surfaceAnimationFrame = window.requestAnimationFrame(() => {
-        surfaceAnimationFrame = undefined;
-        runSurfaceAnimation("opening");
-      });
-    });
+    surfaceAnimationFrame = undefined;
+    runSurfaceAnimation("opening");
   }
 
   function isNativeSurfaceRuntime() {

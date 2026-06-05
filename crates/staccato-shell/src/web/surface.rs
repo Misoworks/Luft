@@ -23,6 +23,8 @@ const DOCK_MENU_WIDTH: i32 = 184;
 const DOCK_MENU_HEIGHT: i32 = 128;
 const DATE_CENTER_WIDTH: i32 = 360;
 const DATE_CENTER_HEIGHT: i32 = 470;
+const SHELL_SURFACE_IDLE_TTL: Duration = Duration::from_secs(20);
+const TRANSIENT_SURFACE_IDLE_TTL: Duration = Duration::from_secs(8);
 
 pub struct WebSurfaces {
     pub dock: WebSurface,
@@ -106,9 +108,11 @@ impl WebSurfaces {
                 snapshot,
             ),
         };
-        surfaces.overview.prewarm();
-        surfaces.quick.prewarm();
-        surfaces.date.prewarm();
+        if shell_prewarm_enabled() {
+            surfaces.overview.prewarm();
+            surfaces.quick.prewarm();
+            surfaces.date.prewarm();
+        }
         surfaces.dock_menu.ensure_created();
         surfaces.notification_toast.ensure_created();
         Ok(surfaces)
@@ -171,6 +175,8 @@ pub struct LazyWebSurface {
     snapshot_json: String,
     visible: bool,
     hide_at: Option<Instant>,
+    hide_started_at: Option<Instant>,
+    release_at: Option<Instant>,
     panel_taskbar: bool,
     dock_menu_x: Option<i32>,
     surface: Option<WebSurface>,
@@ -192,6 +198,8 @@ impl LazyWebSurface {
             snapshot_json: serde_json::to_string(snapshot).unwrap_or_default(),
             visible: false,
             hide_at: None,
+            hide_started_at: None,
+            release_at: None,
             panel_taskbar,
             dock_menu_x: None,
             surface: None,
@@ -211,17 +219,25 @@ impl LazyWebSurface {
             self.visible = false;
             if let Some(surface) = &mut self.surface {
                 if let Some(delay) = close_animation_duration(self.kind) {
+                    let now = Instant::now();
+                    self.hide_started_at = Some(now);
+                    surface.set_surface_alpha(1.0);
                     surface.emit_surface_close();
-                    self.hide_at = Some(Instant::now() + delay);
+                    self.hide_at = Some(now + delay);
                 } else {
                     self.hide_at = None;
+                    self.hide_started_at = None;
+                    surface.set_surface_alpha(0.0);
                     surface.set_visible(false);
+                    self.schedule_release(Instant::now());
                 }
             }
             return;
         }
 
         let was_closing = self.hide_at.take().is_some();
+        self.hide_started_at = None;
+        self.release_at = None;
         if self.surface.is_none() {
             self.ensure_created();
             if self.surface.is_none() {
@@ -231,6 +247,7 @@ impl LazyWebSurface {
 
         self.visible = true;
         if let Some(surface) = &mut self.surface {
+            surface.set_surface_alpha(1.0);
             if was_closing {
                 surface.emit_surface_open();
             }
@@ -239,17 +256,32 @@ impl LazyWebSurface {
     }
 
     fn tick(&mut self) {
-        let Some(hide_at) = self.hide_at else {
+        let now = Instant::now();
+        if let Some(hide_at) = self.hide_at {
+            self.tick_close_alpha(now, hide_at);
+            if now < hide_at {
+                return;
+            }
+            self.hide_at = None;
+            self.hide_started_at = None;
+            if !self.visible {
+                if let Some(surface) = &mut self.surface {
+                    surface.set_surface_alpha(0.0);
+                    surface.set_visible(false);
+                }
+                self.schedule_release(now);
+            }
+        }
+
+        let Some(release_at) = self.release_at else {
             return;
         };
-        if Instant::now() < hide_at {
+        if self.visible || self.hide_at.is_some() || now < release_at {
             return;
         }
-        self.hide_at = None;
-        if !self.visible {
-            if let Some(surface) = &mut self.surface {
-                surface.set_visible(false);
-            }
+        self.release_at = None;
+        if let Some(surface) = &mut self.surface {
+            surface.release_hidden_process();
         }
     }
 
@@ -283,6 +315,9 @@ impl LazyWebSurface {
         if let Some(surface) = &mut self.surface {
             surface.prewarm();
         }
+        if !self.visible {
+            self.schedule_release(Instant::now());
+        }
     }
 
     fn evaluate_snapshot(&mut self, snapshot: &WebShellSnapshot, json: &str) {
@@ -311,6 +346,31 @@ impl LazyWebSurface {
             surface.set_dock_menu_x(x);
         }
     }
+
+    fn schedule_release(&mut self, now: Instant) {
+        self.release_at = hidden_process_ttl(self.kind).map(|ttl| now + ttl);
+    }
+
+    fn tick_close_alpha(&mut self, now: Instant, hide_at: Instant) {
+        let Some(started_at) = self.hide_started_at else {
+            return;
+        };
+        let Some(surface) = &mut self.surface else {
+            return;
+        };
+        let total = hide_at.saturating_duration_since(started_at);
+        if total.is_zero() {
+            surface.set_surface_alpha(0.0);
+            return;
+        }
+        let elapsed = now.saturating_duration_since(started_at);
+        let progress = (elapsed.as_secs_f32() / total.as_secs_f32()).clamp(0.0, 1.0);
+        surface.set_surface_alpha(1.0 - smoothstep(progress));
+    }
+}
+
+fn smoothstep(value: f32) -> f32 {
+    value * value * (3.0 - 2.0 * value)
 }
 
 pub struct WebSurface {
@@ -443,6 +503,8 @@ impl WebSurface {
         let had_process = self.process.is_some();
         if had_process {
             self.flush_snapshot();
+            self.set_surface_alpha(1.0);
+            self.emit_surface_open();
         }
         let restored = self
             .process
@@ -454,12 +516,16 @@ impl WebSurface {
         }
         if self.process.is_none() {
             self.launch();
+            self.set_surface_alpha(1.0);
+            self.flush_snapshot();
+            self.emit_surface_open();
+            return;
         }
         self.flush_snapshot();
-        self.emit_surface_open();
     }
 
     fn hide_process(&mut self) {
+        self.set_surface_alpha(0.0);
         if !self.keep_alive_when_hidden {
             self.process = None;
             self.rendered_snapshot.clear();
@@ -474,6 +540,21 @@ impl WebSurface {
         }
         self.process = None;
         self.rendered_snapshot.clear();
+    }
+
+    fn release_hidden_process(&mut self) {
+        if self.visible {
+            return;
+        }
+        if self.process.take().is_some() {
+            self.rendered_snapshot.clear();
+        }
+    }
+
+    fn set_surface_alpha(&mut self, alpha: f32) {
+        if let Some(process) = &self.process {
+            let _ = process.set_shell_surface_alpha(alpha.clamp(0.0, 1.0));
+        }
     }
 
     fn build_window(&self) -> CefWindow {
@@ -581,16 +662,34 @@ impl WebSurface {
 
 fn close_animation_duration(kind: WebShellSurface) -> Option<Duration> {
     match kind {
-        WebShellSurface::Overview => Some(Duration::from_millis(190)),
+        WebShellSurface::Overview => Some(Duration::from_millis(145)),
         WebShellSurface::QuickSettings | WebShellSurface::DateCenter => {
-            Some(Duration::from_millis(150))
+            Some(Duration::from_millis(125))
         }
+        WebShellSurface::DockMenu => Some(Duration::from_millis(120)),
         WebShellSurface::Panel
         | WebShellSurface::Dock
-        | WebShellSurface::DockMenu
         | WebShellSurface::Sidebar
         | WebShellSurface::NotificationToast => None,
     }
+}
+
+fn hidden_process_ttl(kind: WebShellSurface) -> Option<Duration> {
+    match kind {
+        WebShellSurface::Overview
+        | WebShellSurface::QuickSettings
+        | WebShellSurface::DateCenter => Some(SHELL_SURFACE_IDLE_TTL),
+        WebShellSurface::DockMenu
+        | WebShellSurface::NotificationToast
+        | WebShellSurface::Sidebar => Some(TRANSIENT_SURFACE_IDLE_TTL),
+        WebShellSurface::Panel | WebShellSurface::Dock => None,
+    }
+}
+
+fn shell_prewarm_enabled() -> bool {
+    env::var("STACCATO_SHELL_PREWARM")
+        .ok()
+        .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "on"))
 }
 
 fn runtime_config() -> RuntimeConfig {

@@ -267,23 +267,13 @@ img {
 
 #app.is-surface-opening[data-surface="quick-settings"] .popover,
 #app.is-surface-opening[data-surface="date-center"] .popover {
-  animation: popover-surface-in 220ms var(--ease-shell) both;
-  will-change: opacity, transform;
+  animation: popover-shell-in 145ms var(--ease-shell) both;
+  will-change: opacity;
 }
 
 #app.is-surface-closing[data-surface="quick-settings"] .popover,
 #app.is-surface-closing[data-surface="date-center"] .popover {
-  animation: popover-surface-out 120ms var(--ease-shell) both;
-  will-change: opacity, transform;
-}
-
-#app.is-surface-opening[data-surface="date-center"] .notifications,
-#app.is-surface-opening[data-surface="date-center"] .calendar {
-  animation: popover-content-in 170ms var(--ease-shell) both;
-}
-
-#app.is-surface-opening[data-surface="date-center"] .calendar {
-  animation-delay: 24ms;
+  pointer-events: none;
 }
 
 @keyframes top-panel-in {
@@ -298,38 +288,12 @@ img {
   }
 }
 
-@keyframes popover-surface-in {
+@keyframes popover-shell-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0) scale(0.976);
   }
 
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes popover-surface-out {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    transform: translate3d(0, 5px, 0) scale(0.99);
-  }
-}
-
-@keyframes popover-content-in {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 5px, 0);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
   }
 }

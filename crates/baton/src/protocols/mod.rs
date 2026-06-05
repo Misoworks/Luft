@@ -5,10 +5,10 @@ use crate::{
     window::{ResizeEdge, surface_has_client_frame_extents},
 };
 use smithay::{
-    delegate_compositor, delegate_cursor_shape, delegate_data_device, delegate_fractional_scale,
-    delegate_layer_shell, delegate_output, delegate_presentation, delegate_primary_selection,
-    delegate_seat, delegate_shm, delegate_text_input_manager, delegate_viewporter,
-    delegate_xdg_activation, delegate_xdg_decoration, delegate_xdg_shell,
+    delegate_alpha_modifier, delegate_compositor, delegate_cursor_shape, delegate_data_device,
+    delegate_fractional_scale, delegate_layer_shell, delegate_output, delegate_presentation,
+    delegate_primary_selection, delegate_seat, delegate_shm, delegate_text_input_manager,
+    delegate_viewporter, delegate_xdg_activation, delegate_xdg_decoration, delegate_xdg_shell,
     delegate_xdg_toplevel_icon,
     input::{
         Seat, SeatHandler,
@@ -467,3 +467,4 @@ delegate_shm!(BatonState);
 delegate_seat!(BatonState);
 delegate_data_device!(BatonState);
 delegate_primary_selection!(BatonState);
+delegate_alpha_modifier!(BatonState);

@@ -53,12 +53,17 @@
 
 .app-button.is-launching .app-icon {
   --app-launch-rest-y: 0px;
-  animation: app-launch 420ms var(--ease-shell);
+  animation: app-launch 430ms var(--ease-shell) both;
   will-change: transform;
 }
 
 .app-button.is-launching.is-launch-raised .app-icon {
   --app-launch-rest-y: var(--app-icon-lift, -9px);
+}
+
+.app-button.is-launch-settling .app-icon {
+  animation: app-launch-settle 180ms var(--ease-shell) both;
+  will-change: transform;
 }
 
 .app-button.is-running .running-dot {
@@ -88,18 +93,32 @@
 @keyframes app-launch {
   0%,
   100% {
-    transform: translateY(var(--app-launch-rest-y, 0));
+    transform: translateY(var(--app-launch-rest-y, 0px));
   }
 
-  28% {
+  24% {
     transform: translateY(calc(var(--app-launch-rest-y, 0px) + 5px));
   }
 
-  56% {
-    transform: translateY(calc(var(--app-launch-rest-y, 0px) - 6px));
+  52% {
+    transform: translateY(calc(var(--app-launch-rest-y, 0px) - 7px));
   }
 
-  78% {
+  76% {
     transform: translateY(calc(var(--app-launch-rest-y, 0px) - 2px));
+  }
+}
+
+@keyframes app-launch-settle {
+  from {
+    transform: translateY(var(--app-icon-lift, -9px));
+  }
+
+  68% {
+    transform: translateY(1px);
+  }
+
+  100% {
+    transform: translateY(0);
   }
 }

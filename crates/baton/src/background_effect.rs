@@ -1,5 +1,5 @@
 use crate::{
-    layers::{LayerMaterial, LayerRenderTarget},
+    layers::{BlurLayer, LayerMaterial, LayerRenderTarget},
     state::BatonState,
     window::ManagedWindow,
     window_clip::WINDOW_RADIUS,
@@ -231,9 +231,11 @@ fn append_workspace_targets(
         if titlebar_height > 0 {
             targets.push(LayerRenderTarget {
                 surface: surface.clone(),
+                blur_layer: BlurLayer::Window,
                 material: LayerMaterial::RoundRect {
                     radius: titlebar_radius(window, transform.scale),
                 },
+                opacity: 1.0,
                 location: Point::from((transform.x.round() as i32, transform.y.round() as i32)),
                 size: (
                     (window.size.w as f64 * transform.scale).round().max(1.0) as i32,
@@ -249,7 +251,9 @@ fn append_workspace_targets(
         for rect in rects_for_region(&region, clip) {
             targets.push(LayerRenderTarget {
                 surface: surface.clone(),
+                blur_layer: BlurLayer::Window,
                 material: LayerMaterial::Rect,
+                opacity: 1.0,
                 location: Point::from((
                     (transform.x + (surface_offset.x + rect.loc.x) as f64 * transform.scale).round()
                         as i32,

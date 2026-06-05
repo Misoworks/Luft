@@ -18,6 +18,10 @@
   will-change: transform;
 }
 
+#app.is-surface-opening[data-surface="overview"] .overview-app-pages {
+  animation: overview-pages-in 155ms var(--ease-shell) both;
+}
+
 .overview-app-page {
   --overview-app-size: clamp(128px, min(9vw, 18vh), 176px);
   display: grid;
@@ -186,6 +190,18 @@
   width: 32px;
   height: 32px;
   stroke-width: 1.6;
+}
+
+@keyframes overview-pages-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--page-offset, 0%), 8px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(var(--page-offset, 0%), 0, 0);
+  }
 }
 
 @media (max-width: 900px) {

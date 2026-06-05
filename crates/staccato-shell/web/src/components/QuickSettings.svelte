@@ -5,6 +5,7 @@
   import { sendAction } from "../shell/bridge";
   import { batteryLabel, networkLabel } from "../lib/labels";
   import type { ShellSnapshot } from "../shell/model";
+  import { onMount } from "svelte";
 
   let { snapshot }: { snapshot: ShellSnapshot } = $props();
   let powerMenuOpen = $state(false);
@@ -16,6 +17,16 @@
   const volume = $derived(snapshot.status.audio?.percent ?? 0);
   const brightness = $derived(snapshot.status.brightness?.percent ?? 0);
   const notificationLabel = $derived(snapshot.notifications.length === 1 ? "1 notification" : `${snapshot.notifications.length} notifications`);
+
+  onMount(() => {
+    const closePowerMenu = () => (powerMenuOpen = false);
+    window.addEventListener("fenestra:staccato.surface-open", closePowerMenu);
+    window.addEventListener("fenestra:staccato.surface-close", closePowerMenu);
+    return () => {
+      window.removeEventListener("fenestra:staccato.surface-open", closePowerMenu);
+      window.removeEventListener("fenestra:staccato.surface-close", closePowerMenu);
+    };
+  });
 
   function setVolume(percent: number) {
     sendAction({ type: "quick-set-volume", percent });

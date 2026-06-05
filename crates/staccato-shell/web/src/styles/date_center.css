@@ -49,31 +49,16 @@
 #app.is-surface-opening[data-surface="date-center"] .notification-group,
 #app.is-surface-opening[data-surface="date-center"] .notification-empty,
 #app.is-surface-opening[data-surface="date-center"] .notification-header,
-#app.is-surface-opening[data-surface="date-center"] .calendar-header,
-#app.is-surface-opening[data-surface="date-center"] .calendar-month,
-#app.is-surface-opening[data-surface="date-center"] .calendar-day {
-  animation: date-item-in 190ms var(--ease-shell) both;
+#app.is-surface-opening[data-surface="date-center"] .calendar-grid {
+  animation: date-item-in 145ms var(--ease-shell) both;
 }
 
 #app.is-surface-opening[data-surface="date-center"] .notification-group {
-  animation-delay: calc(var(--index, 0) * 18ms);
+  animation-delay: calc(var(--index, 0) * 10ms);
 }
 
-#app.is-surface-opening[data-surface="date-center"] .calendar-header {
-  animation-delay: 36ms;
-}
-
-#app.is-surface-opening[data-surface="date-center"] .calendar-month {
-  animation-delay: 54ms;
-}
-
-#app.is-surface-closing[data-surface="date-center"] .notification-center,
-#app.is-surface-closing[data-surface="date-center"] .calendar {
-  animation: date-content-out 90ms var(--ease-shell) both;
-}
-
-#app.is-surface-closing[data-surface="date-center"] .calendar {
-  animation-delay: 10ms;
+#app.is-surface-opening[data-surface="date-center"] .calendar-grid {
+  animation-delay: 12ms;
 }
 
 @keyframes date-item-in {
@@ -85,29 +70,5 @@
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes date-content-out {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    transform: translate3d(0, 5px, 0) scale(0.992);
-  }
-}
-
-@keyframes calendar-page-in {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 5px, 0);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
   }
 }

@@ -477,8 +477,6 @@ impl WebShell {
             return;
         }
         self.dock_menu_open = false;
-        self.dock_menu_command = None;
-        self.dock_menu_x = None;
         self.surfaces.set_dock_menu_visible(false);
     }
 

@@ -413,18 +413,12 @@
 #app.is-surface-opening[data-surface="quick-settings"] .quick-header,
 #app.is-surface-opening[data-surface="quick-settings"] .setting-tile,
 #app.is-surface-opening[data-surface="quick-settings"] .control-slider {
-  animation: quick-item-in 190ms var(--ease-shell) both;
+  animation: quick-item-in 145ms var(--ease-shell) both;
 }
 
 #app.is-surface-opening[data-surface="quick-settings"] .setting-tile,
 #app.is-surface-opening[data-surface="quick-settings"] .control-slider {
-  animation-delay: calc(var(--index, 0) * 18ms);
-}
-
-#app.is-surface-closing[data-surface="quick-settings"] .quick-header,
-#app.is-surface-closing[data-surface="quick-settings"] .setting-tile,
-#app.is-surface-closing[data-surface="quick-settings"] .control-slider {
-  animation: quick-item-out 90ms var(--ease-shell) both;
+  animation-delay: calc(var(--index, 0) * 10ms);
 }
 
 @keyframes quick-item-in {
@@ -436,17 +430,5 @@
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes quick-item-out {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    transform: translate3d(0, 5px, 0) scale(0.992);
   }
 }

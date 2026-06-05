@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import AppIcon from "./AppIcon.svelte";
   import type { DockApp } from "../shell/model";
 
@@ -18,7 +19,11 @@
 
   let launchRaised = $state(false);
   let jumping = $state(false);
+  let settling = $state(false);
+  let hovered = $state(false);
+  let launchFrame: number | undefined;
   let launchTimer: ReturnType<typeof setTimeout> | undefined;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
 
   const className = $derived(`${variant === "dock" ? "dock-item" : "taskbar-app"} app-button`);
 
@@ -30,20 +35,62 @@
   }
 
   function launch(event: MouseEvent) {
-    launchRaised = (event.currentTarget as HTMLElement).matches(":hover");
+    hovered = (event.currentTarget as HTMLElement).matches(":hover");
+    launchRaised = hovered;
     jumping = false;
-    requestAnimationFrame(() => {
+    settling = false;
+    if (launchFrame !== undefined) {
+      cancelAnimationFrame(launchFrame);
+    }
+    if (settleTimer) {
+      clearTimeout(settleTimer);
+    }
+    launchFrame = requestAnimationFrame(() => {
+      launchFrame = undefined;
       jumping = true;
     });
     if (launchTimer) {
       clearTimeout(launchTimer);
     }
     launchTimer = setTimeout(() => {
+      const shouldSettle = launchRaised && !hovered;
       jumping = false;
       launchRaised = false;
+      if (shouldSettle) {
+        settling = true;
+        settleTimer = setTimeout(() => {
+          settling = false;
+        }, 180);
+      }
     }, 430);
     onlaunch(app.command);
   }
+
+  function pointerEnter() {
+    hovered = true;
+    if (settling) {
+      settling = false;
+    }
+    if (settleTimer) {
+      clearTimeout(settleTimer);
+    }
+  }
+
+  function pointerLeave() {
+    hovered = false;
+  }
+
+  onDestroy(() => {
+    if (launchFrame !== undefined) {
+      cancelAnimationFrame(launchFrame);
+    }
+    if (launchTimer) {
+      clearTimeout(launchTimer);
+    }
+    if (settleTimer) {
+      clearTimeout(settleTimer);
+    }
+  });
 </script>
 
 <button
@@ -53,10 +100,13 @@
   class:is-running={app.running}
   class:is-launching={jumping}
   class:is-launch-raised={launchRaised}
+  class:is-launch-settling={settling}
   data-command={app.command}
   aria-label={app.label}
   onclick={launch}
   oncontextmenu={openMenu}
+  onpointerenter={pointerEnter}
+  onpointerleave={pointerLeave}
 >
   <AppIcon {app} />
   <span class="running-dot"></span>

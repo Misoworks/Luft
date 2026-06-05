@@ -1,5 +1,5 @@
 use crate::{
-    layers::LayerRenderTarget,
+    layers::{BlurLayer, LayerRenderTarget},
     render::window_chrome_elements_for_window,
     scene_blur::{self, SceneBlurCache},
     state::BatonState,
@@ -50,7 +50,8 @@ pub fn render_scene(
     if !request.blur_enabled
         || (request.window_targets.is_empty()
             && request.top_targets.is_empty()
-            && request.overlay_targets.is_empty())
+            && request.overlay_targets.is_empty()
+            && !blur_cache.has_cached_elements())
     {
         return render_flat_scene(renderer, framebuffer, request);
     }
@@ -99,10 +100,18 @@ fn render_flat_scene_with_cached_layer_blur(
     framebuffer: &mut GlesTarget<'_>,
     request: SceneRenderRequest<'_>,
 ) -> Result<(), GlesError> {
-    let top_blur =
-        blur_cache.cached_elements(renderer, request.output_size, request.top_targets)?;
-    let overlay_blur =
-        blur_cache.cached_elements(renderer, request.output_size, request.overlay_targets)?;
+    let top_blur = blur_cache.cached_elements(
+        renderer,
+        request.output_size,
+        BlurLayer::Top,
+        request.top_targets,
+    )?;
+    let overlay_blur = blur_cache.cached_elements(
+        renderer,
+        request.output_size,
+        BlurLayer::Overlay,
+        request.overlay_targets,
+    )?;
     let mut frame = renderer.render(framebuffer, request.output_size, Transform::Flipped180)?;
     frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), request.damage)?;
     draw_optional_memory(&mut frame, request.background.as_ref(), request.damage)?;
@@ -166,6 +175,7 @@ fn render_staged_scene(
             renderer,
             framebuffer,
             request.output_size,
+            BlurLayer::Window,
             &targets,
             request.blur_damage,
             request.blur_enabled,
@@ -190,6 +200,7 @@ fn render_staged_scene(
         renderer,
         framebuffer,
         request.output_size,
+        BlurLayer::Top,
         request.top_targets,
         request.blur_damage,
         request.blur_enabled,
@@ -206,6 +217,7 @@ fn render_staged_scene(
         renderer,
         framebuffer,
         request.output_size,
+        BlurLayer::Overlay,
         request.overlay_targets,
         request.blur_damage,
         request.blur_enabled,

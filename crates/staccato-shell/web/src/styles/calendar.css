@@ -28,7 +28,6 @@
   align-items: center;
   gap: 6px;
   min-height: 34px;
-  animation: calendar-page-in 150ms var(--ease-shell) both;
 }
 
 .calendar-current,
@@ -76,7 +75,6 @@
   grid-template-columns: repeat(7, 1fr);
   gap: 5px;
   text-align: center;
-  animation: calendar-page-in 170ms var(--ease-shell) both;
 }
 
 .calendar-grid span {
