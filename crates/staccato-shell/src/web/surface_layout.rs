@@ -14,6 +14,8 @@ const DOCK_HEIGHT: i32 = 50;
 const DOCK_ITEM: i32 = 40;
 const DOCK_GAP: i32 = 10;
 const DOCK_PADDING: i32 = 22;
+const DOCK_MENU_EDGE_MARGIN: i32 = 6;
+const DOCK_MENU_PANEL_GAP: i32 = 6;
 
 impl WebShellSurface {
     pub(crate) fn as_str(self) -> &'static str {
@@ -67,11 +69,12 @@ pub(crate) fn shell_surface(
     kind: WebShellSurface,
     size: (i32, i32),
     panel_taskbar: bool,
+    dock_menu_x: Option<i32>,
 ) -> ShellSurfaceOptions {
     let mut shell_surface = ShellSurfaceOptions::new(kind.namespace())
         .layer(layer(kind))
-        .anchor(anchor(kind, panel_taskbar))
-        .margin(margin(kind, panel_taskbar))
+        .anchor(anchor(kind, panel_taskbar, dock_menu_x))
+        .margin(margin(kind, size, panel_taskbar, dock_menu_x))
         .keyboard_interactivity(keyboard_interactivity(kind));
     if !matches!(
         kind,
@@ -107,13 +110,22 @@ fn layer(kind: WebShellSurface) -> ShellSurfaceLayer {
     }
 }
 
-fn anchor(kind: WebShellSurface, panel_taskbar: bool) -> ShellSurfaceAnchor {
+fn anchor(
+    kind: WebShellSurface,
+    panel_taskbar: bool,
+    dock_menu_x: Option<i32>,
+) -> ShellSurfaceAnchor {
     match kind {
         WebShellSurface::Panel if panel_taskbar => {
             ShellSurfaceAnchor::BOTTOM | ShellSurfaceAnchor::horizontal()
         }
         WebShellSurface::Panel => ShellSurfaceAnchor::TOP | ShellSurfaceAnchor::horizontal(),
-        WebShellSurface::Dock | WebShellSurface::DockMenu => ShellSurfaceAnchor::BOTTOM,
+        WebShellSurface::Dock => ShellSurfaceAnchor::BOTTOM,
+        WebShellSurface::DockMenu if panel_taskbar && dock_menu_x.is_some() => {
+            ShellSurfaceAnchor::BOTTOM | ShellSurfaceAnchor::LEFT
+        }
+        WebShellSurface::DockMenu if panel_taskbar => ShellSurfaceAnchor::BOTTOM,
+        WebShellSurface::DockMenu => ShellSurfaceAnchor::BOTTOM,
         WebShellSurface::Sidebar => ShellSurfaceAnchor::LEFT | ShellSurfaceAnchor::vertical(),
         WebShellSurface::QuickSettings | WebShellSurface::DateCenter => ShellSurfaceAnchor::ALL,
         WebShellSurface::NotificationToast if panel_taskbar => {
@@ -124,10 +136,20 @@ fn anchor(kind: WebShellSurface, panel_taskbar: bool) -> ShellSurfaceAnchor {
     }
 }
 
-fn margin(kind: WebShellSurface, panel_taskbar: bool) -> ShellSurfaceMargin {
+fn margin(
+    kind: WebShellSurface,
+    size: (i32, i32),
+    panel_taskbar: bool,
+    dock_menu_x: Option<i32>,
+) -> ShellSurfaceMargin {
     match kind {
         WebShellSurface::Dock => ShellSurfaceMargin::new(0, 0, 12, 0),
-        WebShellSurface::DockMenu if panel_taskbar => ShellSurfaceMargin::new(0, 0, 6, 0),
+        WebShellSurface::DockMenu if panel_taskbar => ShellSurfaceMargin::new(
+            0,
+            0,
+            TASKBAR_HEIGHT + DOCK_MENU_PANEL_GAP,
+            dock_menu_left_margin(size.0, dock_menu_x),
+        ),
         WebShellSurface::DockMenu => ShellSurfaceMargin::new(0, 0, 84, 0),
         WebShellSurface::QuickSettings | WebShellSurface::DateCenter => ShellSurfaceMargin::ZERO,
         WebShellSurface::NotificationToast if panel_taskbar => {
@@ -138,10 +160,17 @@ fn margin(kind: WebShellSurface, panel_taskbar: bool) -> ShellSurfaceMargin {
     }
 }
 
+fn dock_menu_left_margin(width: i32, x: Option<i32>) -> i32 {
+    let Some(x) = x else {
+        return 0;
+    };
+    (x - width.max(1) / 2).max(DOCK_MENU_EDGE_MARGIN)
+}
+
 fn exclusive_zone(kind: WebShellSurface, panel_taskbar: bool) -> Option<i32> {
     match kind {
-        WebShellSurface::Panel if panel_taskbar => Some(TASKBAR_HEIGHT),
-        WebShellSurface::Panel => Some(PANEL_HEIGHT),
+        WebShellSurface::Panel if panel_taskbar => None,
+        WebShellSurface::Panel => None,
         WebShellSurface::Sidebar => Some(108),
         _ => None,
     }

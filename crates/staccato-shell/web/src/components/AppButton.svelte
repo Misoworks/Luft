@@ -13,7 +13,7 @@
     app: DockApp;
     variant: Variant;
     onlaunch: (command: string) => void;
-    onmenu?: (command: string) => void;
+    onmenu?: (command: string, x: number) => void;
   } = $props();
 
   let launchRaised = $state(false);
@@ -24,7 +24,9 @@
 
   function openMenu(event: MouseEvent) {
     event.preventDefault();
-    onmenu?.(app.command);
+    event.stopPropagation();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    onmenu?.(app.command, Math.round(rect.left + rect.width / 2));
   }
 
   function launch(event: MouseEvent) {

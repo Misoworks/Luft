@@ -27,6 +27,7 @@ export type ShellSnapshot = {
   windows: WindowItem[];
   dockApps: DockApp[];
   dockMenuCommand?: string;
+  dockMenuX?: number;
   applications: ApplicationItem[];
   status: SystemStatus;
   tray: TrayItem[];
@@ -131,7 +132,7 @@ export type ShellAction =
   | { type: "window-activate"; window: number }
   | { type: "window-move"; window: number; workspace: string }
   | { type: "dock-launch"; command: string }
-  | { type: "dock-menu-open"; command: string }
+  | { type: "dock-menu-open"; command: string; x?: number }
   | { type: "dock-menu-close" }
   | { type: "dock-pin"; label: string; command: string; icon?: string }
   | { type: "dock-unpin"; command: string }
@@ -182,6 +183,7 @@ export const emptySnapshot = (): ShellSnapshot => {
     windows: [],
     dockApps: [],
     dockMenuCommand: undefined,
+    dockMenuX: undefined,
     applications: [],
     status: {},
     tray: [],

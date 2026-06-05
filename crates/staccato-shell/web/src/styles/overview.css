@@ -45,14 +45,10 @@
 }
 
 .overview-top {
-  display: grid;
-  grid-template-columns: minmax(300px, 680px);
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
   height: 54px;
-  margin: 0 auto;
-  max-width: min(2320px, calc(100vw - 72px));
   width: 100%;
 }
 
@@ -62,22 +58,21 @@
   grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
   justify-content: start;
+  box-sizing: border-box;
+  width: min(680px, calc(100vw - 72px));
   height: 46px;
   gap: 8px;
   padding: 0 15px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.105);
+  cursor: text;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.09),
     0 18px 38px rgba(0, 0, 0, 0.16);
   transition: background-color 180ms var(--ease-shell), transform 180ms var(--ease-shell);
 }
 
-.overview-search:focus {
-  outline: 0;
-}
-
-.overview-search:focus,
+.overview-search:focus-within,
 .overview-search:hover {
   background: rgba(255, 255, 255, 0.15);
   transform: translate3d(0, -1px, 0);
@@ -89,43 +84,22 @@
   color: rgba(255, 255, 255, 0.62);
 }
 
-.overview-search-text {
-  display: inline-flex;
-  align-items: center;
-  justify-self: start;
+.overview-search-input {
   min-width: 0;
-  width: max-content;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.overview-search-value {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--panel-text);
+  width: 100%;
+  height: 100%;
+  appearance: none;
+  border: 0;
+  outline: 0;
+  color: rgba(255, 255, 255, 0.92);
   font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font: inherit;
+  background: transparent;
+  caret-color: color-mix(in srgb, var(--accent), white 18%);
 }
 
-.overview-search-value.is-placeholder {
+.overview-search-input::placeholder {
   color: rgba(255, 255, 255, 0.52);
-}
-
-.overview-search-caret {
-  flex: 0 0 auto;
-  width: 2px;
-  height: 18px;
-  margin-left: 4px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent), white 18%);
-  opacity: 0;
-  transform: scaleY(0.78);
-  transition: opacity 120ms var(--ease-shell);
-}
-
-.overview-search:focus .overview-search-caret {
-  animation: overview-caret 900ms steps(2, jump-none) infinite;
   opacity: 1;
 }
 
@@ -188,20 +162,12 @@
   }
 }
 
-@keyframes overview-caret {
-  50% {
-    opacity: 0;
-  }
-}
-
 @media (max-width: 760px) {
   .overview-top {
-    grid-template-columns: minmax(0, 1fr) auto;
     height: auto;
   }
 
   .overview-search {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    width: 100%;
   }
 }

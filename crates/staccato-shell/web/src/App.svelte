@@ -20,25 +20,22 @@
   const rootElement = document.querySelector<HTMLElement>("#app");
   let surfaceAnimationTimer: number | undefined;
   let surfaceAnimationFrame: number | undefined;
+  let surfacePresented = false;
 
   onMount(() => {
     applySnapshot(snapshot);
-    scheduleSurfaceAnimation("opening");
+    if (!isNativeSurfaceRuntime()) {
+      scheduleSurfaceAnimation("opening");
+    }
     const unsubscribe = subscribe(applySnapshot);
-    const resume = () => scheduleSurfaceAnimation("opening");
     const surfaceOpen = () => scheduleSurfaceAnimation("opening");
     const surfaceClose = () => runSurfaceAnimation("closing");
-    const suspend = () => runSurfaceAnimation("closing");
-    window.addEventListener("fenestra:resume", resume);
     window.addEventListener("fenestra:staccato.surface-open", surfaceOpen);
     window.addEventListener("fenestra:staccato.surface-close", surfaceClose);
-    window.addEventListener("fenestra:suspend", suspend);
     return () => {
       unsubscribe();
-      window.removeEventListener("fenestra:resume", resume);
       window.removeEventListener("fenestra:staccato.surface-open", surfaceOpen);
       window.removeEventListener("fenestra:staccato.surface-close", surfaceClose);
-      window.removeEventListener("fenestra:suspend", suspend);
       if (surfaceAnimationTimer) {
         window.clearTimeout(surfaceAnimationTimer);
       }
@@ -72,6 +69,13 @@
 
   function runSurfaceAnimation(phase: "opening" | "closing") {
     if (!rootElement) return;
+    if (phase === "opening" && surfacePresented && !rootElement.classList.contains("is-surface-closing")) {
+      return;
+    }
+    if (phase === "closing" && !surfacePresented && !rootElement.classList.contains("is-surface-opening")) {
+      return;
+    }
+    surfacePresented = phase === "opening";
     const activeClass = phase === "opening" ? "is-surface-opening" : "is-surface-closing";
     const inactiveClass = phase === "opening" ? "is-surface-closing" : "is-surface-opening";
     rootElement.classList.remove(activeClass, inactiveClass);
@@ -100,6 +104,10 @@
         runSurfaceAnimation("opening");
       });
     });
+  }
+
+  function isNativeSurfaceRuntime() {
+    return Boolean(window.fenestra?.bridge) || new URLSearchParams(window.location.search).has("fenestra");
   }
 
   function keydown(event: KeyboardEvent) {

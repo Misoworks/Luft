@@ -37,8 +37,8 @@
     return Math.max(0, Math.min(selection, searchResults.length - 1));
   });
 
-  const focusSearch: Attachment<HTMLElement> = (node) => {
-    requestAnimationFrame(() => node.focus());
+  const focusSearch: Attachment<HTMLInputElement> = (node) => {
+    requestAnimationFrame(() => node.focus({ preventScroll: true }));
   };
 
   function scrollOverviewList(event: WheelEvent) {
@@ -85,16 +85,6 @@
       moveSelection(-1);
       return;
     }
-    if (event.key === "Backspace") {
-      event.preventDefault();
-      setSearch(query.slice(0, -1));
-      return;
-    }
-    if (event.key === "Delete") {
-      event.preventDefault();
-      setSearch("");
-      return;
-    }
     if (event.key === "Escape" && query) {
       event.preventDefault();
       event.stopPropagation();
@@ -102,12 +92,9 @@
       return;
     }
     if (event.key !== "Enter") {
-      if (event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey) {
-        event.preventDefault();
-        setSearch(`${query}${event.key}`);
-      }
       return;
     }
+    event.preventDefault();
     const result = selectedOverviewResult(searchResults, clampedSelection);
     if (!result) {
       if (!searching) {
@@ -118,11 +105,8 @@
     activateResult(result);
   }
 
-  function searchPaste(event: ClipboardEvent) {
-    const text = event.clipboardData?.getData("text/plain");
-    if (!text) return;
-    event.preventDefault();
-    setSearch(`${query}${text.replace(/\s+/g, " ")}`);
+  function searchInput(event: Event) {
+    setSearch((event.currentTarget as HTMLInputElement).value);
   }
 
   function moveSelection(offset: number) {
@@ -195,23 +179,23 @@
 
 <section class="shell-overview">
   <header class="overview-top">
-    <div
-      {@attach focusSearch}
-      class="overview-search"
-      role="searchbox"
-      tabindex="0"
-      aria-label="Search apps"
-      aria-placeholder="Search"
-      onkeydown={searchKeydown}
-      onpaste={searchPaste}
-      onclick={(event) => (event.currentTarget as HTMLElement).focus()}
-    >
+    <label class="overview-search">
       <Icon name="search" />
-      <span class="overview-search-text">
-        <span class="overview-search-value" class:is-placeholder={!query}>{query || "Search"}</span>
-        <span class="overview-search-caret"></span>
-      </span>
-    </div>
+      <input
+        {@attach focusSearch}
+        class="overview-search-input"
+        type="text"
+        aria-label="Search apps"
+        inputmode="search"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        placeholder="Search"
+        value={query}
+        oninput={searchInput}
+        onkeydown={searchKeydown}
+      />
+    </label>
   </header>
 
   <div class:overview-apps={!searching} class:overview-results={searching} onwheel={overviewAppsWheel}>

@@ -87,6 +87,7 @@ struct WebShell {
     chrome_visibility: ChromeVisibility,
     dock_menu_open: bool,
     dock_menu_command: Option<String>,
+    dock_menu_x: Option<i32>,
     last_model_refresh: Instant,
     last_status_refresh: Instant,
     last_config_refresh: Instant,
@@ -168,7 +169,7 @@ impl WebShell {
                 move_window_to_workspace(window_id(window), workspace_id(workspace)),
             ),
             WebShellAction::DockLaunch { command } => self.activate_dock_command(command),
-            WebShellAction::DockMenuOpen { command } => self.open_dock_menu(command),
+            WebShellAction::DockMenuOpen { command, x } => self.open_dock_menu(command, x),
             WebShellAction::DockMenuClose => self.close_dock_menu(),
             WebShellAction::DockPin {
                 label,
@@ -306,6 +307,8 @@ impl WebShell {
         self.quick_visible = false;
         self.date_visible = false;
         self.overview_visible = !self.overview_visible;
+        self.sync_chrome();
+        self.sync_surfaces();
         self.surfaces.quick.set_visible(false);
         self.surfaces.date.set_visible(false);
         self.surfaces.overview.set_visible(self.overview_visible);
@@ -315,15 +318,19 @@ impl WebShell {
         self.date_visible = false;
         self.overview_visible = false;
         self.quick_visible = !self.quick_visible;
+        self.refresh_status_now();
+        self.sync_chrome();
+        self.sync_surfaces();
         self.surfaces.quick.set_visible(self.quick_visible);
         self.surfaces.date.set_visible(false);
         self.surfaces.overview.set_visible(false);
-        self.refresh_status_now();
     }
     fn toggle_date_center(&mut self) {
         self.quick_visible = false;
         self.overview_visible = false;
         self.date_visible = !self.date_visible;
+        self.sync_chrome();
+        self.sync_surfaces();
         self.surfaces.date.set_visible(self.date_visible);
         self.surfaces.quick.set_visible(false);
         self.surfaces.overview.set_visible(false);
@@ -450,12 +457,18 @@ impl WebShell {
         }
     }
 
-    fn open_dock_menu(&mut self, command: String) {
-        if self.dock_menu_open && self.dock_menu_command.as_deref() == Some(command.as_str()) {
+    fn open_dock_menu(&mut self, command: String, x: Option<i32>) {
+        if self.dock_menu_open
+            && self.dock_menu_command.as_deref() == Some(command.as_str())
+            && self.dock_menu_x == x
+        {
             return;
         }
         self.dock_menu_open = true;
         self.dock_menu_command = Some(command);
+        self.dock_menu_x = x;
+        self.surfaces.set_dock_menu_x(x);
+        self.sync_surfaces();
         self.surfaces.set_dock_menu_visible(true);
     }
 
@@ -465,6 +478,7 @@ impl WebShell {
         }
         self.dock_menu_open = false;
         self.dock_menu_command = None;
+        self.dock_menu_x = None;
         self.surfaces.set_dock_menu_visible(false);
     }
 

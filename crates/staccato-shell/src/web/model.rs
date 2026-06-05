@@ -37,6 +37,7 @@ pub struct WebShellSnapshot {
     pub windows: Vec<WebWindow>,
     pub dock_apps: Vec<WebDockApp>,
     pub dock_menu_command: Option<String>,
+    pub dock_menu_x: Option<i32>,
     pub applications: Vec<WebApplication>,
     pub status: WebSystemStatus,
     pub tray: Vec<WebTrayItem>,
@@ -218,6 +219,7 @@ impl WebShellSnapshot {
         notifications: &NotificationSnapshot,
         dock_apps: &[DockApp],
         dock_menu_command: Option<&str>,
+        dock_menu_x: Option<i32>,
         applications: &[AppEntry],
         wallpaper_uri: Option<String>,
         palette: ShellPalette,
@@ -308,6 +310,7 @@ impl WebShellSnapshot {
                 })
                 .collect(),
             dock_menu_command: dock_menu_command.map(str::to_string),
+            dock_menu_x,
             applications: applications
                 .iter()
                 .map(|app| WebApplication {

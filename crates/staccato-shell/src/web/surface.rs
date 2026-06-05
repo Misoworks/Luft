@@ -21,6 +21,8 @@ use tracing::{debug, warn};
 
 const DOCK_MENU_WIDTH: i32 = 184;
 const DOCK_MENU_HEIGHT: i32 = 128;
+const DATE_CENTER_WIDTH: i32 = 360;
+const DATE_CENTER_HEIGHT: i32 = 470;
 
 pub struct WebSurfaces {
     pub dock: WebSurface,
@@ -47,6 +49,7 @@ impl WebSurfaces {
                 true,
                 false,
                 panel_taskbar,
+                None,
                 &actions_tx,
                 snapshot,
             )?,
@@ -56,6 +59,7 @@ impl WebSurfaces {
                 true,
                 false,
                 false,
+                None,
                 &actions_tx,
                 snapshot,
             )?,
@@ -89,7 +93,7 @@ impl WebSurfaces {
             ),
             date: LazyWebSurface::new(
                 WebShellSurface::DateCenter,
-                (780, 430),
+                (DATE_CENTER_WIDTH, DATE_CENTER_HEIGHT),
                 panel_taskbar,
                 &actions_tx,
                 snapshot,
@@ -141,6 +145,10 @@ impl WebSurfaces {
         self.dock_menu.set_visible(visible);
     }
 
+    pub fn set_dock_menu_x(&mut self, x: Option<i32>) {
+        self.dock_menu.set_dock_menu_x(x);
+    }
+
     pub fn set_notification_toast_visible(&mut self, visible: bool) {
         self.notification_toast.set_visible(visible);
     }
@@ -164,6 +172,7 @@ pub struct LazyWebSurface {
     visible: bool,
     hide_at: Option<Instant>,
     panel_taskbar: bool,
+    dock_menu_x: Option<i32>,
     surface: Option<WebSurface>,
 }
 
@@ -184,6 +193,7 @@ impl LazyWebSurface {
             visible: false,
             hide_at: None,
             panel_taskbar,
+            dock_menu_x: None,
             surface: None,
         }
     }
@@ -253,6 +263,7 @@ impl LazyWebSurface {
             false,
             true,
             self.panel_taskbar,
+            self.dock_menu_x,
             &self.actions_tx,
             &self.snapshot,
         ) {
@@ -290,6 +301,16 @@ impl LazyWebSurface {
             surface.set_panel_taskbar(taskbar);
         }
     }
+
+    fn set_dock_menu_x(&mut self, x: Option<i32>) {
+        if self.dock_menu_x == x {
+            return;
+        }
+        self.dock_menu_x = x;
+        if let Some(surface) = &mut self.surface {
+            surface.set_dock_menu_x(x);
+        }
+    }
 }
 
 pub struct WebSurface {
@@ -300,6 +321,7 @@ pub struct WebSurface {
     visible: bool,
     keep_alive_when_hidden: bool,
     panel_taskbar: bool,
+    dock_menu_x: Option<i32>,
     process: Option<CefProcess>,
     pending_snapshot: String,
     rendered_snapshot: String,
@@ -312,6 +334,7 @@ impl WebSurface {
         visible: bool,
         keep_alive_when_hidden: bool,
         panel_taskbar: bool,
+        dock_menu_x: Option<i32>,
         actions_tx: &Sender<WebShellAction>,
         snapshot: &WebShellSnapshot,
     ) -> Result<Self, Box<dyn Error>> {
@@ -324,6 +347,7 @@ impl WebSurface {
             visible: false,
             keep_alive_when_hidden,
             panel_taskbar,
+            dock_menu_x,
             process: None,
             pending_snapshot: initial,
             rendered_snapshot: String::new(),
@@ -360,6 +384,16 @@ impl WebSurface {
         if self.kind == WebShellSurface::Panel {
             self.resize(panel_size(taskbar));
         } else {
+            self.restart_for_geometry_change();
+        }
+    }
+
+    fn set_dock_menu_x(&mut self, x: Option<i32>) {
+        if self.dock_menu_x == x {
+            return;
+        }
+        self.dock_menu_x = x;
+        if self.kind == WebShellSurface::DockMenu {
             self.restart_for_geometry_change();
         }
     }
@@ -446,7 +480,7 @@ impl WebSurface {
         let snapshot = Arc::clone(&self.snapshot);
         let action_tx = self.actions_tx.clone();
         let kind = self.kind;
-        let shell_options = shell_surface(kind, self.size, self.panel_taskbar);
+        let shell_options = shell_surface(kind, self.size, self.panel_taskbar, self.dock_menu_x);
         let (width, height) = cef_initial_size(&shell_options, self.size);
 
         let window = CefWindow::new()

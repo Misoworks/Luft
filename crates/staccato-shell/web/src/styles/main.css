@@ -89,7 +89,7 @@ body,
 #app[data-taskbar="true"][data-surface="quick-settings"],
 #app[data-taskbar="true"][data-surface="date-center"] {
   align-items: end;
-  padding: 0 10px 4px 0;
+  padding: 0 12px 56px 0;
 }
 
 button {
@@ -262,7 +262,7 @@ img {
 #app[data-taskbar="true"][data-surface="quick-settings"] .popover,
 #app[data-taskbar="true"][data-surface="date-center"] .popover {
   transform-origin: bottom right;
-  max-height: calc(100vh - 62px);
+  max-height: calc(100vh - 104px);
 }
 
 #app.is-surface-opening[data-surface="quick-settings"] .popover,

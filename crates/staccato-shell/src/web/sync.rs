@@ -114,6 +114,7 @@ impl WebShell {
             self.notifications.snapshot(),
             &self.dock_apps,
             self.dock_menu_command.as_deref(),
+            self.dock_menu_x,
             &self.applications,
             self.wallpaper_uri.clone(),
             self.palette,

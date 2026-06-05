@@ -34,6 +34,7 @@ pub enum WebShellAction {
     },
     DockMenuOpen {
         command: String,
+        x: Option<i32>,
     },
     DockMenuClose,
     DockPin {

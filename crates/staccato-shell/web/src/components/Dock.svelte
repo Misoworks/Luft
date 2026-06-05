@@ -12,8 +12,8 @@
     sendAction({ type: "dock-launch", command });
   }
 
-  function openMenu(command: string) {
-    sendAction({ type: "dock-menu-open", command });
+  function openMenu(command: string, x: number) {
+    sendAction({ type: "dock-menu-open", command, x });
   }
 
   function workspaceScroll(event: WheelEvent) {
