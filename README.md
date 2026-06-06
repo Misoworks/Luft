@@ -30,6 +30,17 @@ bun install
 bun run build
 ```
 
+During shell development, `staccatoctl dev apply` performs that web build, rebuilds `staccato-shell`, asks the live compositor to restart only the shell process, and reloads config:
+
+```sh
+cargo run -p staccatoctl -- dev setup
+sudo target/debug/staccatoctl dev install-session
+cargo run -p staccatoctl -- dev apply
+cargo run -p staccatoctl -- dev watch
+```
+
+`dev setup` installs Bun dependencies, builds the shell web bundle, and builds Baton, `staccato-session`, `staccato-shell`, and `staccatoctl`. `dev install-session` installs the display-manager entry and portal preferences; by default the entry points at `target/debug` binaries, so a rebuild changes what the next Staccato login uses. `dev watch` watches the shell web UI, shell Rust code, default and user config, and Baton/session source groups. Shell changes are applied through the shell restart IPC path. Baton changes are built with `--features session-backend` and reported, but the compositor is not restarted automatically because replacing it ends the running app session.
+
 ## Test
 
 ```sh
@@ -124,6 +135,11 @@ cargo run -p staccatoctl -- config path
 cargo run -p staccatoctl -- config validate
 cargo run -p staccatoctl -- logs
 cargo run -p staccatoctl -- doctor
+cargo run -p staccatoctl -- dev setup
+cargo run -p staccatoctl -- dev install-session
+cargo run -p staccatoctl -- dev apply
+cargo run -p staccatoctl -- dev watch
+cargo run -p staccatoctl -- dev apply baton
 cargo run -p staccatoctl -- recovery status
 cargo run -p staccatoctl -- recovery backups
 cargo run -p staccatoctl -- recovery rollback

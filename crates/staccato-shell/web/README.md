@@ -20,4 +20,4 @@ Build the embedded single-file bundle:
 bun run build
 ```
 
-The Rust shell embeds `dist/index.html`, so rebuild this package before compiling `staccato-shell` after UI changes.
+The Rust shell loads `dist/index.html`, so rebuild this package before compiling `staccato-shell` after UI changes. From the workspace root, `cargo run -p staccatoctl -- dev apply` builds the web bundle, rebuilds `staccato-shell`, and asks a running Baton session to restart only the shell process. Use `cargo run -p staccatoctl -- dev watch` for the normal edit loop.

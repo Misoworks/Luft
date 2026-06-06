@@ -1,3 +1,4 @@
+mod dev_cli;
 mod diagnostics;
 mod dock_cli;
 mod doctor;
@@ -6,6 +7,7 @@ mod recovery_cli;
 mod workspace_cli;
 
 use clap::{Parser, Subcommand};
+use dev_cli::{DevCommand, run_dev_command};
 use diagnostics::{
     open_config, print_config_path, print_doctor, print_logs, print_recovery_status,
     validate_config,
@@ -39,6 +41,8 @@ enum Command {
     },
     Doctor,
     Reload,
+    #[command(subcommand)]
+    Dev(DevCommand),
     #[command(subcommand)]
     Recovery(RecoveryCommand),
     #[command(subcommand)]
@@ -203,6 +207,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => print_logs(component, lines, path, cli.json)?,
         Command::Doctor => print_doctor(cli.json)?,
         Command::Reload => accepted(send_request(&IpcRequest::Reload)?)?,
+        Command::Dev(command) => run_dev_command(command)?,
         Command::Recovery(RecoveryCommand::Status) => print_recovery_status(cli.json)?,
         Command::Recovery(RecoveryCommand::Backups) => list_recovery_backups(cli.json)?,
         Command::Recovery(RecoveryCommand::Rollback) => rollback_config(cli.json)?,
