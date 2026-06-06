@@ -20,6 +20,7 @@ mod recovery;
 mod render;
 mod scene_blur;
 mod scene_render;
+mod session_services;
 mod shell;
 mod state;
 mod state_focus;

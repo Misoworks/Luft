@@ -27,7 +27,10 @@ pub fn run(
             config,
             socket_name,
         })?),
-        RuntimeBackend::Session => drm::run(),
+        RuntimeBackend::Session => Ok(drm::run(drm::DrmOptions {
+            config,
+            socket_name,
+        })?),
     }
 }
 
@@ -37,6 +40,6 @@ pub enum BackendError {
     Nested(#[from] nested::NestedError),
     #[error(transparent)]
     Headless(#[from] headless::HeadlessError),
-    #[error("{0}")]
-    Unsupported(String),
+    #[error(transparent)]
+    Drm(#[from] drm::DrmError),
 }

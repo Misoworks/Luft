@@ -63,7 +63,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let backend = selected_backend(&args, loaded.config.compositor.backend);
     let explicit_baton = args.baton.is_some() || env::var_os("STACCATO_BATON").is_some();
     if !args.dry_run && !explicit_baton {
-        ensure_dev_helpers_built()?;
+        ensure_dev_helpers_built(backend)?;
     }
     let baton = resolve_baton(args.baton);
     let environment = SessionEnvironment::default();
@@ -135,7 +135,7 @@ fn sibling_binary(name: &str) -> Option<PathBuf> {
     path.exists().then_some(path)
 }
 
-fn ensure_dev_helpers_built() -> io::Result<()> {
+fn ensure_dev_helpers_built(backend: BatonBackend) -> io::Result<()> {
     let Some(workspace) = dev_workspace() else {
         return Ok(());
     };
@@ -145,10 +145,13 @@ fn ensure_dev_helpers_built() -> io::Result<()> {
         .arg("build")
         .arg("--manifest-path")
         .arg(&workspace.manifest)
-        .arg("--bin")
+        .arg("-p")
         .arg("baton")
-        .arg("--bin")
+        .arg("-p")
         .arg("staccato-shell");
+    if matches!(backend, BatonBackend::Session) {
+        command.arg("--features").arg("baton/session-backend");
+    }
     if workspace.release {
         command.arg("--release");
     }

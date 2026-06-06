@@ -5,7 +5,7 @@ use crate::{
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, Event, InputBackend, InputEvent, KeyState, KeyboardKeyEvent,
-        PointerAxisEvent, PointerButtonEvent,
+        PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
     },
     input::{
         keyboard::{FilterResult, KeyboardHandle},
@@ -64,25 +64,24 @@ pub fn handle_input_event<B>(
         InputEvent::PointerMotionAbsolute { event } => {
             let frame_hover_before = frame_control_hover(state);
             let location = event.position_transformed(output_size.to_logical(1));
-            state.pointer_location = location;
-            state.update_drag(location);
-            update_frame_cursor(state);
+            move_pointer(state, pointer, location, event.time_msec());
             if frame_hover_before != frame_control_hover(state) {
                 state.mark_scene_dirty();
             }
-
-            let serial = state.next_serial();
-            let focus = state.pointer_focus(location);
-            pointer.motion(
-                state,
-                focus,
-                &MotionEvent {
-                    location,
-                    serial,
-                    time: event.time_msec(),
-                },
-            );
-            pointer.frame(state);
+        }
+        InputEvent::PointerMotion { event } => {
+            let frame_hover_before = frame_control_hover(state);
+            let delta = event.delta();
+            let max = output_size.to_logical(1);
+            let location = (
+                (state.pointer_location.x + delta.x).clamp(0.0, max.w as f64),
+                (state.pointer_location.y + delta.y).clamp(0.0, max.h as f64),
+            )
+                .into();
+            move_pointer(state, pointer, location, event.time_msec());
+            if frame_hover_before != frame_control_hover(state) {
+                state.mark_scene_dirty();
+            }
         }
         InputEvent::PointerButton { event } => {
             let serial = state.next_serial();
@@ -198,6 +197,30 @@ fn refresh_pointer_focus(
             time,
         },
     );
+}
+
+fn move_pointer(
+    state: &mut BatonState,
+    pointer: &PointerHandle<BatonState>,
+    location: smithay::utils::Point<f64, smithay::utils::Logical>,
+    time: u32,
+) {
+    state.pointer_location = location;
+    state.update_drag(location);
+    update_frame_cursor(state);
+
+    let serial = state.next_serial();
+    let focus = state.pointer_focus(location);
+    pointer.motion(
+        state,
+        focus,
+        &MotionEvent {
+            location,
+            serial,
+            time,
+        },
+    );
+    pointer.frame(state);
 }
 
 fn frame_control_hover(state: &BatonState) -> Option<WindowFrameControl> {

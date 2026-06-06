@@ -20,7 +20,7 @@ The real DRM/KMS session backend is built behind an explicit feature while it is
 cargo build -p baton --features session-backend
 ```
 
-That feature requires libseat development files. On Arch-based systems install `seatd`; on Debian/Ubuntu-style systems install `libseat-dev`.
+That feature requires libseat development files. On Arch-based systems install `seatd`; on Debian/Ubuntu-style systems install `libseat-dev`. For a complete login session, install `dbus-run-session`, `dbus-update-activation-environment`, and a Secret Service provider such as `gnome-keyring-daemon`.
 
 Build the web shell assets with Bun before compiling `staccato-shell` when the web UI has changed. The build emits a single HTML file that is embedded into the shell binary:
 
@@ -78,7 +78,7 @@ STACCATO_IPC_SOCKET=/tmp/staccato-headless.sock staccatoctl status
 ## Session Launcher
 
 `staccato-session` is the display-manager entry point from `data/sessions/staccato.desktop`.
-The installed desktop entry launches `staccato-session --session`, sets the Staccato desktop environment variables, and starts Baton as a real Wayland session. When run manually without an explicit backend, `staccato-session` defaults to nested inside an existing Wayland session and to the session backend outside one. When `dbus-run-session` is available, the session runs Baton under a private D-Bus session so shell services and launched apps do not attach to the host desktop session while testing nested. If Baton is started directly for development, it wraps `staccato-shell` in its own private D-Bus session when possible. Set `STACCATO_USE_HOST_DBUS=1` only when intentionally debugging against the host session bus.
+The installed desktop entry launches `staccato-session --session`, sets the Staccato desktop environment variables, and starts Baton as a real Wayland session. When run manually without an explicit backend, `staccato-session` defaults to nested inside an existing Wayland session and to the session backend outside one. When `dbus-run-session` is available, the session runs Baton under a private D-Bus session so shell services and launched apps do not attach to the host desktop session while testing nested. Baton exports `WAYLAND_DISPLAY`, `DISPLAY`, and desktop identifiers to D-Bus activation/systemd user environments and starts `gnome-keyring-daemon --components=secrets` when it is installed on the private bus. If Baton is started directly for development, it wraps `staccato-shell` in its own private D-Bus session when possible. Set `STACCATO_USE_HOST_DBUS=1` only when intentionally debugging against the host session bus.
 
 ```sh
 cargo run -p staccato-session -- --nested --socket staccato-dev
@@ -86,7 +86,7 @@ cargo run -p staccato-session -- --desktop-entry
 cargo run -p staccato-session -- --session --dry-run
 ```
 
-The DRM/KMS session backend has a libseat/udev hardware probe behind `baton --features session-backend` and now selects connected DRM outputs, modes, and CRTCs before the render loop is initialized. Modeset rendering still depends on Baton session-backend implementation work. The installed session entry has a real launcher binary.
+The DRM/KMS session backend behind `baton --features session-backend` opens the active seat through libseat, selects the primary DRM card with udev, modesets the first connected output, renders with GBM/EGL/GLES, forwards libinput keyboard/pointer events, starts the shell and XWayland satellite, and keeps the private D-Bus session behavior used by the nested launcher. The current hardware backend is a first real-session path for one GPU and one connected output; hotplug, multi-output layout, direct scanout, portal services, and a linux-dmabuf global are still follow-up work.
 
 Current compositor shortcuts:
 

@@ -1,5 +1,6 @@
 mod diagnostics;
 mod dock_cli;
+mod doctor;
 mod mode_cli;
 mod recovery_cli;
 mod workspace_cli;

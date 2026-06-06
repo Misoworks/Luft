@@ -17,6 +17,7 @@ use crate::{
     render::{RenderStage, render_stage_elements, window_chrome_elements},
     scene_blur::SceneBlurCache,
     scene_render::{SceneRenderRequest, render_scene},
+    session_services,
     shell::ShellProcess,
     state::BatonState,
     window_clip::window_elements,
@@ -111,6 +112,7 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
     if let Some(display) = &state.xwayland_display {
         println!("DISPLAY={display}");
     }
+    session_services::start(&socket_name, state.xwayland_display.as_deref());
     let mut shell = ShellProcess::start(
         &socket_name,
         state.xwayland_display.as_deref(),
@@ -189,6 +191,10 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
         let xwayland_display = xwayland.display().map(str::to_string);
         if state.xwayland_display != xwayland_display {
             state.xwayland_display = xwayland_display;
+            session_services::sync_activation_environment(
+                &socket_name,
+                state.xwayland_display.as_deref(),
+            );
             state.mark_scene_dirty();
         }
         match state.take_shell_restart_requested() {
