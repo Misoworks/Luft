@@ -351,7 +351,7 @@ impl WindowStack {
     ) -> impl Iterator<Item = &'a ManagedWindow> {
         let fullscreen = self.fullscreen_on_workspace(active_workspace);
         let active_workspace = active_workspace.clone();
-        self.windows.iter().filter(move |window| {
+        self.windows.iter().rev().filter(move |window| {
             fullscreen.map_or_else(
                 || {
                     window.workspace == active_workspace

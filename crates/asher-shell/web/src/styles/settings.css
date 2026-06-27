@@ -1,5 +1,5 @@
 .settings-shell {
-  --settings-content: #111110;
+  --settings-content: rgba(10, 10, 9, 0.72);
   --settings-surface: #1a1a18;
   --settings-control: rgba(255, 255, 255, 0.075);
   --settings-control-hover: rgba(255, 255, 255, 0.12);
@@ -168,9 +168,8 @@
   min-width: 0;
   padding: 10px 14px 8px 16px;
   background:
-    linear-gradient(var(--settings-sidebar-tint), var(--settings-sidebar-tint)),
-    linear-gradient(var(--settings-sidebar-overlay), var(--settings-sidebar-overlay)),
-    var(--settings-sidebar-solid);
+    linear-gradient(rgba(10, 10, 9, 0.42), rgba(10, 10, 9, 0.42)),
+    color-mix(in srgb, var(--settings-glass-sidebar, rgba(22, 22, 20, 0.5)), transparent 28%);
   box-shadow: inset 0 -1px 0 var(--settings-hairline);
 }
 
@@ -207,7 +206,9 @@
 }
 
 .settings-page.is-loaded {
-  background: var(--settings-content);
+  background:
+    linear-gradient(rgba(8, 8, 7, 0.58), rgba(8, 8, 7, 0.58)),
+    var(--settings-content);
 }
 
 .settings-loading {

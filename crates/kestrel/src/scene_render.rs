@@ -309,6 +309,7 @@ fn scene_window_entries(state: &KestrelState) -> Vec<SceneWindowEntry<'_>> {
     } else {
         append_workspace_entries(state, state.layout.active_workspace(), 0, &mut entries);
     }
+    entries.reverse();
     entries
 }
 

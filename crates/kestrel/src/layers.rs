@@ -239,7 +239,7 @@ fn material_for(namespace: &str) -> Option<LayerMaterial> {
         "asher-quick-settings" => Some(LayerMaterial::RoundRect { radius: 26 }),
         "asher-sidebar" => Some(LayerMaterial::Rect),
         "asher-start-menu" => Some(LayerMaterial::RoundRect { radius: 24 }),
-        "asher-notifications" => Some(LayerMaterial::RoundRect { radius: 18 }),
+        "asher-notifications" => Some(LayerMaterial::RoundRect { radius: 26 }),
         _ => None,
     }
 }
