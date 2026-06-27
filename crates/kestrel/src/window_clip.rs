@@ -210,6 +210,10 @@ where
     }
 
     fn underlying_storage(&self, renderer: &mut R) -> Option<UnderlyingStorage<'_>> {
+        if self.radius > 0 {
+            return None;
+        }
+
         self.element.underlying_storage(renderer)
     }
 }

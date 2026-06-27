@@ -213,10 +213,13 @@
 
 <section class="popover quick-settings">
   <header class="quick-header">
-    <div>
-      <span>Quick Settings</span>
-      <small>{snapshot.activeProfile} / Workspace {snapshot.activeWorkspace}</small>
-    </div>
+    <span class="quick-profile" aria-label="User profile">
+      {#if snapshot.userProfileIconUri}
+        <img src={snapshot.userProfileIconUri} alt="" />
+      {:else}
+        <Icon name="user" />
+      {/if}
+    </span>
     <div class="quick-header-actions">
       <button
         type="button"

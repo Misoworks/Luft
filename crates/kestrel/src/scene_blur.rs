@@ -1,4 +1,7 @@
-use crate::layers::{BlurLayer, LayerMaterial, LayerRenderTarget};
+use crate::{
+    layers::{BlurLayer, LayerMaterial, LayerRenderTarget},
+    window_clip::RoundedWindowElement,
+};
 use smithay::{
     backend::{
         allocator::Fourcc,
@@ -17,7 +20,7 @@ use smithay::{
 use std::time::Instant;
 
 const WINDOW_BLUR_SAMPLE_PADDING: i32 = 36;
-const LAYER_BLUR_SAMPLE_PADDING: i32 = 0;
+const LAYER_BLUR_SAMPLE_PADDING: i32 = 6;
 
 const BLUR_SHADER: &str = r#"#version 100
 
@@ -38,6 +41,8 @@ uniform float alpha;
 uniform vec2 texel;
 uniform vec2 target_size;
 uniform float radius;
+uniform vec2 direction;
+uniform float final_pass;
 varying vec2 v_coords;
 
 #if defined(DEBUG_FLAGS)
@@ -50,7 +55,7 @@ float hash(vec2 value) {
 
 float edgeCoverage(vec2 pixel) {
     vec2 edge = min(pixel, target_size - pixel);
-    return smoothstep(0.0, 1.0, min(edge.x, edge.y));
+    return smoothstep(-0.5, 0.5, min(edge.x, edge.y));
 }
 
 float roundedCoverage(vec2 pixel) {
@@ -68,18 +73,20 @@ float roundedCoverage(vec2 pixel) {
 }
 
 void main() {
-    vec4 color = texture2D(tex, v_coords) * 0.18;
-    color += texture2D(tex, v_coords + texel * vec2(1.384615, 0.0)) * 0.16;
-    color += texture2D(tex, v_coords - texel * vec2(1.384615, 0.0)) * 0.16;
-    color += texture2D(tex, v_coords + texel * vec2(0.0, 1.384615)) * 0.16;
-    color += texture2D(tex, v_coords - texel * vec2(0.0, 1.384615)) * 0.16;
-    color += texture2D(tex, v_coords + texel * vec2(1.0, 1.0)) * 0.095;
-    color += texture2D(tex, v_coords + texel * vec2(-1.0, 1.0)) * 0.095;
-    color += texture2D(tex, v_coords + texel * vec2(1.0, -1.0)) * 0.095;
-    color += texture2D(tex, v_coords + texel * vec2(-1.0, -1.0)) * 0.095;
+    vec2 step = texel * direction;
+    vec4 color = texture2D(tex, v_coords) * 0.227027;
+    color += texture2D(tex, v_coords + step * 1.384615) * 0.316216;
+    color += texture2D(tex, v_coords - step * 1.384615) * 0.316216;
+    color += texture2D(tex, v_coords + step * 3.230769) * 0.070270;
+    color += texture2D(tex, v_coords - step * 3.230769) * 0.070270;
+
+    if (final_pass < 0.5) {
+        gl_FragColor = color;
+        return;
+    }
 
     float luma = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
-    color.rgb = luma + (color.rgb - vec3(luma)) * 1.04;
+    color.rgb = luma + (color.rgb - vec3(luma)) * 1.06;
     color.rgb += hash(gl_FragCoord.xy) * 0.0028;
 
     float coverage = roundedCoverage(gl_FragCoord.xy);
@@ -185,6 +192,8 @@ impl SceneBlurCache {
                 UniformName::new("texel", UniformType::_2f),
                 UniformName::new("target_size", UniformType::_2f),
                 UniformName::new("radius", UniformType::_1f),
+                UniformName::new("direction", UniformType::_2f),
+                UniformName::new("final_pass", UniformType::_1f),
             ],
         )?;
         self.program = Some(program.clone());
@@ -218,7 +227,7 @@ impl SceneBlurCache {
         let capture_size = blur_texture_size(target, sample_rect.size);
         let texture_size = blur_texture_size(target, rect.size);
         let source = source_rect_for_visible_target(sample_rect, rect, capture_size);
-        let (capture, blurred) = match cached {
+        let (capture, scratch, blurred) = match cached {
             Some(index)
                 if self.entries[index].texture_size == texture_size
                     && self.entries[index].capture_size == capture_size =>
@@ -242,6 +251,7 @@ impl SceneBlurCache {
                         capture_size,
                         source,
                         capture: &entry.capture,
+                        scratch: &mut entry.scratch,
                         blurred: &mut entry.blurred,
                     },
                 )?;
@@ -256,6 +266,10 @@ impl SceneBlurCache {
                 let mut capture = renderer.create_buffer(
                     Fourcc::Abgr8888,
                     Size::<i32, Buffer>::from((capture_size.w, capture_size.h)),
+                )?;
+                let mut scratch = renderer.create_buffer(
+                    Fourcc::Abgr8888,
+                    Size::<i32, Buffer>::from((texture_size.w, texture_size.h)),
                 )?;
                 let mut blurred = renderer.create_buffer(
                     Fourcc::Abgr8888,
@@ -279,10 +293,11 @@ impl SceneBlurCache {
                         capture_size,
                         source,
                         capture: &capture,
+                        scratch: &mut scratch,
                         blurred: &mut blurred,
                     },
                 )?;
-                (capture, blurred)
+                (capture, scratch, blurred)
             }
         };
 
@@ -300,6 +315,7 @@ impl SceneBlurCache {
                     capture_size,
                     texture_size,
                     capture,
+                    scratch,
                     blurred,
                     target_opacity: target.opacity,
                 };
@@ -316,6 +332,7 @@ impl SceneBlurCache {
                 capture_size,
                 texture_size,
                 capture,
+                scratch,
                 blurred,
                 target_opacity: target.opacity,
             }),
@@ -331,7 +348,7 @@ impl SceneBlurCache {
     }
 }
 
-pub type BlurElement = TextureRenderElement<GlesTexture>;
+pub type BlurElement = RoundedWindowElement<TextureRenderElement<GlesTexture>>;
 
 pub fn capture_blur_elements(
     cache: &mut SceneBlurCache,
@@ -372,6 +389,7 @@ struct SceneBlurCacheEntry {
     capture_size: Size<i32, Physical>,
     texture_size: Size<i32, Physical>,
     capture: GlesTexture,
+    scratch: GlesTexture,
     blurred: GlesTexture,
     target_opacity: f32,
 }
@@ -421,6 +439,7 @@ struct BlurRenderPass<'a> {
     capture_size: Size<i32, Physical>,
     source: Rectangle<f64, Buffer>,
     capture: &'a GlesTexture,
+    scratch: &'a mut GlesTexture,
     blurred: &'a mut GlesTexture,
 }
 
@@ -428,6 +447,36 @@ fn render_blur_texture(
     renderer: &mut GlesRenderer,
     pass: BlurRenderPass<'_>,
 ) -> Result<(), GlesError> {
+    let full_damage = [Rectangle::<i32, Physical>::from_size(pass.texture_size)];
+    {
+        let mut scratch_target = renderer.bind(pass.scratch)?;
+        let mut frame =
+            renderer.render(&mut scratch_target, pass.texture_size, Transform::Normal)?;
+        frame.clear(
+            smithay::backend::renderer::Color32F::new(0.0, 0.0, 0.0, 0.0),
+            &full_damage,
+        )?;
+        frame.render_texture_from_to(
+            pass.capture,
+            pass.source,
+            Rectangle::<i32, Physical>::from_size(pass.texture_size),
+            &full_damage,
+            &[],
+            Transform::Normal,
+            1.0,
+            Some(pass.program),
+            &blur_uniforms(BlurUniforms {
+                texel_size: pass.capture_size,
+                target_size: pass.texture_size,
+                visible_size: pass.visible_size,
+                material: pass.material,
+                direction: (1.0, 0.0),
+                final_pass: false,
+            }),
+        )?;
+        let _ = frame.finish()?;
+    }
+
     let mut target = renderer.bind(pass.blurred)?;
     let mut frame = renderer.render(&mut target, pass.texture_size, Transform::Flipped180)?;
     let full_damage = [Rectangle::<i32, Physical>::from_size(pass.texture_size)];
@@ -436,20 +485,25 @@ fn render_blur_texture(
         &full_damage,
     )?;
     frame.render_texture_from_to(
-        pass.capture,
-        pass.source,
+        pass.scratch,
+        Rectangle::<f64, Buffer>::from_size(Size::<f64, Buffer>::from((
+            pass.texture_size.w as f64,
+            pass.texture_size.h as f64,
+        ))),
         Rectangle::<i32, Physical>::from_size(pass.texture_size),
         &full_damage,
         &[],
         Transform::Normal,
         1.0,
         Some(pass.program),
-        &blur_uniforms(
-            pass.texture_size,
-            pass.capture_size,
-            pass.visible_size,
-            pass.material,
-        ),
+        &blur_uniforms(BlurUniforms {
+            texel_size: pass.texture_size,
+            target_size: pass.texture_size,
+            visible_size: pass.visible_size,
+            material: pass.material,
+            direction: (0.0, 1.0),
+            final_pass: true,
+        }),
     )?;
     let _ = frame.finish()?;
     Ok(())
@@ -461,7 +515,7 @@ fn render_element(
     entry: &SceneBlurCacheEntry,
     opacity: f32,
 ) -> BlurElement {
-    TextureRenderElement::from_static_texture(
+    let element = TextureRenderElement::from_static_texture(
         entry.id.clone(),
         renderer.context_id(),
         Point::<f64, Physical>::from((rect.loc.x as f64, rect.loc.y as f64)),
@@ -475,30 +529,58 @@ fn render_element(
         Some(Size::<i32, Logical>::from((rect.size.w, rect.size.h))),
         None,
         Kind::Unspecified,
+    );
+    RoundedWindowElement::new(
+        element,
+        rect,
+        material_clip_radius(entry.material, rect.size),
     )
 }
 
-fn blur_uniforms(
-    texture_size: Size<i32, Physical>,
-    capture_size: Size<i32, Physical>,
+fn material_clip_radius(material: LayerMaterial, size: Size<i32, Physical>) -> i32 {
+    match material {
+        LayerMaterial::Rect => 0,
+        LayerMaterial::RoundRect { radius } => radius.max(0).min(size.w / 2).min(size.h / 2),
+    }
+}
+
+struct BlurUniforms {
+    texel_size: Size<i32, Physical>,
+    target_size: Size<i32, Physical>,
     visible_size: Size<i32, Physical>,
     material: LayerMaterial,
-) -> [Uniform<'static>; 3] {
+    direction: (f32, f32),
+    final_pass: bool,
+}
+
+fn blur_uniforms(uniforms: BlurUniforms) -> [Uniform<'static>; 5] {
     [
         Uniform::new(
             "texel",
             UniformValue::_2f(
-                1.0 / capture_size.w.max(1) as f32,
-                1.0 / capture_size.h.max(1) as f32,
+                1.0 / uniforms.texel_size.w.max(1) as f32,
+                1.0 / uniforms.texel_size.h.max(1) as f32,
             ),
         ),
         Uniform::new(
             "target_size",
-            UniformValue::_2f(texture_size.w as f32, texture_size.h as f32),
+            UniformValue::_2f(uniforms.target_size.w as f32, uniforms.target_size.h as f32),
         ),
         Uniform::new(
             "radius",
-            UniformValue::_1f(material_radius(material, texture_size, visible_size)),
+            UniformValue::_1f(material_radius(
+                uniforms.material,
+                uniforms.target_size,
+                uniforms.visible_size,
+            )),
+        ),
+        Uniform::new(
+            "direction",
+            UniformValue::_2f(uniforms.direction.0, uniforms.direction.1),
+        ),
+        Uniform::new(
+            "final_pass",
+            UniformValue::_1f(if uniforms.final_pass { 1.0 } else { 0.0 }),
         ),
     ]
 }
@@ -596,7 +678,7 @@ fn blur_texture_size(target: &LayerRenderTarget, size: Size<i32, Physical>) -> S
 
 fn blur_downscale(target: &LayerRenderTarget, width: i32, height: i32) -> i32 {
     if target.blur_layer != BlurLayer::Window {
-        return 4;
+        return 3;
     }
 
     let area = width.saturating_mul(height);

@@ -1,4 +1,4 @@
-use crate::{layers::LayerRenderTarget, window_clip::RoundedWindowElement};
+use crate::{layers::LayerRenderTarget, render::LayerElement, window_clip::RoundedWindowElement};
 use smithay::{
     backend::renderer::{
         damage::OutputDamageTracker,
@@ -12,9 +12,10 @@ use smithay::{
     utils::{Buffer, Physical, Rectangle, Scale, Size, Transform},
 };
 
-type SurfaceElement = WaylandSurfaceRenderElement<GlesRenderer>;
+type LayerSurfaceElement = LayerElement;
+type WindowSurfaceElement = WaylandSurfaceRenderElement<GlesRenderer>;
 type MemoryElement = MemoryRenderBufferRenderElement<GlesRenderer>;
-type WindowElement = RoundedWindowElement<SurfaceElement>;
+type WindowElement = RoundedWindowElement<WindowSurfaceElement>;
 
 #[derive(Debug)]
 pub struct DamageTracker {
@@ -67,7 +68,7 @@ impl DamageTracker {
 
 #[derive(Clone, Copy)]
 pub(crate) enum DamageElement<'a> {
-    Surface(&'a SurfaceElement),
+    Surface(&'a LayerSurfaceElement),
     Memory(&'a MemoryElement),
     Window(&'a WindowElement),
 }
@@ -153,12 +154,12 @@ impl Element for DamageElement<'_> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn damage_elements<'a>(
     background: Option<&'a MemoryElement>,
-    background_layer: &'a [SurfaceElement],
-    bottom_layer: &'a [SurfaceElement],
+    background_layer: &'a [LayerSurfaceElement],
+    bottom_layer: &'a [LayerSurfaceElement],
     windows: &'a [WindowElement],
     window_chrome: &'a [MemoryElement],
-    top_layer: &'a [SurfaceElement],
-    overlay_layer: &'a [SurfaceElement],
+    top_layer: &'a [LayerSurfaceElement],
+    overlay_layer: &'a [LayerSurfaceElement],
     loading: Option<&'a MemoryElement>,
     debug: Option<&'a MemoryElement>,
 ) -> Vec<DamageElement<'a>> {
@@ -183,8 +184,8 @@ pub(crate) fn damage_elements<'a>(
 
 pub(crate) fn blur_damage_elements<'a>(
     background: Option<&'a MemoryElement>,
-    background_layer: &'a [SurfaceElement],
-    bottom_layer: &'a [SurfaceElement],
+    background_layer: &'a [LayerSurfaceElement],
+    bottom_layer: &'a [LayerSurfaceElement],
     windows: &'a [WindowElement],
 ) -> Vec<DamageElement<'a>> {
     let mut elements = Vec::new();

@@ -106,7 +106,16 @@ body,
 #app[data-surface="quick-settings"],
 #app[data-surface="date-center"] {
   display: block;
+  overflow: hidden;
+  border-radius: 26px;
+  clip-path: inset(0 round 26px);
   background: transparent;
+}
+
+#app[data-surface="start-menu"] {
+  overflow: hidden;
+  border-radius: 24px;
+  clip-path: inset(0 round 24px);
 }
 
 #app[data-surface="quick-settings"] .popover,
@@ -279,6 +288,8 @@ img {
   max-height: 100%;
   padding: 16px;
   border-radius: 26px;
+  overflow: hidden;
+  clip-path: inset(0 round 26px);
   transform-origin: top right;
   background:
     linear-gradient(rgba(12, 12, 10, 0.08), rgba(12, 12, 10, 0.08)),

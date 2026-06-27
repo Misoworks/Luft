@@ -23,33 +23,71 @@ pub enum WindowGrab {
         surface: ToplevelSurface,
         pointer_start: Point<f64, Logical>,
         start_geometry: Rect,
+        forward_button_release: bool,
     },
     Resize {
         id: WindowId,
         edge: ResizeEdge,
         pointer_start: Point<f64, Logical>,
         start_geometry: Rect,
+        forward_button_release: bool,
     },
 }
 
 impl KestrelState {
+    pub fn prepare_window_drag(&mut self, surface: ToplevelSurface) {
+        self.pending_window_drag = Some(crate::state::PendingWindowDrag {
+            surface,
+            pointer_start: self.pointer_location,
+        });
+    }
+
     pub fn begin_drag(&mut self, surface: ToplevelSurface) {
+        self.begin_drag_from(surface, self.pointer_location, false);
+    }
+
+    pub fn begin_client_drag(&mut self, surface: ToplevelSurface) {
+        self.begin_drag_from(surface, self.pointer_location, true);
+    }
+
+    fn begin_drag_from(
+        &mut self,
+        surface: ToplevelSurface,
+        pointer_start: Point<f64, Logical>,
+        forward_button_release: bool,
+    ) {
         let Some((_id, start_geometry)) = self.windows.geometry_for_surface(&surface) else {
             return;
         };
 
+        self.pending_window_drag = None;
         self.drag = Some(WindowGrab::Move {
             surface,
-            pointer_start: self.pointer_location,
+            pointer_start,
             start_geometry,
+            forward_button_release,
         });
     }
 
     pub fn begin_resize(&mut self, surface: ToplevelSurface, edge: ResizeEdge) {
+        self.begin_resize_from(surface, edge, false);
+    }
+
+    pub fn begin_client_resize(&mut self, surface: ToplevelSurface, edge: ResizeEdge) {
+        self.begin_resize_from(surface, edge, true);
+    }
+
+    fn begin_resize_from(
+        &mut self,
+        surface: ToplevelSurface,
+        edge: ResizeEdge,
+        forward_button_release: bool,
+    ) {
         let Some((id, start_geometry)) = self.windows.geometry_for_surface(&surface) else {
             return;
         };
 
+        self.pending_window_drag = None;
         self.windows.set_restore_geometry(id, None);
         let _ = self.layout.set_window_state(id, WindowState::Floating);
         self.drag = Some(WindowGrab::Resize {
@@ -57,10 +95,12 @@ impl KestrelState {
             edge,
             pointer_start: self.pointer_location,
             start_geometry,
+            forward_button_release,
         });
     }
 
     pub fn update_drag(&mut self, location: Point<f64, Logical>) {
+        self.promote_pending_window_drag(location);
         let Some(grab) = self.drag.clone() else {
             return;
         };
@@ -70,6 +110,7 @@ impl KestrelState {
                 surface,
                 pointer_start,
                 start_geometry,
+                ..
             } => {
                 let Some((id, _)) = self.windows.geometry_for_surface(&surface) else {
                     return;
@@ -83,6 +124,7 @@ impl KestrelState {
                 edge,
                 pointer_start,
                 start_geometry,
+                ..
             } => {
                 let geometry = resize_geometry(start_geometry, edge, pointer_start, location);
                 self.apply_window_geometry(id, geometry, false, false, false);
@@ -92,6 +134,57 @@ impl KestrelState {
 
     pub fn end_drag(&mut self) {
         self.drag = None;
+        self.pending_window_drag = None;
+    }
+
+    fn promote_pending_window_drag(&mut self, location: Point<f64, Logical>) {
+        const DRAG_THRESHOLD: f64 = 4.0;
+
+        let Some(pending) = self.pending_window_drag.clone() else {
+            return;
+        };
+        let dx = location.x - pending.pointer_start.x;
+        let dy = location.y - pending.pointer_start.y;
+        if dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD {
+            return;
+        }
+
+        self.begin_drag_from(pending.surface, pending.pointer_start, true);
+    }
+
+    pub fn drag_forwards_button_release(&self) -> bool {
+        matches!(
+            self.drag,
+            Some(WindowGrab::Move {
+                forward_button_release: true,
+                ..
+            }) | Some(WindowGrab::Resize {
+                forward_button_release: true,
+                ..
+            })
+        )
+    }
+
+    pub fn next_initial_window_geometry(&self) -> Rect {
+        let output = self.output_size();
+        let reserved_top = self.reserved_top();
+        let reserved_bottom = self.reserved_bottom();
+        let available_height = (output.h - reserved_top - reserved_bottom).max(MIN_WINDOW_HEIGHT);
+        let width = 900
+            .min((output.w as f32 * 0.78) as i32)
+            .max(MIN_WINDOW_WIDTH);
+        let height = 560
+            .min((available_height as f32 * 0.78) as i32)
+            .max(MIN_WINDOW_HEIGHT);
+        let visible_windows = self
+            .windows
+            .iter()
+            .filter(|window| !window.hidden && !window.closing)
+            .count() as i32;
+        let offset = ((visible_windows % 5) - 2) * 24;
+        let x = ((output.w - width) / 2 + offset).max(0);
+        let y = (reserved_top + (available_height - height) / 2 + offset).max(reserved_top);
+        self.fit_initial_window_geometry(Rect::new(x, y, width, height))
     }
 
     pub fn handle_window_control(
@@ -264,7 +357,7 @@ impl KestrelState {
             None => {
                 self.apply_window_geometry(
                     id,
-                    self.fit_initial_window_geometry(self.windows.next_geometry()),
+                    self.next_initial_window_geometry(),
                     false,
                     false,
                     self.animations_enabled(),

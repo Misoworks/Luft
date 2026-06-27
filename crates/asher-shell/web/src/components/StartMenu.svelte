@@ -55,8 +55,10 @@
     };
   });
 
-  function focusSearch() {
+  function focusSearch(event?: Event) {
+    event?.stopPropagation();
     cancelSearchFocus();
+    searchInputElement?.focus({ preventScroll: true });
     focusFrame = requestAnimationFrame(() => {
       focusFrame = requestAnimationFrame(() => {
         focusFrame = undefined;
@@ -223,10 +225,11 @@
 
 <section class="shell-start-menu">
   <header class="start-menu-top">
-    <label class="start-menu-search" onpointerdown={focusSearch}>
+    <label class="start-menu-search" for="start-menu-search-input">
       <Icon name="search" />
       <input
         {@attach captureSearchInput}
+        id="start-menu-search-input"
         class="start-menu-search-input"
         type="text"
         aria-label="Search apps"
@@ -236,6 +239,8 @@
         spellcheck="false"
         placeholder="Search"
         value={query}
+        onpointerdown={(event) => event.stopPropagation()}
+        onclick={focusSearch}
         oninput={searchInput}
         onkeydown={searchKeydown}
       />

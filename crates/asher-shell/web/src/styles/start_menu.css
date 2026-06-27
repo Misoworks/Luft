@@ -9,6 +9,7 @@
   padding: 22px 26px 20px;
   overflow: hidden;
   border-radius: 24px;
+  clip-path: inset(0 round 24px);
   background:
     linear-gradient(rgba(18, 18, 16, 0.14), rgba(18, 18, 16, 0.14)),
     var(--material-popover);

@@ -86,18 +86,28 @@ pub fn handle_input_event<B>(
         }
         InputEvent::PointerButton { event } => {
             let serial = state.next_serial();
-            let hit = state.window_at_for_shell_interaction(state.pointer_location);
             let mut frame_interaction = false;
+            let mut forward_button_release = false;
             let left_button = event.button_code() == BTN_LEFT;
             let right_button = event.button_code() == BTN_RIGHT;
-
-            if event.state().is_pressed()
+            let closes_transient = event.state().is_pressed()
                 && (left_button || right_button)
-                && layers::should_close_transient_popover(state.output(), state.pointer_location)
-            {
+                && layers::should_close_transient_popover(state.output(), state.pointer_location);
+            let hit = if closes_transient {
+                state.window_at_below_shell(state.pointer_location)
+            } else {
+                state.window_at_for_shell_interaction(state.pointer_location)
+            };
+
+            if closes_transient {
                 state.close_shell_transient_popovers();
-                keyboard.set_focus(state, None, serial);
-                return;
+            }
+            if event.state().is_pressed() && (left_button || right_button) {
+                if let Some(surface) = hit.clone() {
+                    state.allow_client_grab(surface, serial);
+                } else {
+                    state.clear_client_grab();
+                }
             }
 
             if state.super_active
@@ -110,13 +120,20 @@ pub fn handle_input_event<B>(
                 state.activate_surface(keyboard, &surface);
                 if left_button {
                     state.begin_drag(surface);
-                } else if let Some((surface, edge)) =
+                } else if let Some((surface, edge)) = if closes_transient {
+                    state.modifier_resize_at_below_shell(state.pointer_location)
+                } else {
                     state.modifier_resize_at(state.pointer_location)
-                {
+                } {
                     state.begin_resize(surface, edge);
                 }
             } else if left_button && event.state().is_pressed() {
-                if let Some(frame_hit) = state.window_frame_hit(state.pointer_location) {
+                let frame_hit = if closes_transient {
+                    state.window_frame_hit_below_shell(state.pointer_location)
+                } else {
+                    state.window_frame_hit(state.pointer_location)
+                };
+                if let Some(frame_hit) = frame_hit {
                     frame_interaction = true;
                     match frame_hit {
                         WindowFrameHit::Titlebar { surface } => {
@@ -135,6 +152,14 @@ pub fn handle_input_event<B>(
                     if !state.activate_surface(keyboard, &surface) {
                         keyboard.set_focus(state, Some(surface.wl_surface().clone()), serial);
                     }
+                    let drag_surface = if closes_transient {
+                        state.client_drag_surface_at_below_shell(state.pointer_location)
+                    } else {
+                        state.client_drag_surface_at(state.pointer_location)
+                    };
+                    if drag_surface.as_ref() == Some(&surface) {
+                        state.prepare_window_drag(surface);
+                    }
                     refresh_pointer_focus(state, pointer, serial, event.time_msec());
                 } else {
                     keyboard.set_focus(state, state.keyboard_focus(state.pointer_location), serial);
@@ -142,13 +167,15 @@ pub fn handle_input_event<B>(
             }
 
             if (left_button || right_button) && !event.state().is_pressed() {
-                frame_interaction |= state.drag.is_some();
+                forward_button_release = state.drag_forwards_button_release();
+                frame_interaction |= state.drag.is_some() && !forward_button_release;
                 state.end_drag();
+                state.clear_client_grab();
             }
 
             update_frame_cursor(state);
 
-            if !frame_interaction {
+            if !frame_interaction || forward_button_release {
                 pointer.button(
                     state,
                     &ButtonEvent {

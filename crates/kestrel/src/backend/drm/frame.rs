@@ -15,7 +15,7 @@ use crate::{
     frame_clock::FrameTime,
     layers,
     loading_overlay::render_loading_overlay,
-    render::{RenderStage, render_stage_elements, window_chrome_elements},
+    render::{LayerElement, RenderStage, render_stage_elements, window_chrome_elements},
     scene_blur::SceneBlurCache,
     scene_render::{SceneRenderRequest, render_scene},
     state::KestrelState,
@@ -437,18 +437,10 @@ fn can_direct_scanout(
     show_loading: bool,
     debug_needs_render: bool,
     blur_animating: bool,
-    background_layer: &[smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<
-        GlesRenderer,
-    >],
-    bottom_layer: &[smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<
-        GlesRenderer,
-    >],
-    top_layer: &[smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<
-        GlesRenderer,
-    >],
-    overlay_layer: &[smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<
-        GlesRenderer,
-    >],
+    background_layer: &[LayerElement],
+    bottom_layer: &[LayerElement],
+    top_layer: &[LayerElement],
+    overlay_layer: &[LayerElement],
     window_effect_targets: &[layers::LayerRenderTarget],
 ) -> bool {
     fullscreen_active

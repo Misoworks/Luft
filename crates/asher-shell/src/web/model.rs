@@ -12,6 +12,7 @@ use crate::{
 };
 use asher_config::AsherConfig;
 use serde::Serialize;
+use std::{env, path::PathBuf};
 use time::{OffsetDateTime, macros::format_description};
 
 #[derive(Debug, Clone, Serialize)]
@@ -29,6 +30,7 @@ pub struct WebShellSnapshot {
     pub safe_mode: bool,
     pub wallpaper_uri: Option<String>,
     pub glass_blur_wallpaper_uri: Option<String>,
+    pub user_profile_icon_uri: Option<String>,
     pub palette: WebPalette,
     pub appearance: WebAppearance,
     pub profiles: Vec<WebProfile>,
@@ -236,6 +238,7 @@ impl WebShellSnapshot {
             safe_mode,
             wallpaper_uri,
             glass_blur_wallpaper_uri,
+            user_profile_icon_uri: user_profile_icon_uri(),
             palette: WebPalette::from(palette),
             appearance: WebAppearance::from_config(config),
             profiles: model
@@ -343,6 +346,21 @@ impl WebShellSnapshot {
                 .collect(),
         }
     }
+}
+
+fn user_profile_icon_uri() -> Option<String> {
+    let user = env::var("USER").ok()?;
+    let home = env::var_os("HOME").map(PathBuf::from);
+    [
+        Some(PathBuf::from(format!(
+            "/var/lib/AccountsService/icons/{user}"
+        ))),
+        home.as_ref().map(|path| path.join(".face")),
+        home.as_ref().map(|path| path.join(".face.icon")),
+    ]
+    .into_iter()
+    .flatten()
+    .find_map(|path| icon_data_uri(path.as_path()))
 }
 
 impl From<&NotificationItem> for WebNotification {

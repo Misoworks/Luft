@@ -62,6 +62,11 @@ impl KestrelState {
             .window_at(location, self.layout.active_workspace())
     }
 
+    pub fn window_at_below_shell(&self, location: Point<f64, Logical>) -> Option<ToplevelSurface> {
+        self.windows
+            .window_at(location, self.layout.active_workspace())
+    }
+
     pub fn window_frame_hit(&self, location: Point<f64, Logical>) -> Option<WindowFrameHit> {
         let fullscreen = self
             .windows
@@ -71,6 +76,14 @@ impl KestrelState {
             return None;
         }
 
+        self.windows
+            .frame_hit(location, self.layout.active_workspace())
+    }
+
+    pub fn window_frame_hit_below_shell(
+        &self,
+        location: Point<f64, Logical>,
+    ) -> Option<WindowFrameHit> {
         self.windows
             .frame_hit(location, self.layout.active_workspace())
     }
@@ -89,6 +102,35 @@ impl KestrelState {
 
         self.windows
             .modifier_resize_at(location, self.layout.active_workspace())
+    }
+
+    pub fn modifier_resize_at_below_shell(
+        &self,
+        location: Point<f64, Logical>,
+    ) -> Option<(ToplevelSurface, ResizeEdge)> {
+        self.windows
+            .modifier_resize_at(location, self.layout.active_workspace())
+    }
+
+    pub fn client_drag_surface_at(&self, location: Point<f64, Logical>) -> Option<ToplevelSurface> {
+        let fullscreen = self
+            .windows
+            .fullscreen_on_workspace(self.layout.active_workspace())
+            .is_some();
+        if !fullscreen && layers::has_layer_above_windows(self.output(), location) {
+            return None;
+        }
+
+        self.windows
+            .client_drag_surface_at(location, self.layout.active_workspace())
+    }
+
+    pub fn client_drag_surface_at_below_shell(
+        &self,
+        location: Point<f64, Logical>,
+    ) -> Option<ToplevelSurface> {
+        self.windows
+            .client_drag_surface_at(location, self.layout.active_workspace())
     }
 
     pub fn layer_surface_for_commit(&self, surface: &WlSurface) -> Option<LayerSurface> {

@@ -3,7 +3,7 @@ use crate::{
     state::KestrelState,
     titlebar::{self, TITLEBAR_OVERLAP},
     window::{ManagedWindow, TITLEBAR_HEIGHT},
-    window_clip::WINDOW_RADIUS,
+    window_clip::{RoundedWindowElement, WINDOW_RADIUS},
 };
 use asher_layout::WorkspaceId;
 use smithay::{
@@ -25,11 +25,13 @@ pub fn handle_commit(surface: &wl_surface::WlSurface) {
     on_commit_buffer_handler::<KestrelState>(surface);
 }
 
+pub type LayerElement = RoundedWindowElement<WaylandSurfaceRenderElement<GlesRenderer>>;
+
 pub fn render_stage_elements(
     renderer: &mut GlesRenderer,
     state: &KestrelState,
     stage: RenderStage,
-) -> Vec<WaylandSurfaceRenderElement<GlesRenderer>> {
+) -> Vec<LayerElement> {
     let mut elements = Vec::new();
     match stage {
         RenderStage::Layer(layer) => append_layer_elements(renderer, state, layer, &mut elements),
@@ -138,16 +140,42 @@ fn append_layer_elements(
     renderer: &mut GlesRenderer,
     state: &KestrelState,
     layer: Layer,
-    elements: &mut Vec<WaylandSurfaceRenderElement<GlesRenderer>>,
+    elements: &mut Vec<LayerElement>,
 ) {
     for target in layers::render_surfaces(state.output(), layer) {
-        elements.extend(render_elements_from_surface_tree(
-            renderer,
-            &target.surface,
-            (target.location.x, target.location.y),
-            1.0,
-            1.0,
-            Kind::Unspecified,
-        ));
+        elements.extend(
+            render_elements_from_surface_tree(
+                renderer,
+                &target.surface,
+                (target.location.x, target.location.y),
+                1.0,
+                1.0,
+                Kind::Unspecified,
+            )
+            .into_iter()
+            .map(|element| {
+                let clip = smithay::utils::Rectangle::<i32, smithay::utils::Physical>::new(
+                    (target.location.x, target.location.y).into(),
+                    (target.size.w, target.size.h).into(),
+                );
+                RoundedWindowElement::new(
+                    element,
+                    clip,
+                    layer_material_radius(target.material, target.size),
+                )
+            }),
+        );
+    }
+}
+
+fn layer_material_radius(
+    material: layers::LayerMaterial,
+    size: smithay::utils::Size<i32, Logical>,
+) -> i32 {
+    match material {
+        layers::LayerMaterial::Rect => 0,
+        layers::LayerMaterial::RoundRect { radius } => {
+            radius.max(0).min(size.w / 2).min(size.h / 2)
+        }
     }
 }

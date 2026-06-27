@@ -103,28 +103,36 @@ impl XdgShellHandler for KestrelState {
         let _ = surface.send_configure();
     }
 
-    fn move_request(&mut self, surface: ToplevelSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
+    fn move_request(&mut self, surface: ToplevelSurface, _seat: wl_seat::WlSeat, serial: Serial) {
+        if !self.client_grab_allowed(&surface, serial) {
+            debug!("ignored stale xdg toplevel move request");
+            return;
+        }
         if let Some(keyboard) = self.keyboard.clone() {
             self.activate_surface(&keyboard, &surface);
         }
-        self.begin_drag(surface);
+        self.begin_client_drag(surface);
     }
 
     fn resize_request(
         &mut self,
         surface: ToplevelSurface,
         _seat: wl_seat::WlSeat,
-        _serial: Serial,
+        serial: Serial,
         edges: xdg_toplevel::ResizeEdge,
     ) {
         let Some(edge) = resize_edge_from_xdg(edges) else {
             return;
         };
+        if !self.client_grab_allowed(&surface, serial) {
+            debug!("ignored stale xdg toplevel resize request");
+            return;
+        }
 
         if let Some(keyboard) = self.keyboard.clone() {
             self.activate_surface(&keyboard, &surface);
         }
-        self.begin_resize(surface, edge);
+        self.begin_client_resize(surface, edge);
     }
 
     fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {}

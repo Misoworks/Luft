@@ -1,6 +1,6 @@
 use crate::{
     layers::{BlurLayer, LayerRenderTarget},
-    render::window_chrome_elements_for_window,
+    render::{LayerElement, window_chrome_elements_for_window},
     scene_blur::{self, BlurElement, SceneBlurCache},
     state::KestrelState,
     window::ManagedWindow,
@@ -17,9 +17,10 @@ use smithay::{
     utils::{Physical, Rectangle, Size, Transform},
 };
 
-type SurfaceElement = WaylandSurfaceRenderElement<GlesRenderer>;
+type LayerSurfaceElement = LayerElement;
+type WindowSurfaceElement = WaylandSurfaceRenderElement<GlesRenderer>;
 type MemoryElement = MemoryRenderBufferRenderElement<GlesRenderer>;
-type WindowElement = RoundedWindowElement<SurfaceElement>;
+type WindowElement = RoundedWindowElement<WindowSurfaceElement>;
 
 pub struct SceneRenderRequest<'a> {
     pub state: &'a KestrelState,
@@ -28,15 +29,15 @@ pub struct SceneRenderRequest<'a> {
     pub blur_damage: &'a [Rectangle<i32, Physical>],
     pub blur_enabled: bool,
     pub background: Option<MemoryElement>,
-    pub background_layer: &'a [SurfaceElement],
-    pub bottom_layer: &'a [SurfaceElement],
+    pub background_layer: &'a [LayerSurfaceElement],
+    pub bottom_layer: &'a [LayerSurfaceElement],
     pub windows: &'a [WindowElement],
     pub window_chrome: &'a [MemoryElement],
     pub window_targets: &'a [LayerRenderTarget],
     pub top_targets: &'a [LayerRenderTarget],
-    pub top_layer: &'a [SurfaceElement],
+    pub top_layer: &'a [LayerSurfaceElement],
     pub overlay_targets: &'a [LayerRenderTarget],
-    pub overlay_layer: &'a [SurfaceElement],
+    pub overlay_layer: &'a [LayerSurfaceElement],
     pub loading: Option<MemoryElement>,
     pub debug: Option<MemoryElement>,
 }
@@ -253,6 +254,8 @@ fn flush_window_batch(
         return Ok(());
     }
 
+    windows.reverse();
+    chrome.reverse();
     let mut frame = renderer.render(framebuffer, output_size, Transform::Flipped180)?;
     draw_render_elements(&mut frame, 1.0, windows.as_slice(), damage)?;
     draw_render_elements(&mut frame, 1.0, chrome.as_slice(), damage)?;

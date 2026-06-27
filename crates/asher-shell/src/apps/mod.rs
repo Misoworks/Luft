@@ -1,8 +1,6 @@
 use crate::dock::DockApp;
 
-mod browser_launch;
 mod desktop_entry;
-mod dev_command;
 mod icon_theme;
 mod xdg;
 
@@ -118,9 +116,7 @@ pub fn launcher_apps(config: &AsherConfig, fallback: &[DockApp]) -> Vec<AppEntry
 }
 
 pub fn spawn_command(command: &str, xwayland_display: Option<&str>) -> io::Result<Child> {
-    let command = browser_launch::command_for_shell(command);
-    let command = dev_command::resolve(&command).unwrap_or(command);
-    let mut child = command_for_launch(&command);
+    let mut child = command_for_launch(command);
     apply_app_environment(&mut child, xwayland_display);
     child.spawn()
 }
@@ -189,6 +185,8 @@ fn apply_app_environment(command: &mut Command, xwayland_display: Option<&str>) 
     command.env("NO_AT_BRIDGE", "1");
     command.env("GTK_A11Y", "none");
     command.env("GTK_MODULES", "");
+    command.env("UBUNTU_MENUPROXY", "0");
+    command.env("GTK_OVERLAY_SCROLLING", "0");
     command.env("GDK_BACKEND", "wayland,x11");
     command.env("QT_QPA_PLATFORM", "wayland;xcb");
     command.env("SDL_VIDEODRIVER", "wayland");

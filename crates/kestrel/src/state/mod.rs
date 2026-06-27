@@ -56,6 +56,8 @@ pub struct KestrelState {
     pub windows: WindowStack,
     pub pointer_location: Point<f64, Logical>,
     pub drag: Option<WindowGrab>,
+    pub pending_window_drag: Option<PendingWindowDrag>,
+    pub pending_client_grab: Option<ClientGrabSerial>,
     pub config: AsherConfig,
     pub cursor_image: CursorImageStatus,
     pub cursor_dirty: bool,
@@ -123,6 +125,8 @@ impl KestrelState {
             windows: WindowStack::default(),
             pointer_location: (0.0, 0.0).into(),
             drag: None,
+            pending_window_drag: None,
+            pending_client_grab: None,
             config,
             cursor_image: CursorImageStatus::Named(CursorIcon::Default),
             cursor_dirty: true,
@@ -148,6 +152,20 @@ impl KestrelState {
         Serial::from(serial)
     }
 
+    pub fn allow_client_grab(&mut self, surface: ToplevelSurface, _serial: Serial) {
+        self.pending_client_grab = Some(ClientGrabSerial { surface });
+    }
+
+    pub fn clear_client_grab(&mut self) {
+        self.pending_client_grab = None;
+    }
+
+    pub fn client_grab_allowed(&self, surface: &ToplevelSurface, _serial: Serial) -> bool {
+        self.pending_client_grab
+            .as_ref()
+            .is_some_and(|grab| &grab.surface == surface)
+    }
+
     #[cfg(feature = "session-backend")]
     pub fn enable_dmabuf(&mut self, formats: FormatSet) {
         use smithay::backend::allocator::Format;
@@ -171,7 +189,7 @@ impl KestrelState {
 
     pub fn map_toplevel(&mut self, surface: ToplevelSurface) {
         let workspace = self.layout.active_workspace().clone();
-        let geometry = self.fit_initial_window_geometry(self.windows.next_geometry());
+        let geometry = self.next_initial_window_geometry();
         let info = WindowInfo::new(asher_layout::WindowId(0), workspace.clone(), geometry);
 
         match self.layout.register_window(info) {
@@ -480,6 +498,17 @@ impl KestrelState {
     pub fn layer_surfaces(&self) -> Vec<WlSurface> {
         layers::surfaces(self.output())
     }
+}
+
+#[derive(Clone)]
+pub struct ClientGrabSerial {
+    surface: ToplevelSurface,
+}
+
+#[derive(Clone)]
+pub struct PendingWindowDrag {
+    pub surface: ToplevelSurface,
+    pub pointer_start: Point<f64, Logical>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

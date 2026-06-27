@@ -129,10 +129,20 @@ impl WindowAnimation {
             }
             WindowAnimationKind::Geometry { from } => {
                 let progress = ease_out(self.raw_progress(GEOMETRY_DURATION));
+                let target_center_x = bounds.x as f64 + bounds.width as f64 / 2.0;
+                let target_center_y = bounds.y as f64 + bounds.height as f64 / 2.0;
+                let start_center_x = from.x as f64 + from.width as f64 / 2.0;
+                let start_center_y = from.y as f64 + from.height as f64 / 2.0;
+                let scale_x = from.width.max(1) as f64 / bounds.width.max(1) as f64;
+                let scale_y = from.height.max(1) as f64 / bounds.height.max(1) as f64;
+                let scale = lerp(scale_x.min(scale_y).clamp(0.72, 1.28), 1.0, progress);
+                let center_x = lerp(start_center_x, target_center_x, progress);
+                let center_y = lerp(start_center_y, target_center_y, progress);
+
                 WindowTransform {
-                    x: lerp(from.x as f64, bounds.x as f64, progress),
-                    y: lerp(from.y as f64, bounds.y as f64, progress),
-                    scale: 1.0,
+                    x: center_x - bounds.width as f64 * scale / 2.0,
+                    y: center_y - bounds.height as f64 * scale / 2.0,
+                    scale,
                     alpha: 1.0,
                 }
             }

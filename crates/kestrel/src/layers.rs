@@ -82,16 +82,18 @@ pub fn pointer_focus(output: &Output, point: Point<f64, Logical>) -> Option<Laye
 pub fn keyboard_focus(output: &Output, point: Point<f64, Logical>) -> Option<WlSurface> {
     let layer_map = layer_map_for_output(output);
     for layer in [Layer::Overlay, Layer::Top, Layer::Bottom, Layer::Background] {
-        let Some(surface) = layer_map.layer_under(layer, point) else {
-            continue;
-        };
+        let mut surfaces = layer_map.layers_on(layer).collect::<Vec<_>>();
+        surfaces.reverse();
+        for surface in surfaces {
+            if !surface_accepts_input(surface)
+                || !point_inside_layer_material(&layer_map, surface, point)
+            {
+                continue;
+            }
 
-        if !surface_accepts_input(surface) {
-            continue;
-        }
-
-        if surface.can_receive_keyboard_focus() {
-            return Some(surface.wl_surface().clone());
+            if surface.can_receive_keyboard_focus() {
+                return Some(surface.wl_surface().clone());
+            }
         }
     }
 
@@ -121,7 +123,9 @@ pub fn should_close_transient_popover(output: &Output, point: Point<f64, Logical
         let Some(geometry) = layer_map.layer_geometry(surface) else {
             continue;
         };
-        if point_in_rect(point, geometry.loc, geometry.size) {
+        let (location, size) =
+            material_geometry(surface.namespace(), geometry.loc, geometry.size, false);
+        if point_in_rect(point, location, size) {
             return false;
         }
     }
@@ -171,9 +175,12 @@ pub fn render_surfaces(output: &Output, layer: Layer) -> Vec<LayerRenderSurface>
         .layers_on(layer)
         .filter_map(|surface| {
             let geometry = layer_map.layer_geometry(surface)?;
+            let material = material_for(surface.namespace()).unwrap_or(LayerMaterial::Rect);
             Some(LayerRenderSurface {
                 surface: surface.wl_surface().clone(),
                 location: geometry.loc,
+                size: geometry.size,
+                material,
             })
         })
         .collect()
@@ -202,6 +209,8 @@ pub struct LayerRenderTarget {
 pub struct LayerRenderSurface {
     pub surface: WlSurface,
     pub location: Point<i32, Logical>,
+    pub size: smithay::utils::Size<i32, Logical>,
+    pub material: LayerMaterial,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -302,23 +311,47 @@ fn pointer_focus_on_layer(
     layer: Layer,
 ) -> Option<LayerPointerFocus> {
     let layer_map = layer_map_for_output(output);
-    let layer_surface = layer_map.layer_under(layer, point)?;
-    if !surface_accepts_input(layer_surface) {
-        return None;
-    }
-    let geometry = layer_map.layer_geometry(layer_surface)?;
-    let point_in_layer: Point<f64, Logical> = (
-        point.x - f64::from(geometry.loc.x),
-        point.y - f64::from(geometry.loc.y),
-    )
-        .into();
-    let (surface, surface_location) =
-        layer_surface.surface_under(point_in_layer, WindowSurfaceType::ALL)?;
+    let mut surfaces = layer_map.layers_on(layer).collect::<Vec<_>>();
+    surfaces.reverse();
+    for layer_surface in surfaces {
+        if !surface_accepts_input(layer_surface)
+            || !point_inside_layer_material(&layer_map, layer_surface, point)
+        {
+            continue;
+        }
 
-    Some(LayerPointerFocus {
-        surface,
-        location: (geometry.loc + surface_location).to_f64(),
-    })
+        let geometry = layer_map.layer_geometry(layer_surface)?;
+        let point_in_layer: Point<f64, Logical> = (
+            point.x - f64::from(geometry.loc.x),
+            point.y - f64::from(geometry.loc.y),
+        )
+            .into();
+        let Some((surface, surface_location)) =
+            layer_surface.surface_under(point_in_layer, WindowSurfaceType::ALL)
+        else {
+            continue;
+        };
+
+        return Some(LayerPointerFocus {
+            surface,
+            location: (geometry.loc + surface_location).to_f64(),
+        });
+    }
+
+    None
+}
+
+fn point_inside_layer_material(
+    layer_map: &smithay::desktop::LayerMap,
+    surface: &LayerSurface,
+    point: Point<f64, Logical>,
+) -> bool {
+    let Some(geometry) = layer_map.layer_geometry(surface) else {
+        return false;
+    };
+    let (location, size) =
+        material_geometry(surface.namespace(), geometry.loc, geometry.size, false);
+    point_in_rect(point, location, size)
 }
 
 fn point_in_rect(

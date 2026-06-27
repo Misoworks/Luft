@@ -2,7 +2,7 @@ use super::{
     MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, ManagedWindow, ResizeEdge, WindowFrameHit,
     WindowRestoreState,
     hit::{
-        contains, content_contains, modifier_resize_edge_at, resize_edge_at, titlebar_contains,
+        content_contains, modifier_resize_edge_at, resize_edge_at, titlebar_contains,
         titlebar_control_at,
     },
     surface_has_client_frame_extents,
@@ -309,11 +309,6 @@ impl WindowStack {
         true
     }
 
-    pub fn next_geometry(&self) -> Rect {
-        let offset = self.windows.len() as i32 * 32;
-        Rect::new(80 + offset, 72 + offset, 900, 560)
-    }
-
     pub fn window_at(
         &self,
         point: Point<f64, Logical>,
@@ -322,7 +317,7 @@ impl WindowStack {
         self.visible_windows_for_workspace(active_workspace)
             .iter()
             .copied()
-            .find(|window| contains(window, point))
+            .find(|window| interactive_contains(window, point))
             .map(|window| window.surface.clone())
     }
 
@@ -331,18 +326,22 @@ impl WindowStack {
         point: Point<f64, Logical>,
         active_workspace: &WorkspaceId,
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
-        let window = self
-            .visible_windows_for_workspace(active_workspace)
-            .iter()
-            .copied()
-            .find(|window| content_contains(window, point))?;
-        let (surface, location) = under_from_surface_tree(
-            window.surface.wl_surface(),
-            point,
-            window.surface_location(),
-            WindowSurfaceType::ALL,
-        )?;
-        Some((surface, location.to_f64()))
+        for window in self.visible_windows_for_workspace(active_workspace) {
+            if !content_contains(window, point) {
+                continue;
+            }
+
+            if let Some((surface, location)) = under_from_surface_tree(
+                window.surface.wl_surface(),
+                point,
+                window.surface_location(),
+                WindowSurfaceType::ALL,
+            ) {
+                return Some((surface, location.to_f64()));
+            }
+        }
+
+        None
     }
 
     pub fn render_windows_on_workspace<'a>(
@@ -381,31 +380,33 @@ impl WindowStack {
         point: Point<f64, Logical>,
         active_workspace: &WorkspaceId,
     ) -> Option<WindowFrameHit> {
-        let window = self
-            .visible_windows_for_workspace(active_workspace)
-            .iter()
-            .copied()
-            .find(|window| contains(window, point))?;
+        for window in self.visible_windows_for_workspace(active_workspace) {
+            if titlebar_contains(window, point) {
+                if let Some(control) = titlebar_control_at(window, point) {
+                    return Some(WindowFrameHit::Control {
+                        id: window.id,
+                        control,
+                    });
+                }
 
-        if titlebar_contains(window, point)
-            && let Some(control) = titlebar_control_at(window, point)
-        {
-            return Some(WindowFrameHit::Control {
-                id: window.id,
-                control,
-            });
+                return Some(WindowFrameHit::Titlebar {
+                    surface: window.surface.clone(),
+                });
+            }
+
+            if let Some(edge) = resize_edge_at(window, point) {
+                return Some(WindowFrameHit::Resize {
+                    surface: window.surface.clone(),
+                    edge,
+                });
+            }
+
+            if surface_contains(window, point) {
+                return None;
+            }
         }
 
-        if let Some(edge) = resize_edge_at(window, point) {
-            return Some(WindowFrameHit::Resize {
-                surface: window.surface.clone(),
-                edge,
-            });
-        }
-
-        titlebar_contains(window, point).then(|| WindowFrameHit::Titlebar {
-            surface: window.surface.clone(),
-        })
+        None
     }
 
     pub fn modifier_resize_at(
@@ -417,9 +418,21 @@ impl WindowStack {
             .visible_windows_for_workspace(active_workspace)
             .iter()
             .copied()
-            .find(|window| contains(window, point))?;
+            .find(|window| interactive_contains(window, point))?;
         let edge = modifier_resize_edge_at(window, point)?;
         Some((window.surface.clone(), edge))
+    }
+
+    pub fn client_drag_surface_at(
+        &self,
+        point: Point<f64, Logical>,
+        active_workspace: &WorkspaceId,
+    ) -> Option<ToplevelSurface> {
+        self.visible_windows_for_workspace(active_workspace)
+            .iter()
+            .copied()
+            .find(|window| client_drag_region_contains(window, point))
+            .map(|window| window.surface.clone())
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &ManagedWindow> {
@@ -492,4 +505,35 @@ fn update_effective_decoration(window: &mut ManagedWindow) -> Option<WindowDecor
         geometry: window.geometry(),
         server_decorated,
     })
+}
+
+fn interactive_contains(window: &ManagedWindow, point: Point<f64, Logical>) -> bool {
+    titlebar_contains(window, point)
+        || resize_edge_at(window, point).is_some()
+        || surface_contains(window, point)
+}
+
+fn surface_contains(window: &ManagedWindow, point: Point<f64, Logical>) -> bool {
+    under_from_surface_tree(
+        window.surface.wl_surface(),
+        point,
+        window.surface_location(),
+        WindowSurfaceType::ALL,
+    )
+    .is_some()
+}
+
+fn client_drag_region_contains(window: &ManagedWindow, point: Point<f64, Logical>) -> bool {
+    const CLIENT_DRAG_HEIGHT: f64 = 44.0;
+
+    if window.server_decorated || window.fullscreen || !surface_contains(window, point) {
+        return false;
+    }
+
+    let content = window.content_location().to_f64();
+    let size = window.size.to_f64();
+    point.x >= content.x
+        && point.x < content.x + size.w
+        && point.y >= content.y
+        && point.y < content.y + CLIENT_DRAG_HEIGHT.min(size.h)
 }

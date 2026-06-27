@@ -22,6 +22,7 @@ export type ShellSnapshot = {
   safeMode: boolean;
   wallpaperUri?: string;
   glassBlurWallpaperUri?: string;
+  userProfileIconUri?: string;
   palette: ShellPalette;
   appearance: ShellAppearance;
   profiles: ProfileItem[];
