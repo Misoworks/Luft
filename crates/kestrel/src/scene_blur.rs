@@ -308,7 +308,6 @@ impl SceneBlurCache {
                         capture: &capture,
                         scratch: &mut scratch,
                         blurred: &mut blurred,
-                        display_transform: target_transform,
                     },
                 )?;
                 (capture, scratch, blurred)
