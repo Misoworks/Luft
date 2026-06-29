@@ -385,7 +385,7 @@ fn point_inside_layer_material(
 
 fn pointer_on_shell_chrome(output: &Output, point: Point<f64, Logical>) -> bool {
     let layer_map = layer_map_for_output(output);
-    for layer in [Layer::Top, Layer::Bottom] {
+    for layer in [Layer::Overlay, Layer::Top, Layer::Bottom] {
         for surface in layer_map.layers_on(layer) {
             if !SHELL_CHROME_NAMESPACES.contains(&surface.namespace()) {
                 continue;

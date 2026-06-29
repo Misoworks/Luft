@@ -432,13 +432,13 @@ impl SceneBlurCacheEntry {
 fn capture_target(
     renderer: &mut GlesRenderer,
     framebuffer: &GlesTarget<'_>,
-    _output_size: Size<i32, Physical>,
-    _target_transform: Transform,
+    output_size: Size<i32, Physical>,
+    target_transform: Transform,
     rect: Rectangle<i32, Physical>,
     texture_size: Size<i32, Physical>,
     capture: &mut GlesTexture,
 ) -> Result<(), GlesError> {
-    let source = Rectangle::<i32, Physical>::new(rect.loc, rect.size);
+    let source = framebuffer_source_rect(output_size, target_transform, rect);
     let target = Rectangle::<i32, Physical>::from_size(texture_size);
     let mut target_framebuffer = renderer.bind(capture)?;
     renderer.blit(
@@ -448,6 +448,24 @@ fn capture_target(
         target,
         TextureFilter::Linear,
     )
+}
+
+fn framebuffer_source_rect(
+    output_size: Size<i32, Physical>,
+    transform: Transform,
+    rect: Rectangle<i32, Physical>,
+) -> Rectangle<i32, Physical> {
+    match transform {
+        Transform::Flipped180 => Rectangle::new(
+            (
+                output_size.w - rect.loc.x - rect.size.w,
+                output_size.h - rect.loc.y - rect.size.h,
+            )
+                .into(),
+            rect.size,
+        ),
+        _ => rect,
+    }
 }
 
 struct BlurRenderPass<'a> {
