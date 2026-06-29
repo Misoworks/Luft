@@ -40,8 +40,8 @@ pub(super) fn open_animation_duration(kind: WebShellSurface) -> Option<Duration>
     }
 }
 
-pub(super) fn surface_alpha_animates(kind: WebShellSurface) -> bool {
-    !matches!(kind, WebShellSurface::NotificationToast)
+pub(super) fn surface_alpha_animates(_kind: WebShellSurface) -> bool {
+    false
 }
 
 pub(super) fn surface_margin_animates(kind: WebShellSurface) -> bool {

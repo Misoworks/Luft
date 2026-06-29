@@ -101,7 +101,11 @@ impl LazyWebSurface {
         }
 
         let now = Instant::now();
-        let resume_alpha = self.current_close_alpha(now);
+        let resume_alpha = if surface_alpha_animates(self.kind) {
+            self.current_close_alpha(now)
+        } else {
+            Some(1.0)
+        };
         let was_closing = self.hide_at.take().is_some();
         self.hide_started_at = None;
         self.hide_start_margin = None;
