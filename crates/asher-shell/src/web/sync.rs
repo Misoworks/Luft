@@ -107,24 +107,25 @@ impl WebShell {
 
     pub(super) fn sync_surfaces(&mut self) {
         let notification_toast_visible = self.notification_toast_visible();
-        let snapshot = super::model::WebShellSnapshot::from_shell(
-            &self.model,
-            &self.status,
-            self.tray.snapshot(),
-            self.notifications.snapshot(),
-            &self.dock_apps,
-            self.dock_menu_command.as_deref(),
-            self.dock_menu_x,
-            &self.applications,
-            self.wallpaper_uri.clone(),
-            self.glass_blur_wallpaper_uri.clone(),
-            self.palette,
-            &self.config,
-            self.config.general.safe_mode,
-            self.start_menu_visible,
-            self.quick_visible,
-            self.date_visible,
-        );
+        let snapshot =
+            super::model::WebShellSnapshot::from_shell(super::snapshot::WebShellSnapshotInput {
+                model: &self.model,
+                status: &self.status,
+                tray: self.tray.snapshot(),
+                notifications: self.notifications.snapshot(),
+                dock_apps: &self.dock_apps,
+                dock_menu_command: self.dock_menu_command.as_deref(),
+                dock_menu_x: self.dock_menu_x,
+                applications: &self.applications,
+                wallpaper_uri: self.wallpaper_uri.clone(),
+                glass_blur_wallpaper_uri: self.glass_blur_wallpaper_uri.clone(),
+                palette: self.palette,
+                config: &self.config,
+                safe_mode: self.config.general.safe_mode,
+                start_menu_open: self.start_menu_visible,
+                quick_settings_open: self.quick_visible,
+                date_center_open: self.date_visible,
+            });
         let Ok(json) = serde_json::to_string(&snapshot) else {
             return;
         };

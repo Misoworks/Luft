@@ -32,7 +32,9 @@ pub fn load_model() -> Result<ShellModel, Box<dyn Error>> {
                 workspaces,
                 profiles,
                 windows,
-            } => Ok(shell_model_from_parts(status, workspaces, profiles, windows)),
+            } => Ok(shell_model_from_parts(
+                status, workspaces, profiles, windows,
+            )),
             IpcResponse::Error { message } if shell_snapshot_unsupported(&message) => {
                 SHELL_SNAPSHOT_SUPPORTED.store(false, Ordering::Relaxed);
                 load_model_legacy()
@@ -67,7 +69,9 @@ fn load_model_legacy() -> Result<ShellModel, Box<dyn Error>> {
         response => return Err(unexpected_response(response).into()),
     };
 
-    Ok(shell_model_from_parts(status, workspaces, profiles, windows))
+    Ok(shell_model_from_parts(
+        status, workspaces, profiles, windows,
+    ))
 }
 
 fn shell_model_from_parts(

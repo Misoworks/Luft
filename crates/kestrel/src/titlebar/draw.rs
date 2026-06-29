@@ -27,6 +27,25 @@ pub(super) struct Rgba {
     a: u8,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(super) struct PixelRect {
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+impl PixelRect {
+    pub(super) const fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+}
+
 impl Rgba {
     pub(super) const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
@@ -47,31 +66,37 @@ pub(super) fn fill_top_round_rect(
     radius: i32,
     color: Rgba,
 ) {
-    fill_round_rect_at(pixels, width, height, 0, 0, width, height, radius, color);
+    fill_round_rect_at(
+        pixels,
+        width,
+        height,
+        PixelRect::new(0, 0, width, height),
+        radius,
+        color,
+    );
     fill_rect_at(
         pixels,
         width,
         height,
-        0,
-        radius.min(height),
-        width,
-        height - radius.min(height),
+        PixelRect::new(0, radius.min(height), width, height - radius.min(height)),
         color,
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 fn fill_round_rect_at(
     pixels: &mut [u8],
     width: i32,
     height: i32,
-    x: i32,
-    y: i32,
-    rect_width: i32,
-    rect_height: i32,
+    rect: PixelRect,
     radius: i32,
     color: Rgba,
 ) {
+    let PixelRect {
+        x,
+        y,
+        width: rect_width,
+        height: rect_height,
+    } = rect;
     let x0 = x.max(0);
     let y0 = y.max(0);
     let x1 = (x + rect_width).min(width);
@@ -91,12 +116,15 @@ pub(super) fn fill_rect_at(
     pixels: &mut [u8],
     width: i32,
     height: i32,
-    x: i32,
-    y: i32,
-    rect_width: i32,
-    rect_height: i32,
+    rect: PixelRect,
     color: Rgba,
 ) {
+    let PixelRect {
+        x,
+        y,
+        width: rect_width,
+        height: rect_height,
+    } = rect;
     let x0 = x.max(0);
     let y0 = y.max(0);
     let x1 = (x + rect_width).min(width);

@@ -162,6 +162,17 @@ struct NotificationServer {
 
 type Hints = HashMap<String, OwnedValue>;
 
+struct NotificationRequest {
+    app_name: String,
+    replaces_id: u32,
+    app_icon: String,
+    summary: String,
+    body: String,
+    actions: Vec<String>,
+    hints: Hints,
+    expire_timeout: i32,
+}
+
 #[interface(name = "org.freedesktop.Notifications")]
 impl NotificationServer {
     fn get_capabilities(&self) -> Vec<String> {
@@ -180,6 +191,7 @@ impl NotificationServer {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn notify(
         &self,
         app_name: String,
@@ -191,7 +203,7 @@ impl NotificationServer {
         hints: Hints,
         expire_timeout: i32,
     ) -> u32 {
-        self.shared.upsert(
+        self.shared.upsert(NotificationRequest {
             app_name,
             replaces_id,
             app_icon,
@@ -200,7 +212,7 @@ impl NotificationServer {
             actions,
             hints,
             expire_timeout,
-        )
+        })
     }
 
     async fn close_notification(
@@ -233,41 +245,31 @@ impl NotificationServer {
 }
 
 impl NotificationShared {
-    fn upsert(
-        &self,
-        app_name: String,
-        replaces_id: u32,
-        app_icon: String,
-        summary: String,
-        body: String,
-        actions: Vec<String>,
-        hints: Hints,
-        expire_timeout: i32,
-    ) -> u32 {
+    fn upsert(&self, request: NotificationRequest) -> u32 {
         let mut state = self.state.lock().expect("notification state poisoned");
-        let id = if replaces_id > 0 {
-            state.next_id = state.next_id.max(replaces_id.saturating_add(1));
-            replaces_id
+        let id = if request.replaces_id > 0 {
+            state.next_id = state.next_id.max(request.replaces_id.saturating_add(1));
+            request.replaces_id
         } else {
             let id = state.next_id.max(1);
             state.next_id = id.saturating_add(1).max(1);
             id
         };
-        let urgency = urgency_from_hints(&hints);
+        let urgency = urgency_from_hints(&request.hints);
         let item = NotificationItem {
             id,
-            app_name: clean_app_name(&app_name),
-            app_icon: clean_icon_name(&app_icon),
+            app_name: clean_app_name(&request.app_name),
+            app_icon: clean_icon_name(&request.app_icon),
             received_at: current_unix_time(),
-            summary: strip_markup(&summary),
-            body: strip_markup(&body),
+            summary: strip_markup(&request.summary),
+            body: strip_markup(&request.body),
             urgency,
-            actions: action_pairs(actions),
+            actions: action_pairs(request.actions),
         };
         let toast_visible = !state.do_not_disturb || urgency == NotificationUrgency::Critical;
         let stored = StoredNotification {
             item,
-            toast_until: expiration_for(expire_timeout, urgency),
+            toast_until: expiration_for(request.expire_timeout, urgency),
             toast_visible,
         };
 

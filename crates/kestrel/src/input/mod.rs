@@ -90,7 +90,7 @@ pub fn handle_input_event<B>(
             let mut forward_button_release = false;
             let left_button = event.button_code() == BTN_LEFT;
             let right_button = event.button_code() == BTN_RIGHT;
-            let closes_transient = event.state().is_pressed()
+            let closes_transient = event.state().pressed()
                 && (left_button || right_button)
                 && layers::should_close_transient_popover(state.output(), state.pointer_location);
             let hit = if closes_transient {
@@ -102,7 +102,7 @@ pub fn handle_input_event<B>(
             if closes_transient {
                 state.close_shell_transient_popovers();
             }
-            if event.state().is_pressed() && (left_button || right_button) {
+            if event.state().pressed() && (left_button || right_button) {
                 if let Some(surface) = hit.clone() {
                     state.allow_client_grab(surface, serial);
                 } else {
@@ -111,7 +111,7 @@ pub fn handle_input_event<B>(
             }
 
             if state.super_active
-                && event.state().is_pressed()
+                && event.state().pressed()
                 && (left_button || right_button)
                 && let Some(surface) = hit.clone()
             {
@@ -127,7 +127,7 @@ pub fn handle_input_event<B>(
                 } {
                     state.begin_resize(surface, edge);
                 }
-            } else if left_button && event.state().is_pressed() {
+            } else if left_button && event.state().pressed() {
                 let frame_hit = if closes_transient {
                     state.window_frame_hit_below_shell(state.pointer_location)
                 } else {
@@ -166,7 +166,7 @@ pub fn handle_input_event<B>(
                 }
             }
 
-            if (left_button || right_button) && !event.state().is_pressed() {
+            if (left_button || right_button) && !event.state().pressed() {
                 forward_button_release = state.drag_forwards_button_release();
                 frame_interaction |= state.drag.is_some() && !forward_button_release;
                 state.end_drag();
@@ -469,11 +469,11 @@ fn workspace_for_raw_key(raw: u32) -> Option<WorkspaceId> {
 }
 
 trait ButtonStateExt {
-    fn is_pressed(self) -> bool;
+    fn pressed(self) -> bool;
 }
 
 impl ButtonStateExt for smithay::backend::input::ButtonState {
-    fn is_pressed(self) -> bool {
+    fn pressed(self) -> bool {
         matches!(self, Self::Pressed)
     }
 }

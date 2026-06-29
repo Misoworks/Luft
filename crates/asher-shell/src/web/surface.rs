@@ -1,11 +1,14 @@
-use super::{lazy_surface::LazyWebSurface, web_surface::WebSurface};
+use super::{
+    lazy_surface::LazyWebSurface,
+    web_surface::{WebSurface, WebSurfaceConfig},
+};
 
+use super::actions::WebShellAction;
 use super::{
     model::{WebShellSnapshot, WebShellSurface},
     surface_layout::{PANEL_HEIGHT, PANEL_WIDTH_HINT},
     surface_sizing::{dock_menu_size, notification_toast_size, quick_settings_size},
 };
-use super::actions::WebShellAction;
 use crate::dock::DockApp;
 use std::{error::Error, sync::mpsc::Sender};
 
@@ -34,26 +37,26 @@ impl WebSurfaces {
         panel_taskbar: bool,
     ) -> Result<Self, Box<dyn Error>> {
         let mut surfaces = Self {
-            panel: WebSurface::new(
-                WebShellSurface::Panel,
-                (PANEL_WIDTH_HINT, PANEL_HEIGHT),
-                true,
-                false,
+            panel: WebSurface::new(WebSurfaceConfig {
+                kind: WebShellSurface::Panel,
+                size: (PANEL_WIDTH_HINT, PANEL_HEIGHT),
+                visible: true,
+                keep_alive_when_hidden: false,
                 panel_taskbar,
-                None,
-                &actions_tx,
+                dock_menu_x: None,
+                actions_tx: &actions_tx,
                 snapshot,
-            )?,
-            dock: WebSurface::new(
-                WebShellSurface::Dock,
-                super::surface_layout::dock_size(dock_apps, dock_icon_size),
-                true,
-                false,
-                false,
-                None,
-                &actions_tx,
+            })?,
+            dock: WebSurface::new(WebSurfaceConfig {
+                kind: WebShellSurface::Dock,
+                size: super::surface_layout::dock_size(dock_apps, dock_icon_size),
+                visible: true,
+                keep_alive_when_hidden: false,
+                panel_taskbar: false,
+                dock_menu_x: None,
+                actions_tx: &actions_tx,
                 snapshot,
-            )?,
+            })?,
             dock_menu: LazyWebSurface::new(
                 WebShellSurface::DockMenu,
                 dock_menu_size(snapshot),

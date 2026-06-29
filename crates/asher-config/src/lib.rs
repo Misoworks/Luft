@@ -7,13 +7,21 @@ use std::{
 use thiserror::Error;
 
 mod appearance;
+mod apps;
 mod backups;
 mod display;
+mod dock;
+mod paths;
+mod performance;
 mod session;
 
 pub use appearance::{AppearanceConfig, MaterialModePreference, ShellModePreference};
+pub use apps::DefaultAppsConfig;
 pub use backups::{list_config_backups, restore_config_backup, restore_latest_config_backup};
 pub use display::{DisplayConfig, OutputConfig};
+pub use dock::{DockConfig, PinnedAppConfig};
+pub use paths::ConfigPaths;
+pub use performance::{PerformanceConfig, PerformanceMode};
 pub use session::SessionConfig;
 
 pub const IGNORE_USER_CONFIG_ENV: &str = "ASHER_IGNORE_USER_CONFIG";
@@ -202,69 +210,6 @@ impl Default for RecoveryConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct PerformanceConfig {
-    pub mode: PerformanceMode,
-    pub animations: bool,
-    pub reduce_effects_on_battery: bool,
-}
-
-impl Default for PerformanceConfig {
-    fn default() -> Self {
-        Self {
-            mode: PerformanceMode::Balanced,
-            animations: true,
-            reduce_effects_on_battery: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum PerformanceMode {
-    Quality,
-    Balanced,
-    Performance,
-    Battery,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct DefaultAppsConfig {
-    pub terminal: String,
-    pub file_manager: String,
-    pub browser: String,
-    pub settings: String,
-    pub launcher: String,
-}
-
-impl Default for DefaultAppsConfig {
-    fn default() -> Self {
-        Self {
-            terminal: "ghostty".to_string(),
-            file_manager: "rover".to_string(),
-            browser: "google-chrome-stable".to_string(),
-            settings: "asher-settings".to_string(),
-            launcher: "vicinae".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(default)]
-pub struct DockConfig {
-    pub customized: bool,
-    pub pinned: Vec<PinnedAppConfig>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PinnedAppConfig {
-    pub label: String,
-    pub command: String,
-    pub icon: Option<String>,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoadedConfig {
     pub config: AsherConfig,
@@ -275,58 +220,6 @@ pub struct LoadedConfig {
 pub enum ConfigSource {
     User(PathBuf),
     Defaults,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigPaths {
-    pub config_home: PathBuf,
-    pub config_file: PathBuf,
-    pub profiles_dir: PathBuf,
-    pub materials_dir: PathBuf,
-    pub state_home: PathBuf,
-    pub cache_home: PathBuf,
-}
-
-impl ConfigPaths {
-    pub fn discover() -> Result<Self, ConfigError> {
-        let home = env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or(ConfigError::HomeMissing)?;
-        let config_home = env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".config"))
-            .join("asher");
-        let state_home = env::var_os("XDG_STATE_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".local/state"))
-            .join("asher");
-        let cache_home = env::var_os("XDG_CACHE_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".cache"))
-            .join("asher");
-
-        Ok(Self {
-            config_file: config_home.join("config.toml"),
-            profiles_dir: config_home.join("profiles"),
-            materials_dir: config_home.join("materials"),
-            config_home,
-            state_home,
-            cache_home,
-        })
-    }
-
-    pub fn logs_dir(&self) -> PathBuf {
-        self.state_home.join("logs")
-    }
-
-    pub fn backups_dir(&self) -> PathBuf {
-        self.config_home.join("backups")
-    }
-
-    pub fn log_file(&self, component: &str) -> PathBuf {
-        self.logs_dir()
-            .join(format!("{}.log", safe_path_segment(component)))
-    }
 }
 
 pub fn load_config() -> Result<LoadedConfig, ConfigError> {
@@ -404,25 +297,6 @@ pub(crate) fn ensure_parent_dir(path: &Path) -> Result<(), ConfigError> {
         path: parent.to_path_buf(),
         source,
     })
-}
-
-fn safe_path_segment(value: &str) -> String {
-    let segment = value
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
-                character
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-
-    if segment.is_empty() {
-        "asher".to_string()
-    } else {
-        segment
-    }
 }
 
 fn ignore_user_config() -> bool {

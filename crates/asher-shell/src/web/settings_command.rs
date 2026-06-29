@@ -96,7 +96,7 @@ fn normalize_dbus_run_session(command: &str) -> String {
     let Some(binary) = tokens.first() else {
         return command.to_string();
     };
-    if !binary.ends_with("dbus-run-session") || tokens.iter().any(|token| *token == "--") {
+    if !binary.ends_with("dbus-run-session") || tokens.contains(&"--") {
         return command.to_string();
     }
 

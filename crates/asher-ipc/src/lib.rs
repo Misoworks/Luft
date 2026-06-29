@@ -166,12 +166,22 @@ pub enum IpcResponse {
         profiles: Vec<ProfileSummary>,
         windows: Vec<WindowSummary>,
     },
-    Profiles { profiles: Vec<ProfileSummary> },
-    Workspaces { workspaces: Vec<WorkspaceSummary> },
-    Windows { windows: Vec<WindowSummary> },
-    Outputs { outputs: Vec<OutputSummary> },
+    Profiles {
+        profiles: Vec<ProfileSummary>,
+    },
+    Workspaces {
+        workspaces: Vec<WorkspaceSummary>,
+    },
+    Windows {
+        windows: Vec<WindowSummary>,
+    },
+    Outputs {
+        outputs: Vec<OutputSummary>,
+    },
     Accepted,
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

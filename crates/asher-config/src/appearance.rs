@@ -33,9 +33,10 @@ impl AppearanceConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MaterialModePreference {
+    #[default]
     Glass,
 }
 
@@ -44,12 +45,6 @@ impl MaterialModePreference {
         match self {
             Self::Glass => "glass",
         }
-    }
-}
-
-impl Default for MaterialModePreference {
-    fn default() -> Self {
-        Self::Glass
     }
 }
 

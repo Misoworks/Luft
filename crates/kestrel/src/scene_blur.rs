@@ -226,14 +226,17 @@ impl SceneBlurCache {
     fn buffer_for_target(
         &mut self,
         renderer: &mut GlesRenderer,
-        framebuffer: &GlesTarget<'_>,
-        output_size: Size<i32, Physical>,
-        target_transform: Transform,
-        target: &LayerRenderTarget,
-        rect: Rectangle<i32, Physical>,
-        damage: &[Rectangle<i32, Physical>],
-        quality: BlurQuality,
+        request: BlurTargetRequest<'_>,
     ) -> Result<(&SceneBlurCacheEntry, f32), GlesError> {
+        let BlurTargetRequest {
+            framebuffer,
+            output_size,
+            target_transform,
+            target,
+            rect,
+            damage,
+            quality,
+        } = request;
         let now = Instant::now();
         let cached = self.entries.iter().position(|entry| entry.matches(target));
         if let Some(index) = cached
@@ -383,42 +386,58 @@ impl SceneBlurCache {
 
 pub type BlurElement = RoundedWindowElement<TextureRenderElement<GlesTexture>>;
 
+pub struct BlurCaptureRequest<'a> {
+    pub framebuffer: &'a GlesTarget<'a>,
+    pub output_size: Size<i32, Physical>,
+    pub target_transform: Transform,
+    pub targets: &'a [LayerRenderTarget],
+    pub damage: &'a [Rectangle<i32, Physical>],
+    pub enabled: bool,
+    pub quality: BlurQuality,
+}
+
+struct BlurTargetRequest<'a> {
+    framebuffer: &'a GlesTarget<'a>,
+    output_size: Size<i32, Physical>,
+    target_transform: Transform,
+    target: &'a LayerRenderTarget,
+    rect: Rectangle<i32, Physical>,
+    damage: &'a [Rectangle<i32, Physical>],
+    quality: BlurQuality,
+}
+
 pub fn capture_blur_elements(
     cache: &mut SceneBlurCache,
     renderer: &mut GlesRenderer,
-    framebuffer: &GlesTarget<'_>,
-    output_size: Size<i32, Physical>,
-    target_transform: Transform,
-    targets: &[LayerRenderTarget],
-    damage: &[Rectangle<i32, Physical>],
-    enabled: bool,
-    quality: BlurQuality,
+    request: BlurCaptureRequest<'_>,
 ) -> Result<Vec<BlurElement>, GlesError> {
-    if !enabled {
+    if !request.enabled {
         return Ok(Vec::new());
     }
 
     let mut elements = Vec::new();
-    for target in targets {
-        let Some(rect) = clipped_target_rect(output_size, target) else {
+    for target in request.targets {
+        let Some(rect) = clipped_target_rect(request.output_size, target) else {
             continue;
         };
         let (entry, opacity) = cache.buffer_for_target(
             renderer,
-            framebuffer,
-            output_size,
-            target_transform,
-            target,
-            rect,
-            damage,
-            quality,
+            BlurTargetRequest {
+                framebuffer: request.framebuffer,
+                output_size: request.output_size,
+                target_transform: request.target_transform,
+                target,
+                rect,
+                damage: request.damage,
+                quality: request.quality,
+            },
         )?;
         elements.push(render_element(
             renderer,
             rect,
             entry,
             opacity,
-            target_transform,
+            request.target_transform,
         ));
     }
 
@@ -770,7 +789,12 @@ fn blur_texture_size(
     ))
 }
 
-fn blur_downscale(target: &LayerRenderTarget, width: i32, height: i32, quality: BlurQuality) -> i32 {
+fn blur_downscale(
+    target: &LayerRenderTarget,
+    width: i32,
+    height: i32,
+    quality: BlurQuality,
+) -> i32 {
     let base: i32 = if target.blur_layer != BlurLayer::Window {
         2
     } else {

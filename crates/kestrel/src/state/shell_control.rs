@@ -89,7 +89,7 @@ impl KestrelState {
         let output_scale = config.display.output_scale(&self.output().name());
         self.config = config;
         self.layout = layout;
-        self.set_output_scale(output_scale);
+        self.set_primary_output_scale(output_scale);
         self.drag = None;
         self.workspace_transition = None;
         if let Some(restart) = restart {

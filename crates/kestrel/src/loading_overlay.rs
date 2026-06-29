@@ -9,8 +9,12 @@ use smithay::{
             gles::{GlesError, GlesRenderer},
         },
     },
+    output::Output,
     utils::{Buffer, Logical, Physical, Rectangle, Size, Transform},
 };
+
+use crate::layers;
+use asher_ipc::ShellStatus;
 
 const WIDTH: i32 = 96;
 const HEIGHT: i32 = 96;
@@ -55,6 +59,17 @@ pub fn loading_overlay_geometry(output_size: Size<i32, Physical>) -> Rectangle<i
             .into(),
         (WIDTH, HEIGHT).into(),
     )
+}
+
+pub fn shell_layers_ready(output: &Output, shell_status: ShellStatus) -> bool {
+    shell_status == ShellStatus::Running && layers::has_shell_surface(output)
+}
+
+pub fn should_show_loading_overlay(
+    shell_layers_ready: bool,
+    shell_layers_seen_ready: bool,
+) -> bool {
+    !shell_layers_ready || !shell_layers_seen_ready
 }
 
 fn draw_spinner(pixels: &mut [u8], phase: f32) {

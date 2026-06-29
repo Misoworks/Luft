@@ -106,7 +106,14 @@ pub fn configure_output(
     refresh_millihertz: i32,
     scale: f64,
 ) {
-    configure_output_at(output, size, refresh_millihertz, scale, (0, 0).into(), Transform::Normal);
+    configure_output_at(
+        output,
+        size,
+        refresh_millihertz,
+        scale,
+        (0, 0).into(),
+        Transform::Normal,
+    );
 }
 
 pub fn configure_output_at(

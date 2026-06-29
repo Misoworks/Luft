@@ -12,7 +12,7 @@ use crate::{
     frame_clock::FrameClock,
     frame_clock::FrameTime,
     layers,
-    loading_overlay::render_loading_overlay,
+    loading_overlay::{render_loading_overlay, shell_layers_ready, should_show_loading_overlay},
     render::{LayerElement, RenderStage, render_stage_elements, window_chrome_elements},
     scene_blur::SceneBlurCache,
     scene_render::{SceneRenderRequest, render_scene},
@@ -125,12 +125,12 @@ impl SessionFrameRenderer {
         let finished_window_closes = state.send_finished_window_closes();
         state.cleanup_layers();
         state.cleanup_output();
-        let shell_layers_ready = state.shell_status == asher_ipc::ShellStatus::Running
-            && layers::has_shell_surface(state.output());
+        let shell_layers_ready = shell_layers_ready(state.output(), state.shell_status);
         if shell_layers_ready {
             self.shell_layers_seen_ready = true;
         }
-        let show_loading = !shell_layers_ready || !self.shell_layers_seen_ready;
+        let show_loading =
+            should_show_loading_overlay(shell_layers_ready, self.shell_layers_seen_ready);
         let scene_dirty = state.take_scene_dirty();
         let debug_needs_render =
             state.config.compositor.debug_overlay && self.debug_overlay_cache.needs_refresh();

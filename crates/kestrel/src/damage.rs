@@ -254,10 +254,7 @@ fn full_damage(output_size: Size<i32, Physical>) -> Rectangle<i32, Physical> {
     Rectangle::from_size(output_size)
 }
 
-fn output_tracker(
-    output_size: Size<i32, Physical>,
-    transform: Transform,
-) -> OutputDamageTracker {
+fn output_tracker(output_size: Size<i32, Physical>, transform: Transform) -> OutputDamageTracker {
     OutputDamageTracker::new(output_size, 1.0, transform)
 }
 
@@ -312,11 +309,17 @@ impl LayerGeometryTracker {
             self.previous.insert(id, *rect);
         }
 
+        for (id, previous) in &self.previous {
+            if active.contains(id) {
+                continue;
+            }
+            geometry_changed = true;
+            if let Some(previous) = previous.intersection(output) {
+                expanded.push(previous);
+            }
+        }
         self.previous.retain(|id, _| active.contains(id));
-        (
-            merge_damage_rectangles(output, expanded),
-            geometry_changed,
-        )
+        (merge_damage_rectangles(output, expanded), geometry_changed)
     }
 }
 

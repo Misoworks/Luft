@@ -197,13 +197,15 @@ fn render_staged_scene(
         let blur = scene_blur::capture_blur_elements(
             blur_cache,
             renderer,
-            framebuffer,
-            request.output_size,
-            request.target_transform,
-            &targets,
-            request.blur_damage,
-            request.blur_enabled,
-            blur_quality,
+            scene_blur::BlurCaptureRequest {
+                framebuffer,
+                output_size: request.output_size,
+                target_transform: request.target_transform,
+                targets: &targets,
+                damage: request.blur_damage,
+                enabled: request.blur_enabled,
+                quality: blur_quality,
+            },
         )?;
         let mut frame =
             renderer.render(framebuffer, request.output_size, request.target_transform)?;
@@ -226,24 +228,28 @@ fn render_staged_scene(
     let top_blur = scene_blur::capture_blur_elements(
         blur_cache,
         renderer,
-        framebuffer,
-        request.output_size,
-        request.target_transform,
-        request.top_targets,
-        request.blur_damage,
-        request.blur_enabled,
-        blur_quality,
+        scene_blur::BlurCaptureRequest {
+            framebuffer,
+            output_size: request.output_size,
+            target_transform: request.target_transform,
+            targets: request.top_targets,
+            damage: request.blur_damage,
+            enabled: request.blur_enabled,
+            quality: blur_quality,
+        },
     )?;
     let overlay_blur = scene_blur::capture_blur_elements(
         blur_cache,
         renderer,
-        framebuffer,
-        request.output_size,
-        request.target_transform,
-        request.overlay_targets,
-        request.blur_damage,
-        request.blur_enabled,
-        blur_quality,
+        scene_blur::BlurCaptureRequest {
+            framebuffer,
+            output_size: request.output_size,
+            target_transform: request.target_transform,
+            targets: request.overlay_targets,
+            damage: request.blur_damage,
+            enabled: request.blur_enabled,
+            quality: blur_quality,
+        },
     )?;
     {
         let mut frame =

@@ -64,9 +64,19 @@ impl KestrelState {
         self.mark_scene_dirty();
     }
 
-    pub fn set_output_scale(&mut self, scale: f64) {
-        if !self.outputs.set_primary_scale(scale) {
-            return;
+    pub fn set_output_scale(&mut self, output: Option<&str>, scale: f64) -> bool {
+        let primary = self.output().name();
+        let target_is_primary = output.is_none_or(|output| output == primary);
+        let Some(changed) = self.outputs.set_scale(output, scale) else {
+            return false;
+        };
+        if !changed {
+            return false;
+        }
+
+        if !target_is_primary {
+            self.mark_scene_dirty();
+            return true;
         }
 
         for surface in self
@@ -79,6 +89,11 @@ impl KestrelState {
         layers::arrange(self.output());
         self.apply_active_arrangement();
         self.mark_scene_dirty();
+        true
+    }
+
+    pub fn set_primary_output_scale(&mut self, scale: f64) {
+        let _ = self.set_output_scale(None, scale);
     }
 
     pub fn enter_output(&self, surface: &WlSurface) {

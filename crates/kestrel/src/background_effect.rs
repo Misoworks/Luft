@@ -1,5 +1,5 @@
 use crate::{
-    layers::{material_for, BlurLayer, LayerMaterial, LayerRenderTarget},
+    layers::{BlurLayer, LayerMaterial, LayerRenderTarget, material_for},
     state::KestrelState,
     window::ManagedWindow,
     window_clip::WINDOW_RADIUS,
@@ -245,7 +245,9 @@ pub fn layer_popup_blur_targets(state: &KestrelState, layer: Layer) -> Vec<Layer
                 blur_layer,
                 popup_location,
                 popup_geometry.size,
-                LayerMaterial::RoundRect { radius: popup_radius },
+                LayerMaterial::RoundRect {
+                    radius: popup_radius,
+                },
                 &mut targets,
             );
         }

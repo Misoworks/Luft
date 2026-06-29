@@ -103,6 +103,14 @@ impl OutputGraph {
         self.outputs.contains_key(name)
     }
 
+    pub fn scale(&self, name: Option<&str>) -> Option<f64> {
+        let output = match name {
+            Some(name) => self.outputs.get(name)?,
+            None => self.primary(),
+        };
+        Some(output.output.current_scale().fractional_scale())
+    }
+
     #[cfg(feature = "session-backend")]
     pub fn replace(
         &mut self,
@@ -156,16 +164,19 @@ impl OutputGraph {
         true
     }
 
-    pub fn set_primary_scale(&mut self, scale: f64) -> bool {
+    pub fn set_scale(&mut self, name: Option<&str>, scale: f64) -> Option<bool> {
         let scale = scale.clamp(0.5, 4.0);
-        let output = self.primary_mut();
+        let output = match name {
+            Some(name) => self.outputs.get_mut(name)?,
+            None => self.primary_mut(),
+        };
         if (output.output.current_scale().fractional_scale() - scale).abs() < f64::EPSILON {
-            return false;
+            return Some(false);
         }
 
         output.descriptor.scale = scale;
         configure_managed_output(output);
-        true
+        Some(true)
     }
 
     pub fn summaries(&self) -> Vec<OutputSummary> {

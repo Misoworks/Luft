@@ -1,5 +1,5 @@
-use super::model::WebShellSnapshot;
 use super::*;
+use super::{model::WebShellSnapshot, snapshot::WebShellSnapshotInput};
 use crate::{
     apps::{dock_apps, launcher_apps},
     ipc::load_model,
@@ -23,24 +23,24 @@ impl WebShell {
         let applications = launcher_apps(&config, &dock_apps);
         let tray = TrayService::start();
         let notifications = NotificationService::start();
-        let snapshot = WebShellSnapshot::from_shell(
-            &model,
-            &status,
-            tray.snapshot(),
-            notifications.snapshot(),
-            &dock_apps,
-            None,
-            None,
-            &applications,
-            wallpaper_uri.clone(),
-            glass_blur_wallpaper_uri.clone(),
+        let snapshot = WebShellSnapshot::from_shell(WebShellSnapshotInput {
+            model: &model,
+            status: &status,
+            tray: tray.snapshot(),
+            notifications: notifications.snapshot(),
+            dock_apps: &dock_apps,
+            dock_menu_command: None,
+            dock_menu_x: None,
+            applications: &applications,
+            wallpaper_uri: wallpaper_uri.clone(),
+            glass_blur_wallpaper_uri: glass_blur_wallpaper_uri.clone(),
             palette,
-            &config,
-            config.general.safe_mode,
-            false,
-            false,
-            false,
-        );
+            config: &config,
+            safe_mode: config.general.safe_mode,
+            start_menu_open: false,
+            quick_settings_open: false,
+            date_center_open: false,
+        });
         let mut surfaces = WebSurfaces::new(
             actions_tx,
             &snapshot,
@@ -67,6 +67,7 @@ impl WebShell {
             applications,
             surfaces,
             actions_rx,
+            queued_actions: Default::default(),
             control: ShellControlServer::bind_from_env()?,
             app_processes: Vec::new(),
             start_menu_visible: false,

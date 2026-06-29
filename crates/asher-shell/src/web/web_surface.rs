@@ -34,34 +34,31 @@ pub struct WebSurface {
 }
 
 impl WebSurface {
-    pub(crate) fn new(
-        kind: WebShellSurface,
-        size: (i32, i32),
-        visible: bool,
-        keep_alive_when_hidden: bool,
-        panel_taskbar: bool,
-        dock_menu_x: Option<i32>,
-        actions_tx: &Sender<WebShellAction>,
-        snapshot: &WebShellSnapshot,
-    ) -> Result<Self, Box<dyn Error>> {
-        let initial = serde_json::to_string(snapshot)?;
-        let shell_margin = shell_surface(kind, size, panel_taskbar, dock_menu_x).margin;
+    pub(crate) fn new(config: WebSurfaceConfig<'_>) -> Result<Self, Box<dyn Error>> {
+        let initial = serde_json::to_string(config.snapshot)?;
+        let shell_margin = shell_surface(
+            config.kind,
+            config.size,
+            config.panel_taskbar,
+            config.dock_menu_x,
+        )
+        .margin;
         let mut surface = Self {
-            kind,
-            size,
-            actions_tx: actions_tx.clone(),
-            snapshot: Arc::new(Mutex::new(snapshot.clone())),
+            kind: config.kind,
+            size: config.size,
+            actions_tx: config.actions_tx.clone(),
+            snapshot: Arc::new(Mutex::new(config.snapshot.clone())),
             visible: false,
-            keep_alive_when_hidden,
-            panel_taskbar,
-            dock_menu_x,
+            keep_alive_when_hidden: config.keep_alive_when_hidden,
+            panel_taskbar: config.panel_taskbar,
+            dock_menu_x: config.dock_menu_x,
             process: None,
-            surface_alpha: if visible { 1.0 } else { 0.0 },
+            surface_alpha: if config.visible { 1.0 } else { 0.0 },
             shell_margin,
             pending_snapshot: initial,
             rendered_snapshot: String::new(),
         };
-        surface.set_visible(visible);
+        surface.set_visible(config.visible);
         Ok(surface)
     }
 
@@ -334,6 +331,17 @@ impl WebSurface {
             self.hide_process();
         }
     }
+}
+
+pub(crate) struct WebSurfaceConfig<'a> {
+    pub kind: WebShellSurface,
+    pub size: (i32, i32),
+    pub visible: bool,
+    pub keep_alive_when_hidden: bool,
+    pub panel_taskbar: bool,
+    pub dock_menu_x: Option<i32>,
+    pub actions_tx: &'a Sender<WebShellAction>,
+    pub snapshot: &'a WebShellSnapshot,
 }
 
 fn shell_surface_frame_rate() -> u32 {

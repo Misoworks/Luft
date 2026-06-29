@@ -111,12 +111,7 @@ const SHELL_CHROME_NAMESPACES: &[&str] = &["asher-panel", "asher-sidebar", "ashe
 pub fn layer_surface_rects(output: &Output) -> Vec<(WlSurface, Rectangle<i32, Physical>)> {
     let layer_map = layer_map_for_output(output);
     let mut rects = Vec::new();
-    for layer in [
-        Layer::Background,
-        Layer::Bottom,
-        Layer::Top,
-        Layer::Overlay,
-    ] {
+    for layer in [Layer::Background, Layer::Bottom, Layer::Top, Layer::Overlay] {
         for surface in layer_map.layers_on(layer) {
             let Some(geometry) = layer_map.layer_geometry(surface) else {
                 continue;

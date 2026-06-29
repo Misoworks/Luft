@@ -13,7 +13,7 @@ pub fn status_payload(state: &KestrelState) -> StatusPayload {
 
     StatusPayload {
         compositor: "kestrel".to_string(),
-        shell: state.shell_status.clone(),
+        shell: state.shell_status,
         xwayland: state.xwayland_status,
         xwayland_display: state.xwayland_display.clone(),
         active_workspace,

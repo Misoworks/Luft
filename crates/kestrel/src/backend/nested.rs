@@ -12,7 +12,7 @@ use crate::{
     input::handle_input_event,
     ipc::IpcServer,
     layers,
-    loading_overlay::render_loading_overlay,
+    loading_overlay::{render_loading_overlay, shell_layers_ready, should_show_loading_overlay},
     output::NestedOutput,
     recovery::RecoveryPolicy,
     render::{RenderStage, render_stage_elements, window_chrome_elements},
@@ -141,14 +141,12 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
         let frame_started = Instant::now();
         let mut force_full_damage = false;
         let status = event_loop.dispatch_new_events(|event| match event {
-            WinitEvent::Resized { size, .. } => {
-                if output.resize(size) {
-                    state.set_output_size(output.size);
-                    damage_tracker = DamageTracker::from_output(state.output());
-                    blur_damage_tracker = DamageTracker::from_output(state.output());
-                    submitted_damage.clear();
-                    force_full_damage = true;
-                }
+            WinitEvent::Resized { size, .. } if output.resize(size) => {
+                state.set_output_size(output.size);
+                damage_tracker = DamageTracker::from_output(state.output());
+                blur_damage_tracker = DamageTracker::from_output(state.output());
+                submitted_damage.clear();
+                force_full_damage = true;
             }
             WinitEvent::Input(event) => {
                 handle_input_event(&mut state, &keyboard, &pointer, event, output.size);
@@ -242,19 +240,16 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             force_full_damage = true;
         }
 
-        let shell_layers_ready = layers::has_shell_surface(state.output());
+        let shell_layers_ready = shell_layers_ready(state.output(), state.shell_status);
         if shell_layers_ready {
             shell_layers_seen_ready = true;
         }
-        let show_loading = !shell_layers_ready
-            && (state.shell_status != ShellStatus::Running || !shell_layers_seen_ready);
+        let show_loading = should_show_loading_overlay(shell_layers_ready, shell_layers_seen_ready);
         let scene_dirty = state.take_scene_dirty();
         let debug_needs_render =
             state.config.compositor.debug_overlay && debug_overlay_cache.needs_refresh();
-        let layer_geometry_changed = layer_geometry.geometry_changed(
-            output.size,
-            &layers::layer_surface_rects(state.output()),
-        );
+        let layer_geometry_changed = layer_geometry
+            .geometry_changed(output.size, &layers::layer_surface_rects(state.output()));
         let blur_animating = blur_cache.is_animating();
         let content_render_needed = force_full_damage
             || scene_dirty
@@ -497,7 +492,7 @@ fn sync_host_cursor(
         CursorImageStatus::Hidden => backend.window().set_cursor_visible(false),
         CursorImageStatus::Named(icon) => {
             backend.window().set_cursor_visible(true);
-            backend.window().set_cursor(icon.clone());
+            backend.window().set_cursor(*icon);
         }
         CursorImageStatus::Surface(_) => {
             backend.window().set_cursor_visible(true);

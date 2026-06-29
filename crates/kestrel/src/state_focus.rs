@@ -19,10 +19,8 @@ impl KestrelState {
             .windows
             .fullscreen_on_workspace(self.layout.active_workspace())
             .is_some();
-        if !fullscreen {
-            if let Some(focus) = layers::pointer_focus(self.output(), location) {
-                return Some((focus.surface, focus.location));
-            }
+        if !fullscreen && let Some(focus) = layers::pointer_focus(self.output(), location) {
+            return Some((focus.surface, focus.location));
         }
 
         self.windows
@@ -34,10 +32,8 @@ impl KestrelState {
             .windows
             .fullscreen_on_workspace(self.layout.active_workspace())
             .is_some();
-        if !fullscreen {
-            if let Some(surface) = layers::keyboard_focus(self.output(), location) {
-                return Some(surface);
-            }
+        if !fullscreen && let Some(surface) = layers::keyboard_focus(self.output(), location) {
+            return Some(surface);
         }
 
         let surface = self

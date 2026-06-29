@@ -183,13 +183,10 @@ impl WindowStack {
         surface: &ToplevelSurface,
         requested_server_decoration: bool,
     ) -> Option<WindowDecorationChange> {
-        let Some(window) = self
+        let window = self
             .windows
             .iter_mut()
-            .find(|window| &window.surface == surface)
-        else {
-            return None;
-        };
+            .find(|window| &window.surface == surface)?;
 
         window.requested_server_decoration = requested_server_decoration;
         update_effective_decoration(window)

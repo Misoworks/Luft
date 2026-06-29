@@ -5,9 +5,7 @@ use crate::{
     dock::DockApp,
     ipc::ShellModel,
     services::{
-        notifications::NotificationService,
-        system_status::SystemStatus,
-        tray::TrayService,
+        notifications::NotificationService, system_status::SystemStatus, tray::TrayService,
     },
     theme::ShellPalette,
 };
@@ -19,11 +17,12 @@ mod dock_actions;
 mod icons;
 mod init;
 mod launched_process;
+mod lazy_surface;
 mod model;
 mod palette;
 mod popover_actions;
-mod lazy_surface;
 mod settings_command;
+mod snapshot;
 mod surface;
 mod surface_layout;
 mod surface_motion;
@@ -37,9 +36,10 @@ use asher_config::AsherConfig;
 use launched_process::LaunchedProcess;
 use std::{
     cell::RefCell,
+    collections::VecDeque,
     error::Error,
     rc::Rc,
-    sync::mpsc::{self, Receiver},
+    sync::mpsc::{self, Receiver, RecvTimeoutError},
     thread,
     time::{Duration, Instant},
 };
@@ -70,11 +70,12 @@ pub fn run(config: AsherConfig) -> Result<(), Box<dyn Error>> {
             }
             shell.surfaces.is_animating()
         };
-        thread::sleep(if animating {
+        let wait = if animating {
             animation_tick
         } else {
-            ACTION_TICK
-        });
+            MAINTENANCE_TICK.saturating_sub(last_maintenance.elapsed())
+        };
+        shell.borrow_mut().wait_for_action(wait);
     }
 }
 
@@ -101,6 +102,7 @@ pub(super) struct WebShell {
     pub(super) applications: Vec<AppEntry>,
     pub(super) surfaces: WebSurfaces,
     actions_rx: Receiver<WebShellAction>,
+    queued_actions: VecDeque<WebShellAction>,
     control: Option<ShellControlServer>,
     pub(super) app_processes: Vec<LaunchedProcess>,
     pub(super) launcher_command: String,
@@ -117,8 +119,21 @@ pub(super) struct WebShell {
 }
 
 impl WebShell {
+    fn wait_for_action(&mut self, timeout: Duration) {
+        if timeout.is_zero() {
+            return;
+        }
+
+        match self.actions_rx.recv_timeout(timeout) {
+            Ok(action) => self.queued_actions.push_back(action),
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => thread::sleep(ACTION_TICK),
+        }
+    }
+
     fn tick_actions(&mut self) {
-        let pending_actions: Vec<WebShellAction> = self.actions_rx.try_iter().collect();
+        let mut pending_actions: Vec<WebShellAction> = self.queued_actions.drain(..).collect();
+        pending_actions.extend(self.actions_rx.try_iter());
         let blocks_dismiss = pending_actions.iter().any(WebShellAction::affects_popover);
 
         self.handle_control_requests(blocks_dismiss);
@@ -129,11 +144,7 @@ impl WebShell {
             self.handle_action(action);
         }
 
-        if handled_action
-            || self.start_menu_visible
-            || self.quick_visible
-            || self.date_visible
-        {
+        if handled_action || self.start_menu_visible || self.quick_visible || self.date_visible {
             self.sync_chrome();
             self.sync_surfaces();
         }

@@ -200,18 +200,25 @@ fn set_output_scale(state: &mut KestrelState, output: Option<String>, scale: f64
             message: "output scale must be between 0.5 and 4.0".to_string(),
         });
     }
-    if let Some(output) = output
-        && !state.outputs.contains(&output)
+    if let Some(output) = output.as_deref()
+        && !state.outputs.contains(output)
     {
         return IpcResult::read_only(IpcResponse::Error {
             message: format!("unknown output {output}"),
         });
     }
 
-    let previous = state.output_scale();
-    state.set_output_scale(scale);
-    debug!(scale, "ipc set output scale");
-    IpcResult::accepted((previous - scale).abs() >= f64::EPSILON)
+    let output_name = output.as_deref();
+    let previous = state
+        .outputs
+        .scale(output_name)
+        .unwrap_or(state.output_scale());
+    let changed = state.set_output_scale(output_name, scale);
+    debug!(
+        output = output_name.unwrap_or("primary"),
+        scale, "ipc set output scale"
+    );
+    IpcResult::accepted(changed || (previous - scale).abs() >= f64::EPSILON)
 }
 
 fn activate_window(

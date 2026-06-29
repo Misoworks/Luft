@@ -3,6 +3,7 @@ use crate::{
     apps::{normalize_launch_command, spawn_command},
     dock::{self, DockApp, dock_app_matches_window},
 };
+use std::path::Path;
 use std::process::Command;
 use tracing::{debug, warn};
 
@@ -97,20 +98,56 @@ impl WebShell {
     pub(super) fn force_quit_dock_app(&mut self, command: String) {
         let command = normalize_launch_command(&command);
         self.close_dock_menu();
-        let Some(pattern) = command
-            .split_whitespace()
-            .next()
-            .filter(|value| !value.is_empty())
-        else {
+
+        let pids = self
+            .dock_app_for_command(&command)
+            .map(|app| self.window_pids_for_dock_app(&app))
+            .unwrap_or_default();
+        if !pids.is_empty() {
+            match Command::new("kill")
+                .arg("-TERM")
+                .args(pids.iter().map(u32::to_string))
+                .spawn()
+            {
+                Ok(child) => self.app_processes.push(LaunchedProcess::new(
+                    format!("kill -TERM {}", format_pids(&pids)),
+                    child,
+                )),
+                Err(error) => warn!(%error, command, "failed to terminate dock app windows"),
+            }
+            return;
+        }
+
+        let Some(program) = command_basename(&command) else {
             return;
         };
-        match Command::new("pkill").args(["-TERM", "-f", pattern]).spawn() {
+        match Command::new("pkill").args(["-TERM", "-x", program]).spawn() {
             Ok(child) => self.app_processes.push(LaunchedProcess::new(
-                format!("pkill -TERM -f {pattern}"),
+                format!("pkill -TERM -x {program}"),
                 child,
             )),
             Err(error) => warn!(%error, command, "failed to force quit dock app"),
         }
+    }
+
+    fn dock_app_for_command(&self, command: &str) -> Option<DockApp> {
+        self.dock_apps
+            .iter()
+            .find(|app| app.command == command)
+            .cloned()
+    }
+
+    fn window_pids_for_dock_app(&self, app: &DockApp) -> Vec<u32> {
+        let mut pids = self
+            .model
+            .windows
+            .iter()
+            .filter(|window| dock_app_matches_window(app, window))
+            .filter_map(|window| window.pid)
+            .collect::<Vec<_>>();
+        pids.sort_unstable();
+        pids.dedup();
+        pids
     }
 
     pub(super) fn open_dock_menu(&mut self, command: String, x: Option<i32>) {
@@ -147,4 +184,16 @@ impl WebShell {
             self.tray.activate(item, 0, 0);
         }
     }
+}
+
+fn command_basename(command: &str) -> Option<&str> {
+    let first = command.split_whitespace().next()?.trim_matches(['"', '\'']);
+    Path::new(first).file_name()?.to_str()
+}
+
+fn format_pids(pids: &[u32]) -> String {
+    pids.iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(" ")
 }

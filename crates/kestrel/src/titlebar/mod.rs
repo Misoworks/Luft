@@ -2,7 +2,7 @@ use crate::window::{
     TITLEBAR_CONTROL_GAP, TITLEBAR_CONTROL_HIT_PADDING, TITLEBAR_CONTROL_RIGHT,
     TITLEBAR_CONTROL_SIZE, TITLEBAR_HEIGHT,
 };
-use draw::{Rgba, draw_control_icon, fill_circle, fill_rect_at, fill_top_round_rect};
+use draw::{PixelRect, Rgba, draw_control_icon, fill_circle, fill_rect_at, fill_top_round_rect};
 use smithay::{
     backend::{allocator::Fourcc, renderer::element::memory::MemoryRenderBuffer},
     utils::{Buffer, Rectangle, Size, Transform},
@@ -95,10 +95,7 @@ fn titlebar_buffer(width: i32, hover: TitlebarHover, radius: i32) -> MemoryRende
         &mut pixels,
         width,
         height,
-        0,
-        height - TITLEBAR_OVERLAP,
-        width,
-        TITLEBAR_OVERLAP,
+        PixelRect::new(0, height - TITLEBAR_OVERLAP, width, TITLEBAR_OVERLAP),
         Rgba::new(20, 22, 24, 72),
     );
     draw_controls(&mut pixels, width, height, hover);

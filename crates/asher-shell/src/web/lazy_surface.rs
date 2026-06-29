@@ -3,16 +3,13 @@ use super::{
     model::{WebShellSnapshot, WebShellSurface},
     surface_motion::{
         close_animation_duration, close_motion_ease, hidden_process_ttl, hidden_shell_margin,
-        lerp_margin, open_animation_duration, open_motion_ease, smoothstep,
-        surface_alpha_animates, surface_margin_animates,
+        lerp_margin, open_animation_duration, open_motion_ease, smoothstep, surface_alpha_animates,
+        surface_margin_animates,
     },
-    web_surface::WebSurface,
+    web_surface::{WebSurface, WebSurfaceConfig},
 };
 use fenestra_cef::ShellSurfaceMargin;
-use std::{
-    sync::mpsc::Sender,
-    time::Instant,
-};
+use std::{sync::mpsc::Sender, time::Instant};
 use tracing::warn;
 
 pub(crate) struct LazyWebSurface {
@@ -176,11 +173,11 @@ impl LazyWebSurface {
                 self.show_at = None;
                 self.show_started_at = None;
                 self.show_start_margin = None;
-                if self.visible {
-                    if let Some(surface) = &mut self.surface {
-                        surface.set_surface_alpha(1.0);
-                        surface.set_shell_margin(surface.base_shell_margin());
-                    }
+                if self.visible
+                    && let Some(surface) = &mut self.surface
+                {
+                    surface.set_surface_alpha(1.0);
+                    surface.set_shell_margin(surface.base_shell_margin());
                 }
             }
         }
@@ -228,16 +225,16 @@ impl LazyWebSurface {
         if self.surface.is_some() {
             return;
         }
-        match WebSurface::new(
-            self.kind,
-            self.size,
-            false,
-            true,
-            self.panel_taskbar,
-            self.dock_menu_x,
-            &self.actions_tx,
-            &self.snapshot,
-        ) {
+        match WebSurface::new(WebSurfaceConfig {
+            kind: self.kind,
+            size: self.size,
+            visible: false,
+            keep_alive_when_hidden: true,
+            panel_taskbar: self.panel_taskbar,
+            dock_menu_x: self.dock_menu_x,
+            actions_tx: &self.actions_tx,
+            snapshot: &self.snapshot,
+        }) {
             Ok(mut surface) => {
                 surface.set_panel_taskbar(self.panel_taskbar);
                 surface.evaluate_snapshot(&self.snapshot, &self.snapshot_json);
