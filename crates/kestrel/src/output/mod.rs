@@ -97,6 +97,7 @@ pub fn create_output(display: &DisplayHandle, descriptor: &OutputDescriptor) -> 
     output
 }
 
+#[cfg(feature = "session-backend")]
 pub fn configure_output(
     output: &Output,
     size: Size<i32, Physical>,

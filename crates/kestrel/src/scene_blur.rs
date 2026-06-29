@@ -432,18 +432,13 @@ impl SceneBlurCacheEntry {
 fn capture_target(
     renderer: &mut GlesRenderer,
     framebuffer: &GlesTarget<'_>,
-    output_size: Size<i32, Physical>,
-    target_transform: Transform,
+    _output_size: Size<i32, Physical>,
+    _target_transform: Transform,
     rect: Rectangle<i32, Physical>,
     texture_size: Size<i32, Physical>,
     capture: &mut GlesTexture,
 ) -> Result<(), GlesError> {
-    let source_y = if target_transform == Transform::Flipped180 {
-        output_size.h - rect.loc.y - rect.size.h
-    } else {
-        rect.loc.y
-    };
-    let source = Rectangle::<i32, Physical>::new((rect.loc.x, source_y).into(), rect.size);
+    let source = Rectangle::<i32, Physical>::new(rect.loc, rect.size);
     let target = Rectangle::<i32, Physical>::from_size(texture_size);
     let mut target_framebuffer = renderer.bind(capture)?;
     renderer.blit(

@@ -32,6 +32,7 @@ pub struct DamagePlan {
 }
 
 impl DamageTracker {
+    #[cfg(feature = "session-backend")]
     pub fn new(output_size: Size<i32, Physical>, transform: Transform) -> Self {
         Self {
             output_size,

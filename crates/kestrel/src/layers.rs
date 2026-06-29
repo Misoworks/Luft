@@ -390,14 +390,45 @@ fn pointer_on_shell_chrome(output: &Output, point: Point<f64, Logical>) -> bool 
             if !SHELL_CHROME_NAMESPACES.contains(&surface.namespace()) {
                 continue;
             }
-            if surface_accepts_input(surface)
-                && point_inside_layer_or_popup(&layer_map, surface, point)
+            if !surface_accepts_input(surface) {
+                continue;
+            }
+            if point_inside_full_layer(&layer_map, surface, point)
+                || point_inside_layer_popups(&layer_map, surface, point)
             {
                 return true;
             }
         }
     }
     false
+}
+
+fn point_inside_full_layer(
+    layer_map: &smithay::desktop::LayerMap,
+    surface: &LayerSurface,
+    point: Point<f64, Logical>,
+) -> bool {
+    let Some(geometry) = layer_map.layer_geometry(surface) else {
+        return false;
+    };
+    point_in_rect(point, geometry.loc, geometry.size)
+}
+
+fn point_inside_layer_popups(
+    layer_map: &smithay::desktop::LayerMap,
+    surface: &LayerSurface,
+    point: Point<f64, Logical>,
+) -> bool {
+    let Some(geometry) = layer_map.layer_geometry(surface) else {
+        return false;
+    };
+    let point_in_layer: Point<f64, Logical> = (
+        point.x - f64::from(geometry.loc.x),
+        point.y - f64::from(geometry.loc.y),
+    )
+        .into();
+    let popup_bounds = surface.bbox_with_popups();
+    point_in_rect(point_in_layer, popup_bounds.loc, popup_bounds.size)
 }
 
 fn point_inside_layer_or_popup(
