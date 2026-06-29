@@ -32,6 +32,7 @@ pub struct DamagePlan {
 }
 
 impl DamageTracker {
+    #[allow(dead_code)]
     pub fn new(output_size: Size<i32, Physical>, transform: Transform) -> Self {
         Self {
             output_size,

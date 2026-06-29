@@ -165,6 +165,7 @@ impl SceneBlurCache {
         &self,
         renderer: &mut GlesRenderer,
         output_size: Size<i32, Physical>,
+        display_transform: Transform,
         _blur_layer: BlurLayer,
         targets: &[LayerRenderTarget],
     ) -> Result<Vec<BlurElement>, GlesError> {
@@ -182,6 +183,7 @@ impl SceneBlurCache {
                 rect,
                 entry,
                 entry.opacity(now, target.opacity),
+                display_transform,
             ));
         }
 
@@ -306,6 +308,7 @@ impl SceneBlurCache {
                         capture: &capture,
                         scratch: &mut scratch,
                         blurred: &mut blurred,
+                        display_transform: target_transform,
                     },
                 )?;
                 (capture, scratch, blurred)
@@ -391,7 +394,13 @@ pub fn capture_blur_elements(
             damage,
             quality,
         )?;
-        elements.push(render_element(renderer, rect, entry, opacity));
+        elements.push(render_element(
+            renderer,
+            rect,
+            entry,
+            opacity,
+            target_transform,
+        ));
     }
 
     Ok(elements)
@@ -455,17 +464,7 @@ fn framebuffer_source_rect(
     transform: Transform,
     rect: Rectangle<i32, Physical>,
 ) -> Rectangle<i32, Physical> {
-    match transform {
-        Transform::Flipped180 => Rectangle::new(
-            (
-                output_size.w - rect.loc.x - rect.size.w,
-                output_size.h - rect.loc.y - rect.size.h,
-            )
-                .into(),
-            rect.size,
-        ),
-        _ => rect,
-    }
+    transform.transform_rect_in(rect, &output_size)
 }
 
 struct BlurRenderPass<'a> {
@@ -551,6 +550,7 @@ fn render_element(
     rect: Rectangle<i32, Physical>,
     entry: &SceneBlurCacheEntry,
     opacity: f32,
+    display_transform: Transform,
 ) -> BlurElement {
     let element = TextureRenderElement::from_static_texture(
         entry.id.clone(),
@@ -558,7 +558,7 @@ fn render_element(
         Point::<f64, Physical>::from((rect.loc.x as f64, rect.loc.y as f64)),
         entry.blurred.clone(),
         1,
-        Transform::Normal,
+        display_transform,
         Some(opacity.clamp(0.0, 1.0)),
         Some(Rectangle::<f64, Logical>::from_size(
             Size::<f64, Logical>::from((entry.texture_size.w as f64, entry.texture_size.h as f64)),

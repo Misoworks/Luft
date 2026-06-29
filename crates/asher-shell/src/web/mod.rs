@@ -119,14 +119,15 @@ pub(super) struct WebShell {
 impl WebShell {
     fn tick_actions(&mut self) {
         let pending_actions: Vec<WebShellAction> = self.actions_rx.try_iter().collect();
+        let blocks_dismiss = pending_actions.iter().any(WebShellAction::affects_popover);
+
+        self.handle_control_requests(blocks_dismiss);
 
         let mut handled_action = false;
         for action in pending_actions {
             handled_action = true;
             self.handle_action(action);
         }
-
-        self.handle_control_requests();
 
         if handled_action
             || self.start_menu_visible
@@ -153,7 +154,7 @@ impl WebShell {
         self.sync_surfaces();
     }
 
-    fn handle_control_requests(&mut self) {
+    fn handle_control_requests(&mut self, blocks_dismiss: bool) {
         let Some(control) = &self.control else {
             return;
         };
@@ -168,6 +169,9 @@ impl WebShell {
                         asher_ipc::ShellControlRequest::OpenLauncher => self.open_launcher(),
                         asher_ipc::ShellControlRequest::ToggleStartMenu => self.toggle_start_menu(),
                         asher_ipc::ShellControlRequest::CloseTransientPopovers => {
+                            if blocks_dismiss {
+                                continue;
+                            }
                             self.close_transient_popovers()
                         }
                     }

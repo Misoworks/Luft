@@ -114,12 +114,14 @@ fn render_flat_scene_with_cached_layer_blur(
     let top_blur = blur_cache.cached_elements(
         renderer,
         request.output_size,
+        request.target_transform,
         BlurLayer::Top,
         request.top_targets,
     )?;
     let overlay_blur = blur_cache.cached_elements(
         renderer,
         request.output_size,
+        request.target_transform,
         BlurLayer::Overlay,
         request.overlay_targets,
     )?;

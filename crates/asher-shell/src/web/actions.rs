@@ -98,6 +98,20 @@ pub enum WebShellAction {
     },
 }
 
+impl WebShellAction {
+    pub fn affects_popover(&self) -> bool {
+        matches!(
+            self,
+            Self::ToggleStartMenu
+                | Self::CloseStartMenu
+                | Self::ToggleQuickSettings
+                | Self::CloseQuickSettings
+                | Self::ToggleDateCenter
+                | Self::CloseDateCenter
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SessionCommand {
