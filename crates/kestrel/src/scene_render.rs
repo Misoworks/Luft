@@ -48,7 +48,14 @@ fn draw_blur_elements(
     elements: &[BlurElement],
     damage: &[Rectangle<i32, Physical>],
 ) -> Result<(), GlesError> {
-    draw_render_elements::<GlesRenderer, f64, BlurElement>(frame, 1.0, elements, damage)?;
+    for element in elements.iter().rev() {
+        draw_render_elements::<GlesRenderer, f64, BlurElement>(
+            frame,
+            1.0,
+            std::slice::from_ref(element),
+            damage,
+        )?;
+    }
     Ok(())
 }
 
@@ -157,7 +164,6 @@ fn render_staged_scene(
         frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), request.damage)?;
         draw_optional_memory(&mut frame, request.background.as_ref(), request.damage)?;
         draw_render_elements(&mut frame, 1.0, request.background_layer, request.damage)?;
-        draw_render_elements(&mut frame, 1.0, request.bottom_layer, request.damage)?;
         let _ = frame.finish()?;
     }
 
@@ -228,15 +234,6 @@ fn render_staged_scene(
         request.blur_enabled,
         blur_quality,
     )?;
-    {
-        let mut frame =
-            renderer.render(framebuffer, request.output_size, request.target_transform)?;
-        let blur_damage = blur_target_damage(request.output_size, request.top_targets);
-        draw_blur_elements(&mut frame, &top_blur, &blur_damage)?;
-        draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
-        let _ = frame.finish()?;
-    }
-
     let overlay_blur = scene_blur::capture_blur_elements(
         blur_cache,
         renderer,
@@ -248,6 +245,16 @@ fn render_staged_scene(
         request.blur_enabled,
         blur_quality,
     )?;
+    {
+        let mut frame =
+            renderer.render(framebuffer, request.output_size, request.target_transform)?;
+        let blur_damage = blur_target_damage(request.output_size, request.top_targets);
+        draw_render_elements(&mut frame, 1.0, request.bottom_layer, request.damage)?;
+        draw_blur_elements(&mut frame, &top_blur, &blur_damage)?;
+        draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
+        let _ = frame.finish()?;
+    }
+
     let mut frame = renderer.render(framebuffer, request.output_size, request.target_transform)?;
     let blur_damage = blur_target_damage(request.output_size, request.overlay_targets);
     draw_blur_elements(&mut frame, &overlay_blur, &blur_damage)?;

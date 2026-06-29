@@ -265,7 +265,7 @@ impl BlurLayer {
     }
 }
 
-fn material_for(namespace: &str) -> Option<LayerMaterial> {
+pub(crate) fn material_for(namespace: &str) -> Option<LayerMaterial> {
     match namespace {
         "asher-panel" => Some(LayerMaterial::Rect),
         "asher-dock" => Some(LayerMaterial::RoundRect {

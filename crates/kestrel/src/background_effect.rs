@@ -1,5 +1,5 @@
 use crate::{
-    layers::{BlurLayer, LayerMaterial, LayerRenderTarget},
+    layers::{material_for, BlurLayer, LayerMaterial, LayerRenderTarget},
     state::KestrelState,
     window::ManagedWindow,
     window_clip::WINDOW_RADIUS,
@@ -231,6 +231,12 @@ pub fn layer_popup_blur_targets(state: &KestrelState, layer: Layer) -> Vec<Layer
         let Some(parent_geometry) = layer_map.layer_geometry(parent) else {
             continue;
         };
+        let popup_radius = material_for(parent.namespace())
+            .and_then(|material| match material {
+                LayerMaterial::RoundRect { radius } => Some(radius),
+                _ => None,
+            })
+            .unwrap_or(18);
         for (popup, popup_offset) in PopupManager::popups_for_surface(parent.wl_surface()) {
             let popup_geometry = popup.geometry();
             let popup_location = parent_geometry.loc + popup_offset - popup_geometry.loc;
@@ -239,7 +245,7 @@ pub fn layer_popup_blur_targets(state: &KestrelState, layer: Layer) -> Vec<Layer
                 blur_layer,
                 popup_location,
                 popup_geometry.size,
-                LayerMaterial::RoundRect { radius: 18 },
+                LayerMaterial::RoundRect { radius: popup_radius },
                 &mut targets,
             );
         }
@@ -334,7 +340,7 @@ fn titlebar_radius(window: &ManagedWindow, scale: f64) -> i32 {
     }
 }
 
-fn current_blur_region(surface: &WlSurface) -> Option<RegionAttributes> {
+pub(crate) fn current_blur_region(surface: &WlSurface) -> Option<RegionAttributes> {
     compositor::with_states(surface, |states| {
         if !states.cached_state.has::<BackgroundEffectSurfaceState>() {
             return None;

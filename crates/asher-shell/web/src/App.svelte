@@ -83,7 +83,13 @@
   function runSurfaceAnimation(phase: "opening" | "closing") {
     if (!rootElement) return;
     const now = performance.now();
-    if (surfaceAnimationPhase === phase && now - lastSurfaceAnimationAt < 80) {
+    const reopening =
+      phase === "opening" && surfaceAnimationPhase === "closing";
+    if (
+      !reopening &&
+      surfaceAnimationPhase === phase &&
+      now - lastSurfaceAnimationAt < 80
+    ) {
       return;
     }
     surfaceAnimationPhase = phase;

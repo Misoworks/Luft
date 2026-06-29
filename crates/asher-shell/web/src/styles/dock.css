@@ -42,6 +42,13 @@
   --app-icon-lift: -10px;
 }
 
+.dock-app-slot {
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  transform-origin: center bottom;
+}
+
 .dock-shell .web-fps-meter {
   right: 5px;
   bottom: 3px;

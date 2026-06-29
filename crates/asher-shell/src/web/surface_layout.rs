@@ -15,6 +15,7 @@ const DOCK_GAP: i32 = 10;
 const DOCK_PADDING: i32 = 22;
 const DOCK_MENU_EDGE_MARGIN: i32 = 6;
 const DOCK_MENU_PANEL_GAP: i32 = 6;
+const LAYER_SURFACE_ZONE_IGNORE: i32 = -1;
 
 impl WebShellSurface {
     pub(crate) fn as_str(self) -> &'static str {
@@ -190,10 +191,12 @@ fn dock_menu_left_margin(width: i32, x: Option<i32>) -> i32 {
     (x - width.max(1) / 2).max(DOCK_MENU_EDGE_MARGIN)
 }
 
-fn exclusive_zone(kind: WebShellSurface, panel_taskbar: bool) -> Option<i32> {
+fn exclusive_zone(kind: WebShellSurface, _panel_taskbar: bool) -> Option<i32> {
     match kind {
-        WebShellSurface::Panel if panel_taskbar => None,
-        WebShellSurface::Panel => None,
+        WebShellSurface::Panel
+        | WebShellSurface::StartMenu
+        | WebShellSurface::Dock
+        | WebShellSurface::DockMenu => Some(LAYER_SURFACE_ZONE_IGNORE),
         WebShellSurface::Sidebar => Some(108),
         _ => None,
     }

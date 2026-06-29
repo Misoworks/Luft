@@ -114,8 +114,7 @@ body,
 
 #app[data-surface="start-menu"] {
   overflow: hidden;
-  border-radius: 24px;
-  clip-path: inset(0 round 24px);
+  background: var(--material-popover);
 }
 
 #app[data-surface="quick-settings"] .popover,

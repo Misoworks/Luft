@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { cubicOut } from "svelte/easing";
   import AppButton from "./AppButton.svelte";
   import DebugMeter from "./DebugMeter.svelte";
+  import { appFly } from "../lib/app_motion";
   import { moveDockCommand, sameOrder } from "../lib/dock_reorder";
   import { workspaceWheelOffset } from "../lib/workspace_wheel";
   import { sendAction } from "../shell/bridge";
@@ -18,6 +20,9 @@
       .map((command) => appByCommand.get(command))
       .filter((app): app is DockApp => Boolean(app)),
   );
+
+  const dockMotion = { y: 10, duration: 160, easing: cubicOut, opacity: 1 };
+  const dockExit = { y: 6, duration: 130, easing: cubicOut, opacity: 1 };
 
   $effect(() => {
     const commands = pinnedApps.map((app) => app.command);
@@ -73,16 +78,18 @@
 <section class="dock-shell">
   <nav class="shell-dock" aria-label="Pinned applications" onwheel={workspaceScroll}>
     {#each orderedApps as app (app.command)}
-      <AppButton
-        {app}
-        variant="dock"
-        onlaunch={launch}
-        onmenu={openMenu}
-        onreorderstart={startReorder}
-        onreorderover={previewReorder}
-        onreorderdrop={commitReorder}
-        onreorderend={endReorder}
-      />
+      <div class="dock-app-slot" in:appFly={dockMotion} out:appFly={dockExit}>
+        <AppButton
+          {app}
+          variant="dock"
+          onlaunch={launch}
+          onmenu={openMenu}
+          onreorderstart={startReorder}
+          onreorderover={previewReorder}
+          onreorderdrop={commitReorder}
+          onreorderend={endReorder}
+        />
+      </div>
     {/each}
   </nav>
   {#if snapshot.debugOverlay}

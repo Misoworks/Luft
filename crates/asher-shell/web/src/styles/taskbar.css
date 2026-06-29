@@ -3,7 +3,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  padding: 0 10px;
+  padding: 0;
   background: transparent;
   overflow: visible;
   isolation: isolate;
@@ -93,14 +93,12 @@
 
 .taskbar-apps {
   position: absolute;
-  bottom: 0;
   right: 0;
+  bottom: 0;
   left: 0;
   display: flex;
   align-items: flex-end;
-  justify-content: center;
   width: max-content;
-  max-width: calc(100% - 260px);
   min-width: 0;
   height: 62px;
   padding-bottom: 4px;
@@ -113,6 +111,16 @@
 .taskbar-app {
   --app-icon-lift: -10px;
   overflow: visible;
+}
+
+.taskbar-app-slot {
+  display: grid;
+  place-items: end center;
+  overflow: visible;
+}
+
+.taskbar-app-slot--running {
+  transform-origin: center bottom;
 }
 
 .taskbar-launcher:hover,

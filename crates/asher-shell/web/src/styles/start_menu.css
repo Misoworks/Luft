@@ -14,21 +14,12 @@
     linear-gradient(rgba(18, 18, 16, 0.14), rgba(18, 18, 16, 0.14)),
     var(--material-popover);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.115),
-    inset 0 1px 0 rgba(255, 255, 255, 0.105);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.115);
   contain: layout paint style;
-  transform-origin: bottom center;
-}
-
-#app.is-surface-opening[data-surface="start-menu"] .shell-start-menu {
-  animation: start-menu-surface-in 190ms var(--ease-shell) both;
-  will-change: transform;
 }
 
 #app.is-surface-closing[data-surface="start-menu"] .shell-start-menu {
   pointer-events: none;
-  animation: start-menu-surface-out 150ms var(--ease-shell) both;
-  will-change: transform;
 }
 
 .start-menu-top {
@@ -92,26 +83,6 @@
 
 .start-menu-app:active {
   --control-scale: 0.96;
-}
-
-@keyframes start-menu-surface-in {
-  from {
-    transform: translate3d(0, 28px, 0);
-  }
-
-  to {
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@keyframes start-menu-surface-out {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(0, 28px, 0);
-  }
 }
 
 @media (max-width: 760px) {

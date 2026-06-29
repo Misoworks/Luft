@@ -2,6 +2,7 @@
   import AppButton from "./AppButton.svelte";
   import DebugMeter from "./DebugMeter.svelte";
   import StatusCluster from "./StatusCluster.svelte";
+  import { appFly, runningAppEnter, runningAppExit } from "../lib/app_motion";
   import { moveDockCommand, sameOrder } from "../lib/dock_reorder";
   import { workspaceWheelOffset } from "../lib/workspace_wheel";
   import { sendAction } from "../shell/bridge";
@@ -16,12 +17,13 @@
   const pinnedApps = $derived(snapshot.dockApps.filter((app) => app.pinned));
   const runningOnlyApps = $derived(snapshot.dockApps.filter((app) => !app.pinned));
   const appByCommand = $derived(new Map(pinnedApps.map((app) => [app.command, app])));
-  const orderedApps = $derived(
+  const orderedPinnedApps = $derived(
     (order.length > 0 ? order : pinnedApps.map((app) => app.command))
       .map((command) => appByCommand.get(command))
-      .filter((app): app is DockApp => Boolean(app))
-      .concat(runningOnlyApps),
+      .filter((app): app is DockApp => Boolean(app)),
   );
+
+  const runningExit = runningAppExit;
 
   $effect(() => {
     const commands = pinnedApps.map((app) => app.command);
@@ -110,18 +112,38 @@
         </svg>
       </button>
     {/if}
-    {#each orderedApps as app (app.command)}
-      <AppButton
-        {app}
-        variant="taskbar"
-        onlaunch={launch}
-        onmenu={openMenu}
-        onreorderstart={startReorder}
-        onreorderover={previewReorder}
-        onreorderdrop={commitReorder}
-        onreorderend={endReorder}
-        reorderable={app.pinned}
-      />
+    {#each orderedPinnedApps as app (app.command)}
+      <div class="taskbar-app-slot">
+        <AppButton
+          {app}
+          variant="taskbar"
+          onlaunch={launch}
+          onmenu={openMenu}
+          onreorderstart={startReorder}
+          onreorderover={previewReorder}
+          onreorderdrop={commitReorder}
+          onreorderend={endReorder}
+        />
+      </div>
+    {/each}
+    {#each runningOnlyApps as app (app.command)}
+      <div
+        class="taskbar-app-slot taskbar-app-slot--running"
+        in:appFly={runningAppEnter}
+        out:appFly={runningExit}
+      >
+        <AppButton
+          {app}
+          variant="taskbar"
+          onlaunch={launch}
+          onmenu={openMenu}
+          onreorderstart={startReorder}
+          onreorderover={previewReorder}
+          onreorderdrop={commitReorder}
+          onreorderend={endReorder}
+          reorderable={false}
+        />
+      </div>
     {/each}
   </nav>
 

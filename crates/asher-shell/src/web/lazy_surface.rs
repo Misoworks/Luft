@@ -360,7 +360,12 @@ impl LazyWebSurface {
                 )
             });
             let to = surface.base_shell_margin();
-            surface.set_shell_margin(lerp_margin(from, to, motion));
+            let margin = if progress >= 1.0 {
+                to
+            } else {
+                lerp_margin(from, to, motion)
+            };
+            surface.set_shell_margin(margin);
         }
     }
 
