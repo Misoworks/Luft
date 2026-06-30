@@ -24,12 +24,20 @@ mod geometry;
 mod render_pass;
 
 use geometry::{
-    blur_texture_size, clipped_target_rect, material_radius_i32, padded_target_rect,
+    blur_texture_size, clipped_target_rect, material_clip_shape, padded_target_rect,
     source_rect_for_visible_target, target_is_damaged,
 };
 use render_pass::{BlurRenderPass, render_blur_texture};
 
 const BLUR_SHADER: &str = include_str!("shaders/scene_blur.frag");
+
+pub(crate) fn blur_sample_rect(
+    output_size: Size<i32, Physical>,
+    target: &LayerRenderTarget,
+) -> Option<Rectangle<i32, Physical>> {
+    let rect = clipped_target_rect(output_size, target)?;
+    Some(padded_target_rect(output_size, target, rect))
+}
 
 #[derive(Default)]
 pub struct SceneBlurCache {
@@ -77,23 +85,28 @@ impl SceneBlurCache {
         damage: &[Rectangle<i32, Physical>],
     ) -> bool {
         targets.iter().any(|target| {
-            let Some(rect) = clipped_target_rect(output_size, target) else {
-                return false;
-            };
-            let sample_rect = padded_target_rect(output_size, target, rect);
-            self.cached_entry(target).is_none_or(|entry| {
-                entry.rect != rect
-                    || entry.sample_rect != sample_rect
-                    || target_is_damaged(sample_rect, damage)
-            })
+            self.target_capture_sample_rect(output_size, target, damage)
+                .is_some()
         })
+    }
+
+    pub(crate) fn target_capture_sample_rects(
+        &self,
+        output_size: Size<i32, Physical>,
+        targets: &[LayerRenderTarget],
+        damage: &[Rectangle<i32, Physical>],
+    ) -> Vec<Rectangle<i32, Physical>> {
+        targets
+            .iter()
+            .filter_map(|target| self.target_capture_sample_rect(output_size, target, damage))
+            .collect()
     }
 
     pub fn cached_elements(
         &self,
         renderer: &mut GlesRenderer,
         output_size: Size<i32, Physical>,
-        display_transform: Transform,
+        _display_transform: Transform,
         _blur_layer: BlurLayer,
         targets: &[LayerRenderTarget],
     ) -> Result<Vec<BlurElement>, GlesError> {
@@ -111,7 +124,6 @@ impl SceneBlurCache {
                 rect,
                 entry,
                 entry.opacity(now, target.opacity),
-                display_transform,
             ));
         }
 
@@ -300,6 +312,23 @@ impl SceneBlurCache {
     fn cached_entry(&self, target: &LayerRenderTarget) -> Option<&SceneBlurCacheEntry> {
         self.entries.iter().find(|entry| entry.matches(target))
     }
+
+    fn target_capture_sample_rect(
+        &self,
+        output_size: Size<i32, Physical>,
+        target: &LayerRenderTarget,
+        damage: &[Rectangle<i32, Physical>],
+    ) -> Option<Rectangle<i32, Physical>> {
+        let rect = clipped_target_rect(output_size, target)?;
+        let sample_rect = padded_target_rect(output_size, target, rect);
+        self.cached_entry(target)
+            .is_none_or(|entry| {
+                entry.rect != rect
+                    || entry.sample_rect != sample_rect
+                    || target_is_damaged(sample_rect, damage)
+            })
+            .then_some(sample_rect)
+    }
 }
 
 pub type BlurElement = RoundedWindowElement<TextureRenderElement<GlesTexture>>;
@@ -350,13 +379,7 @@ pub fn capture_blur_elements(
                 quality: request.quality,
             },
         )?;
-        elements.push(render_element(
-            renderer,
-            rect,
-            entry,
-            opacity,
-            request.target_transform,
-        ));
+        elements.push(render_element(renderer, rect, entry, opacity));
     }
 
     Ok(elements)
@@ -429,7 +452,6 @@ fn render_element(
     rect: Rectangle<i32, Physical>,
     entry: &SceneBlurCacheEntry,
     opacity: f32,
-    display_transform: Transform,
 ) -> BlurElement {
     let element = TextureRenderElement::from_static_texture(
         entry.id.clone(),
@@ -437,7 +459,7 @@ fn render_element(
         Point::<f64, Physical>::from((rect.loc.x as f64, rect.loc.y as f64)),
         entry.output.clone(),
         1,
-        display_transform,
+        Transform::Normal,
         Some(opacity.clamp(0.0, 1.0)),
         Some(Rectangle::<f64, Logical>::from_size(
             Size::<f64, Logical>::from((entry.texture_size.w as f64, entry.texture_size.h as f64)),
@@ -446,9 +468,9 @@ fn render_element(
         None,
         Kind::Unspecified,
     );
-    RoundedWindowElement::new(
+    RoundedWindowElement::new_with_shape(
         element,
         rect,
-        material_radius_i32(entry.material, rect.size),
+        material_clip_shape(entry.material, rect.size),
     )
 }

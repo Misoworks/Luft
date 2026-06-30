@@ -1,4 +1,7 @@
-use crate::{layers::LayerRenderTarget, render::LayerElement, window_clip::RoundedWindowElement};
+use crate::{
+    layers::LayerRenderTarget, render::LayerElement, scene_blur::blur_sample_rect,
+    window_clip::RoundedWindowElement,
+};
 use smithay::{
     backend::renderer::{
         damage::OutputDamageTracker,
@@ -231,11 +234,9 @@ pub(crate) fn expand_damage_for_blur_targets(
     let mut expanded = damage.to_vec();
     let output = Rectangle::<i32, Physical>::from_size(output_size);
     for target in target_groups.iter().flat_map(|targets| targets.iter()) {
-        let target_rect = Rectangle::<i32, Physical>::new(
-            (target.location.x, target.location.y).into(),
-            (target.size.w, target.size.h).into(),
-        );
-        if let Some(rect) = target_rect.intersection(output) {
+        if let Some(rect) =
+            blur_sample_rect(output_size, target).and_then(|rect| rect.intersection(output))
+        {
             let target_changed = damage
                 .iter()
                 .any(|damage| damage.intersection(rect).is_some());

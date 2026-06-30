@@ -1,4 +1,5 @@
 use crate::{
+    damage::merge_damage_rectangles,
     layers::{BlurLayer, LayerRenderTarget},
     render::{LayerElement, window_chrome_elements_for_window},
     scene_blur::{self, BlurElement, SceneBlurCache},
@@ -158,12 +159,21 @@ fn render_staged_scene(
     request: SceneRenderRequest<'_>,
 ) -> Result<(), GlesError> {
     let blur_quality = request.state.config.effects.blur_quality;
+    let capture_damage = capture_damage_for_blur_targets(blur_cache, &request);
+    let pre_capture_damage =
+        merged_render_damage(request.output_size, request.damage, &capture_damage);
     {
         let mut frame =
             renderer.render(framebuffer, request.output_size, request.target_transform)?;
-        frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), request.damage)?;
-        draw_optional_memory(&mut frame, request.background.as_ref(), request.damage)?;
-        draw_render_elements(&mut frame, 1.0, request.background_layer, request.damage)?;
+        frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), &pre_capture_damage)?;
+        draw_optional_memory(&mut frame, request.background.as_ref(), &pre_capture_damage)?;
+        draw_render_elements(
+            &mut frame,
+            1.0,
+            request.background_layer,
+            &pre_capture_damage,
+        )?;
+        draw_render_elements(&mut frame, 1.0, request.bottom_layer, &pre_capture_damage)?;
         let _ = frame.finish()?;
     }
 
@@ -190,7 +200,7 @@ fn render_staged_scene(
             framebuffer,
             request.output_size,
             request.target_transform,
-            request.damage,
+            &pre_capture_damage,
             &mut batched_windows,
             &mut batched_chrome,
         )?;
@@ -211,8 +221,8 @@ fn render_staged_scene(
             renderer.render(framebuffer, request.output_size, request.target_transform)?;
         let blur_damage = blur_target_damage(request.output_size, &targets);
         draw_blur_elements(&mut frame, &blur, &blur_damage)?;
-        draw_render_elements(&mut frame, 1.0, &window, request.damage)?;
-        draw_render_elements(&mut frame, 1.0, &chrome, request.damage)?;
+        draw_render_elements(&mut frame, 1.0, &window, &pre_capture_damage)?;
+        draw_render_elements(&mut frame, 1.0, &chrome, &pre_capture_damage)?;
         let _ = frame.finish()?;
     }
     flush_window_batch(
@@ -220,7 +230,7 @@ fn render_staged_scene(
         framebuffer,
         request.output_size,
         request.target_transform,
-        request.damage,
+        &pre_capture_damage,
         &mut batched_windows,
         &mut batched_chrome,
     )?;
@@ -238,6 +248,15 @@ fn render_staged_scene(
             quality: blur_quality,
         },
     )?;
+    {
+        let mut frame =
+            renderer.render(framebuffer, request.output_size, request.target_transform)?;
+        let blur_damage = blur_target_damage(request.output_size, request.top_targets);
+        draw_blur_elements(&mut frame, &top_blur, &blur_damage)?;
+        draw_render_elements(&mut frame, 1.0, request.top_layer, &pre_capture_damage)?;
+        let _ = frame.finish()?;
+    }
+
     let overlay_blur = scene_blur::capture_blur_elements(
         blur_cache,
         renderer,
@@ -251,16 +270,6 @@ fn render_staged_scene(
             quality: blur_quality,
         },
     )?;
-    {
-        let mut frame =
-            renderer.render(framebuffer, request.output_size, request.target_transform)?;
-        let blur_damage = blur_target_damage(request.output_size, request.top_targets);
-        draw_render_elements(&mut frame, 1.0, request.bottom_layer, request.damage)?;
-        draw_blur_elements(&mut frame, &top_blur, &blur_damage)?;
-        draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
-        let _ = frame.finish()?;
-    }
-
     let mut frame = renderer.render(framebuffer, request.output_size, request.target_transform)?;
     let blur_damage = blur_target_damage(request.output_size, request.overlay_targets);
     draw_blur_elements(&mut frame, &overlay_blur, &blur_damage)?;
@@ -270,6 +279,49 @@ fn render_staged_scene(
     let _ = frame.finish()?;
 
     Ok(())
+}
+
+fn capture_damage_for_blur_targets(
+    blur_cache: &SceneBlurCache,
+    request: &SceneRenderRequest<'_>,
+) -> Vec<Rectangle<i32, Physical>> {
+    let output = Rectangle::<i32, Physical>::from_size(request.output_size);
+    merge_damage_rectangles(
+        output,
+        blur_cache
+            .target_capture_sample_rects(
+                request.output_size,
+                request.window_targets,
+                request.blur_damage,
+            )
+            .into_iter()
+            .chain(blur_cache.target_capture_sample_rects(
+                request.output_size,
+                request.top_targets,
+                request.blur_damage,
+            ))
+            .chain(blur_cache.target_capture_sample_rects(
+                request.output_size,
+                request.overlay_targets,
+                request.blur_damage,
+            ))
+            .collect(),
+    )
+}
+
+fn merged_render_damage(
+    output_size: Size<i32, Physical>,
+    damage: &[Rectangle<i32, Physical>],
+    extra: &[Rectangle<i32, Physical>],
+) -> Vec<Rectangle<i32, Physical>> {
+    merge_damage_rectangles(
+        Rectangle::<i32, Physical>::from_size(output_size),
+        damage
+            .iter()
+            .copied()
+            .chain(extra.iter().copied())
+            .collect(),
+    )
 }
 
 fn flush_window_batch(

@@ -17,7 +17,15 @@ pub const WINDOW_RADIUS: i32 = 12;
 pub struct RoundedWindowElement<E> {
     element: E,
     clip: Rectangle<i32, Physical>,
-    radius: i32,
+    shape: ClipShape,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClipShape {
+    Rect,
+    RoundRect { radius: i32 },
+    RoundLeft { radius: i32 },
+    RoundRight { radius: i32 },
 }
 
 pub fn window_elements(
@@ -120,11 +128,41 @@ fn append_window_elements(
 
 impl<E> RoundedWindowElement<E> {
     pub fn new(element: E, clip: Rectangle<i32, Physical>, radius: i32) -> Self {
+        let shape = if radius > 0 {
+            ClipShape::RoundRect { radius }
+        } else {
+            ClipShape::Rect
+        };
+        Self::new_with_shape(element, clip, shape)
+    }
+
+    pub fn new_with_shape(element: E, clip: Rectangle<i32, Physical>, shape: ClipShape) -> Self {
         Self {
             element,
             clip,
-            radius,
+            shape: shape.clamped(clip.size),
         }
+    }
+}
+
+impl ClipShape {
+    fn clamped(self, size: Size<i32, Physical>) -> Self {
+        match self {
+            Self::Rect => Self::Rect,
+            Self::RoundRect { radius } => Self::RoundRect {
+                radius: clamp_radius(radius, size),
+            },
+            Self::RoundLeft { radius } => Self::RoundLeft {
+                radius: clamp_radius(radius, size),
+            },
+            Self::RoundRight { radius } => Self::RoundRight {
+                radius: clamp_radius(radius, size),
+            },
+        }
+    }
+
+    fn is_rounded(self) -> bool {
+        !matches!(self, Self::Rect)
     }
 }
 
@@ -165,8 +203,22 @@ impl<E: Element> Element for RoundedWindowElement<E> {
         self.element.damage_since(scale, commit)
     }
 
-    fn opaque_regions(&self, _scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
-        OpaqueRegions::default()
+    fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
+        let element_geometry = self.element.geometry(scale);
+        self.element
+            .opaque_regions(scale)
+            .into_iter()
+            .flat_map(|mut region| {
+                region.loc += element_geometry.loc;
+                clip_strips(self.clip, self.shape)
+                    .into_iter()
+                    .filter_map(move |strip| {
+                        let mut clipped = region.intersection(strip)?;
+                        clipped.loc -= element_geometry.loc;
+                        Some(clipped)
+                    })
+            })
+            .collect()
     }
 
     fn alpha(&self) -> f32 {
@@ -192,7 +244,7 @@ where
         opaque_regions: &[Rectangle<i32, Physical>],
     ) -> Result<(), R::Error> {
         let element_geometry = self.element.geometry(Scale::from(1.0));
-        for strip in rounded_rect_strips(self.clip, self.radius) {
+        for strip in clip_strips(self.clip, self.shape) {
             let Some(piece) = strip.intersection(dst) else {
                 continue;
             };
@@ -210,7 +262,7 @@ where
     }
 
     fn underlying_storage(&self, renderer: &mut R) -> Option<UnderlyingStorage<'_>> {
-        if self.radius > 0 {
+        if self.shape.is_rounded() {
             return None;
         }
 
@@ -218,33 +270,43 @@ where
     }
 }
 
-fn rounded_rect_strips(
-    rect: Rectangle<i32, Physical>,
-    radius: i32,
-) -> Vec<Rectangle<i32, Physical>> {
-    let radius = radius.max(0).min(rect.size.w / 2).min(rect.size.h / 2);
-    if radius == 0 {
+fn clip_strips(rect: Rectangle<i32, Physical>, shape: ClipShape) -> Vec<Rectangle<i32, Physical>> {
+    if shape == ClipShape::Rect {
         return vec![rect];
     }
 
     let mut strips = Vec::new();
     let mut y = 0;
     while y < rect.size.h {
-        let inset = rounded_inset(y, rect.size.h, radius);
+        let inset = clip_inset(y, rect.size.h, shape);
         let mut next_y = y + 1;
-        while next_y < rect.size.h && rounded_inset(next_y, rect.size.h, radius) == inset {
+        while next_y < rect.size.h && clip_inset(next_y, rect.size.h, shape) == inset {
             next_y += 1;
         }
-        strips.push(Rectangle::new(
-            (rect.loc.x + inset, rect.loc.y + y).into(),
-            (rect.size.w - inset * 2, next_y - y).into(),
-        ));
+        let (x, width) = match shape {
+            ClipShape::Rect => (rect.loc.x, rect.size.w),
+            ClipShape::RoundRect { .. } => (rect.loc.x + inset, rect.size.w - inset * 2),
+            ClipShape::RoundLeft { .. } => (rect.loc.x + inset, rect.size.w - inset),
+            ClipShape::RoundRight { .. } => (rect.loc.x, rect.size.w - inset),
+        };
+        if width > 0 {
+            strips.push(Rectangle::new(
+                (x, rect.loc.y + y).into(),
+                (width, next_y - y).into(),
+            ));
+        }
         y = next_y;
     }
     strips
 }
 
-fn rounded_inset(y: i32, height: i32, radius: i32) -> i32 {
+fn clip_inset(y: i32, height: i32, shape: ClipShape) -> i32 {
+    let radius = match shape {
+        ClipShape::Rect => 0,
+        ClipShape::RoundRect { radius }
+        | ClipShape::RoundLeft { radius }
+        | ClipShape::RoundRight { radius } => radius,
+    };
     if y >= radius && y < height - radius {
         return 0;
     }
@@ -257,6 +319,10 @@ fn rounded_inset(y: i32, height: i32, radius: i32) -> i32 {
     let dy = (y as f64 + 0.5 - center_y).abs();
     let dx = ((radius * radius) as f64 - dy * dy).max(0.0).sqrt();
     (radius as f64 - dx).ceil() as i32
+}
+
+fn clamp_radius(radius: i32, size: Size<i32, Physical>) -> i32 {
+    radius.max(0).min(size.w / 2).min(size.h / 2)
 }
 
 fn damage_for_piece(

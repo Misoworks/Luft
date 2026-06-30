@@ -1,8 +1,11 @@
-use crate::layers::{BlurLayer, LayerMaterial, LayerRenderTarget};
+use crate::{
+    layers::{BlurLayer, LayerMaterial, LayerRenderTarget},
+    window_clip::ClipShape,
+};
 use asher_config::BlurQuality;
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Size};
 
-const WINDOW_BLUR_SAMPLE_PADDING: i32 = 36;
+const WINDOW_BLUR_SAMPLE_PADDING: i32 = 0;
 const LAYER_BLUR_SAMPLE_PADDING: i32 = 36;
 
 pub(super) fn material_radius(
@@ -23,18 +26,27 @@ pub(super) fn material_radius(
     }
 }
 
-pub(super) fn material_radius_i32(
+pub(super) fn material_clip_shape(
     material: LayerMaterial,
     visible_size: Size<i32, Physical>,
-) -> i32 {
-    match material {
-        LayerMaterial::Rect => 0,
-        LayerMaterial::RoundRect { radius }
-        | LayerMaterial::RoundLeft { radius }
-        | LayerMaterial::RoundRight { radius } => radius
+) -> ClipShape {
+    let clamp = |radius: i32| {
+        radius
             .max(0)
             .min(visible_size.w / 2)
-            .min(visible_size.h / 2),
+            .min(visible_size.h / 2)
+    };
+    match material {
+        LayerMaterial::Rect => ClipShape::Rect,
+        LayerMaterial::RoundRect { radius } => ClipShape::RoundRect {
+            radius: clamp(radius),
+        },
+        LayerMaterial::RoundLeft { radius } => ClipShape::RoundLeft {
+            radius: clamp(radius),
+        },
+        LayerMaterial::RoundRight { radius } => ClipShape::RoundRight {
+            radius: clamp(radius),
+        },
     }
 }
 
