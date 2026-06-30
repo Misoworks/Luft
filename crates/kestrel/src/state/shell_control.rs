@@ -1,7 +1,7 @@
 use super::{KestrelState, ShellRestartRequest};
 use crate::layout_config::layout_from_config;
 use asher_config::AsherConfig;
-use asher_layout::{Rect, WindowId, WindowInfo, WindowState, WorkspaceId};
+use asher_ipc::{Rect, WindowId, WindowInfo, WindowState, WorkspaceId};
 use tracing::warn;
 
 impl KestrelState {

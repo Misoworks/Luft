@@ -1,5 +1,5 @@
 use asher_config::AsherConfig;
-use asher_layout::{LayoutEngine, Workspace, WorkspaceId};
+use asher_ipc::{LayoutEngine, Workspace, WorkspaceId};
 
 pub fn layout_from_config(config: &AsherConfig) -> LayoutEngine {
     let mut workspaces = configured_workspaces(config);
@@ -42,7 +42,7 @@ fn configured_workspaces(config: &AsherConfig) -> Vec<Workspace> {
 mod tests {
     use super::*;
     use asher_config::WorkspaceConfig;
-    use asher_layout::ProfileId;
+    use asher_ipc::ProfileId;
 
     #[test]
     fn default_config_materializes_runtime_workspace() {

@@ -1,7 +1,7 @@
 use super::{
     actions::WebShellAction,
     model::{WebShellSnapshot, WebShellSurface},
-    surface_layout::{panel_size, shell_surface},
+    surface_layout::shell_surface,
     surface_motion::shell_blur_region,
 };
 use fenestra_cef::{
@@ -24,8 +24,7 @@ pub struct WebSurface {
     snapshot: Arc<Mutex<WebShellSnapshot>>,
     pub(crate) visible: bool,
     keep_alive_when_hidden: bool,
-    panel_taskbar: bool,
-    dock_menu_x: Option<i32>,
+    panel_menu_x: Option<i32>,
     process: Option<FenestraProcess>,
     surface_alpha: f32,
     pub(crate) shell_margin: ShellSurfaceMargin,
@@ -36,13 +35,7 @@ pub struct WebSurface {
 impl WebSurface {
     pub(crate) fn new(config: WebSurfaceConfig<'_>) -> Result<Self, Box<dyn Error>> {
         let initial = serde_json::to_string(config.snapshot)?;
-        let shell_margin = shell_surface(
-            config.kind,
-            config.size,
-            config.panel_taskbar,
-            config.dock_menu_x,
-        )
-        .margin;
+        let shell_margin = shell_surface(config.kind, config.size, config.panel_menu_x).margin;
         let mut surface = Self {
             kind: config.kind,
             size: config.size,
@@ -50,8 +43,7 @@ impl WebSurface {
             snapshot: Arc::new(Mutex::new(config.snapshot.clone())),
             visible: false,
             keep_alive_when_hidden: config.keep_alive_when_hidden,
-            panel_taskbar: config.panel_taskbar,
-            dock_menu_x: config.dock_menu_x,
+            panel_menu_x: config.panel_menu_x,
             process: None,
             surface_alpha: if config.visible { 1.0 } else { 0.0 },
             shell_margin,
@@ -90,26 +82,13 @@ impl WebSurface {
         self.restart_for_geometry_change();
     }
 
-    pub(crate) fn set_panel_taskbar(&mut self, taskbar: bool) {
-        if self.panel_taskbar == taskbar {
+    pub(crate) fn set_panel_menu_x(&mut self, x: Option<i32>) {
+        if self.panel_menu_x == x {
             return;
         }
-        self.panel_taskbar = taskbar;
-        if self.kind == WebShellSurface::Panel {
-            self.resize(panel_size(taskbar));
-        } else {
-            self.shell_margin = self.base_shell_margin();
-            self.restart_for_geometry_change();
-        }
-    }
-
-    pub(crate) fn set_dock_menu_x(&mut self, x: Option<i32>) {
-        if self.dock_menu_x == x {
-            return;
-        }
-        self.dock_menu_x = x;
+        self.panel_menu_x = x;
         self.shell_margin = self.base_shell_margin();
-        if self.kind == WebShellSurface::DockMenu {
+        if self.kind == WebShellSurface::PanelMenu {
             self.restart_for_geometry_change();
         }
     }
@@ -223,17 +202,16 @@ impl WebSurface {
     }
 
     pub(crate) fn base_shell_margin(&self) -> ShellSurfaceMargin {
-        shell_surface(self.kind, self.size, self.panel_taskbar, self.dock_menu_x).margin
+        shell_surface(self.kind, self.size, self.panel_menu_x).margin
     }
 
     fn build_window(&self) -> FenestraWindow {
         let snapshot = Arc::clone(&self.snapshot);
         let action_tx = self.actions_tx.clone();
         let kind = self.kind;
-        let shell_options = shell_surface(kind, self.size, self.panel_taskbar, self.dock_menu_x)
-            .margin(self.shell_margin);
+        let shell_options =
+            shell_surface(kind, self.size, self.panel_menu_x).margin(self.shell_margin);
         let (width, height) = cef_initial_size(&shell_options, self.size);
-
         let window = FenestraWindow::new()
             .title(format!("Asher {}", kind.as_str()))
             .fixed_size(width, height)
@@ -338,8 +316,7 @@ pub(crate) struct WebSurfaceConfig<'a> {
     pub size: (i32, i32),
     pub visible: bool,
     pub keep_alive_when_hidden: bool,
-    pub panel_taskbar: bool,
-    pub dock_menu_x: Option<i32>,
+    pub panel_menu_x: Option<i32>,
     pub actions_tx: &'a Sender<WebShellAction>,
     pub snapshot: &'a WebShellSnapshot,
 }

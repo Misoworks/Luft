@@ -2,7 +2,7 @@ use asher_ipc::{
     IpcRequest, IpcResponse, ProfileSummary, StatusPayload, WindowSummary, WorkspaceSummary,
     send_request,
 };
-use asher_layout::{ModeId, ProfileId, WindowId, WorkspaceId};
+use asher_ipc::{ModeId, ProfileId, WindowId, WorkspaceId};
 use std::{
     error::Error,
     io,

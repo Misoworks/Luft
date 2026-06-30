@@ -14,7 +14,6 @@ use crate::{
     layers,
     loading_overlay::{render_loading_overlay, shell_layers_ready, should_show_loading_overlay},
     output::NestedOutput,
-    recovery::RecoveryPolicy,
     render::{RenderStage, render_stage_elements, window_chrome_elements},
     scene_blur::SceneBlurCache,
     scene_render::{SceneRenderRequest, render_scene},
@@ -64,11 +63,6 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
     let shell_control_socket = shell_socket_path(ipc.path());
     state.shell_control_path = Some(shell_control_socket.clone());
     let mut output = NestedOutput::default();
-    let recovery = RecoveryPolicy::new(
-        state.config.recovery.crash_limit as usize,
-        Duration::from_secs(state.config.recovery.crash_window_seconds),
-    );
-
     let listener = bind_socket(options.socket_name.as_deref())?;
     let socket_name = listener
         .socket_name()
@@ -123,15 +117,11 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
         ipc.path(),
         &shell_control_socket,
         output.refresh_millihertz,
-        recovery.clone(),
     );
     state.shell_status = shell.status();
     info!(
         wayland_display = %socket_name,
-        safe_mode = state.config.general.safe_mode,
         blur_enabled = state.config.general.enable_blur,
-        crash_limit = recovery.limit(),
-        crash_window_seconds = recovery.window().as_secs(),
         ipc_socket = %ipc.path().display(),
         refresh_millihertz = output.refresh_millihertz,
         "nested compositor ready"
@@ -275,11 +265,10 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                 .windows
                 .fullscreen_on_workspace(state.layout.active_workspace())
                 .is_some();
-            let panel_taskbar = state.layout.active_mode() == asher_layout::ModeId::Panel;
             let mut top_targets = if fullscreen_active {
                 Vec::new()
             } else {
-                layers::render_targets(state.output(), Layer::Top, panel_taskbar)
+                layers::render_targets(state.output(), Layer::Top)
             };
             if !fullscreen_active {
                 top_targets.extend(background_effect::layer_popup_blur_targets(
@@ -290,7 +279,7 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             let mut overlay_targets = if fullscreen_active {
                 Vec::new()
             } else {
-                layers::render_targets(state.output(), Layer::Overlay, panel_taskbar)
+                layers::render_targets(state.output(), Layer::Overlay)
             };
             if !fullscreen_active {
                 overlay_targets.extend(background_effect::layer_popup_blur_targets(
@@ -298,14 +287,8 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                     Layer::Overlay,
                 ));
             }
-            let background_element = if show_loading {
-                background.blurred_render_element(renderer, output.size)?
-            } else {
-                background.render_element(renderer, output.size)?
-            };
-            let blur_enabled = state.config.general.enable_blur
-                && state.config.effects.blur
-                && !state.config.general.safe_mode;
+            let background_element = background.render_element(renderer, output.size)?;
+            let blur_enabled = state.config.general.enable_blur && state.config.effects.blur;
             let background_layer =
                 render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Background));
             let bottom_layer =

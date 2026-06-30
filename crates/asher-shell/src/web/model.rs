@@ -16,21 +16,17 @@ pub struct WebShellSnapshot {
     pub active_workspace: String,
     pub active_profile: String,
     pub active_mode: String,
-    pub panel_taskbar: bool,
     pub blur_enabled: bool,
     pub debug_overlay: bool,
-    pub safe_mode: bool,
-    pub wallpaper_uri: Option<String>,
-    pub glass_blur_wallpaper_uri: Option<String>,
     pub user_profile_icon_uri: Option<String>,
     pub palette: WebPalette,
     pub appearance: WebAppearance,
     pub profiles: Vec<WebProfile>,
     pub workspaces: Vec<WebWorkspace>,
     pub windows: Vec<WebWindow>,
-    pub dock_apps: Vec<WebDockApp>,
-    pub dock_menu_command: Option<String>,
-    pub dock_menu_x: Option<i32>,
+    pub panel_apps: Vec<WebPanelApp>,
+    pub panel_menu_command: Option<String>,
+    pub panel_menu_x: Option<i32>,
     pub applications: Vec<WebApplication>,
     pub status: WebSystemStatus,
     pub tray: Vec<WebTrayItem>,
@@ -46,9 +42,7 @@ pub struct WebShellSnapshot {
 #[serde(rename_all = "kebab-case")]
 pub enum WebShellSurface {
     Panel,
-    Dock,
-    DockMenu,
-    Sidebar,
+    PanelMenu,
     QuickSettings,
     DateCenter,
     NotificationToast,
@@ -118,7 +112,7 @@ impl From<&WindowSummary> for WebWindow {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct WebDockApp {
+pub struct WebPanelApp {
     pub label: String,
     pub command: String,
     pub icon_uri: Option<String>,

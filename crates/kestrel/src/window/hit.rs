@@ -2,7 +2,7 @@ use super::{
     ManagedWindow, RESIZE_BORDER, TITLEBAR_CONTROL_GAP, TITLEBAR_CONTROL_HIT_PADDING,
     TITLEBAR_CONTROL_RIGHT, TITLEBAR_CONTROL_SIZE, TITLEBAR_HEIGHT,
 };
-use asher_layout::WindowId;
+use asher_ipc::WindowId;
 use smithay::{
     utils::{Logical, Point},
     wayland::shell::xdg::ToplevelSurface,

@@ -3,7 +3,6 @@ default_profile = "panel-default"
 enable_effects = true
 enable_blur = true
 enable_animations = true
-safe_mode = false
 
 [compositor]
 backend = "auto"
@@ -20,34 +19,26 @@ reboot_command = "systemctl reboot"
 poweroff_command = "systemctl poweroff"
 
 [appearance]
-material_mode = "glass"
-shell_mode = "panel"
-dock_icon_size = 40
-dock_magnification = true
-taskbar_launcher = true
+animations = true
+panel_icon_size = 40
+panel_magnification = false
+panel_launcher = true
 
 [effects]
 background_effect_protocol = true
 blur = true
 blur_quality = "balanced"
-disable_blur_on_battery = false
 
 [workspaces]
 count = 1
 restore_sessions = true
 
-[recovery]
-crash_limit = 3
-crash_window_seconds = 60
-auto_safe_mode = true
-backup_before_apply = true
-
 [default_apps]
 terminal = "ghostty"
 file_manager = "nautilus"
 browser = "google-chrome-stable"
-settings = "asher-settings"
+settings = ""
 launcher = "vicinae"
 
-[dock]
+[panel]
 customized = false

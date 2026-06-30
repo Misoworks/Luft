@@ -2,8 +2,8 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: var(--dock-item-size);
-  height: var(--dock-item-size);
+  width: var(--panel-item-size);
+  height: var(--panel-item-size);
   overflow: visible;
   color: var(--panel-text);
   border-radius: 12px;
@@ -36,7 +36,7 @@
   will-change: transform;
 }
 
-#app[data-dock-magnification="false"] .app-button:hover .app-icon {
+#app[data-panel-magnification="false"] .app-button:hover .app-icon {
   transform: none;
   will-change: auto;
 }
@@ -48,8 +48,8 @@
 .app-icon {
   display: grid;
   place-items: center;
-  width: var(--dock-icon-size);
-  height: var(--dock-icon-size);
+  width: var(--panel-icon-size);
+  height: var(--panel-icon-size);
   overflow: visible;
   transform-origin: center bottom;
   pointer-events: none;
@@ -76,9 +76,9 @@
   --app-launch-rest-y: var(--app-icon-lift, -9px);
 }
 
-.dock-item,
-.taskbar-app {
-  --app-icon-lift: -10px;
+.panel-item,
+.panel-app {
+  --app-icon-lift: -5px;
 }
 
 .running-dot {

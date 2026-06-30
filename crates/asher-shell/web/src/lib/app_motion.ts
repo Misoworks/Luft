@@ -1,6 +1,5 @@
 import type { TransitionConfig } from "svelte/transition";
-import { backOut, cubicOut } from "svelte/easing";
-import { fly } from "svelte/transition";
+import { cubicOut } from "svelte/easing";
 
 export function animationsEnabled() {
   return document.querySelector<HTMLElement>("#app")?.dataset.animations === "true";
@@ -14,17 +13,24 @@ export function appFly(
     return { duration: 0 };
   }
 
-  return fly(node, {
-    ...params,
-    opacity: params.opacity ?? 1,
-  });
+  const y = params.y;
+  const opacity = params.opacity ?? 0;
+  return {
+    duration: params.duration,
+    easing: params.easing,
+    css: (t) => {
+      const offset = (1 - t) * y;
+      const alpha = opacity + (1 - opacity) * t;
+      return `opacity: ${alpha}; transform: translate3d(0, ${offset}px, 0) scale(${0.92 + t * 0.08});`;
+    },
+  };
 }
 
 export const runningAppEnter = {
-  y: 14,
-  duration: 240,
-  easing: backOut,
-  opacity: 1,
+  y: 10,
+  duration: 170,
+  easing: cubicOut,
+  opacity: 0,
 };
 
 export const runningAppExit = {

@@ -38,17 +38,17 @@ impl WebShell {
             WebShellAction::WindowMove { window, workspace } => self.apply_model_result(
                 move_window_to_workspace(window_id(window), workspace_id(workspace)),
             ),
-            WebShellAction::DockLaunch { command } => self.activate_dock_command(command),
-            WebShellAction::DockMenuOpen { command, x } => self.open_dock_menu(command, x),
-            WebShellAction::DockMenuClose => self.close_dock_menu(),
-            WebShellAction::DockPin {
+            WebShellAction::PanelLaunch { command } => self.activate_panel_command(command),
+            WebShellAction::PanelMenuOpen { command, x } => self.open_panel_menu(command, x),
+            WebShellAction::PanelMenuClose => self.close_panel_menu(),
+            WebShellAction::PanelPin {
                 label,
                 command,
                 icon,
-            } => self.pin_dock_app(label, command, icon),
-            WebShellAction::DockUnpin { command } => self.unpin_dock_app(&command),
-            WebShellAction::DockForceQuit { command } => self.force_quit_dock_app(command),
-            WebShellAction::DockReorder { commands } => self.reorder_dock_apps(commands),
+            } => self.pin_panel_app(label, command, icon),
+            WebShellAction::PanelUnpin { command } => self.unpin_panel_app(&command),
+            WebShellAction::PanelForceQuit { command } => self.force_quit_panel_app(command),
+            WebShellAction::PanelReorder { commands } => self.reorder_panel_apps(commands),
             WebShellAction::AppLaunch { command } => {
                 self.close_transient_popovers();
                 self.launch(command);
@@ -80,7 +80,6 @@ impl WebShell {
             WebShellAction::SessionCommand { command } => self.run_session_command(command),
             WebShellAction::ReloadConfig => self.reload_config_from_command(),
             WebShellAction::OpenLogsFolder => self.open_logs_folder(),
-            WebShellAction::ToggleSafeMode => self.toggle_safe_mode(),
             WebShellAction::NotificationClose { notification } => {
                 self.notifications.close(notification);
             }

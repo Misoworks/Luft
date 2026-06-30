@@ -8,18 +8,16 @@ use thiserror::Error;
 
 mod appearance;
 mod apps;
-mod backups;
 mod display;
-mod dock;
+mod panel;
 mod paths;
 mod performance;
 mod session;
 
-pub use appearance::{AppearanceConfig, MaterialModePreference, ShellModePreference};
+pub use appearance::AppearanceConfig;
 pub use apps::DefaultAppsConfig;
-pub use backups::{list_config_backups, restore_config_backup, restore_latest_config_backup};
 pub use display::{DisplayConfig, OutputConfig};
-pub use dock::{DockConfig, PinnedAppConfig};
+pub use panel::{PanelConfig, PinnedAppConfig};
 pub use paths::ConfigPaths;
 pub use performance::{PerformanceConfig, PerformanceMode};
 pub use session::SessionConfig;
@@ -36,9 +34,8 @@ pub struct AsherConfig {
     pub appearance: AppearanceConfig,
     pub effects: EffectsConfig,
     pub workspaces: WorkspacesConfig,
-    pub recovery: RecoveryConfig,
     pub performance: PerformanceConfig,
-    pub dock: DockConfig,
+    pub panel: PanelConfig,
     pub default_apps: DefaultAppsConfig,
 }
 
@@ -47,16 +44,6 @@ impl AsherConfig {
         if self.general.default_profile.trim().is_empty() {
             return Err(ConfigError::Validation(
                 "general.default_profile cannot be empty".to_string(),
-            ));
-        }
-        if self.recovery.crash_limit == 0 {
-            return Err(ConfigError::Validation(
-                "recovery.crash_limit must be greater than zero".to_string(),
-            ));
-        }
-        if self.recovery.crash_window_seconds == 0 {
-            return Err(ConfigError::Validation(
-                "recovery.crash_window_seconds must be greater than zero".to_string(),
             ));
         }
         for (id, workspace) in &self.workspaces.entries {
@@ -84,7 +71,6 @@ pub struct GeneralConfig {
     pub enable_effects: bool,
     pub enable_blur: bool,
     pub enable_animations: bool,
-    pub safe_mode: bool,
 }
 
 impl Default for GeneralConfig {
@@ -94,7 +80,6 @@ impl Default for GeneralConfig {
             enable_effects: true,
             enable_blur: true,
             enable_animations: true,
-            safe_mode: false,
         }
     }
 }
@@ -134,7 +119,6 @@ pub struct EffectsConfig {
     pub background_effect_protocol: bool,
     pub blur: bool,
     pub blur_quality: BlurQuality,
-    pub disable_blur_on_battery: bool,
 }
 
 impl Default for EffectsConfig {
@@ -143,7 +127,6 @@ impl Default for EffectsConfig {
             background_effect_protocol: true,
             blur: true,
             blur_quality: BlurQuality::Balanced,
-            disable_blur_on_battery: false,
         }
     }
 }
@@ -190,26 +173,6 @@ impl WorkspaceConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct RecoveryConfig {
-    pub crash_limit: u32,
-    pub crash_window_seconds: u64,
-    pub auto_safe_mode: bool,
-    pub backup_before_apply: bool,
-}
-
-impl Default for RecoveryConfig {
-    fn default() -> Self {
-        Self {
-            crash_limit: 3,
-            crash_window_seconds: 60,
-            auto_safe_mode: true,
-            backup_before_apply: true,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoadedConfig {
     pub config: AsherConfig,
@@ -252,16 +215,18 @@ pub fn load_config_or_default() -> (LoadedConfig, Option<ConfigError>) {
 
 pub fn save_config(config: &AsherConfig) -> Result<PathBuf, ConfigError> {
     let paths = ConfigPaths::discover()?;
-    backups::save_config_with_backup(
-        &paths.config_file,
-        config,
-        config.recovery.backup_before_apply,
-    )?;
+    save_config_to_path(&paths.config_file, config)?;
     Ok(paths.config_file)
 }
 
 pub fn save_config_to_path(path: &Path, config: &AsherConfig) -> Result<(), ConfigError> {
-    backups::save_config_with_backup(path, config, false)
+    config.validate()?;
+    ensure_parent_dir(path)?;
+    let contents = toml::to_string_pretty(config).map_err(ConfigError::Serialize)?;
+    fs::write(path, contents).map_err(|source| ConfigError::Write {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 pub fn load_config_from_path(path: &Path) -> Result<LoadedConfig, ConfigError> {

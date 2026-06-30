@@ -1,6 +1,6 @@
 use super::{CONFIG_REFRESH, MODEL_REFRESH, STATUS_REFRESH, WebShell};
 use crate::{
-    apps::{dock_apps, launcher_apps},
+    apps::{launcher_apps, panel_apps},
     chrome::ShellChrome,
     ipc::{ShellModel, load_model, reload_config},
     services::system_status::SystemStatus,
@@ -72,14 +72,10 @@ impl WebShell {
 
     fn apply_shell_config(&mut self, config: AsherConfig) {
         self.palette = shell_palette(&config);
-        self.wallpaper_uri = super::wallpaper::wallpaper_uri(&config);
-        self.glass_blur_wallpaper_uri = super::wallpaper::glass_blur_wallpaper_uri(&config);
-        self.dock_apps = dock_apps(&config);
-        self.applications = launcher_apps(&config, &self.dock_apps);
+        self.panel_apps = panel_apps(&config);
+        self.applications = launcher_apps(&config, &self.panel_apps);
         self.launcher_command = config.default_apps.launcher.clone();
         self.config = config;
-        self.surfaces
-            .resize_dock(&self.dock_apps, self.config.appearance.dock_icon_size);
         self.sync_chrome();
     }
 
@@ -87,16 +83,7 @@ impl WebShell {
         let chrome = ShellChrome::for_mode(self.model.active_mode);
         let changed = chrome != self.chrome;
         self.chrome = chrome;
-        self.surfaces
-            .set_panel_taskbar(self.model.active_mode == asher_layout::ModeId::Panel);
         self.surfaces.set_panel_visible(chrome.panel);
-        self.surfaces.dock.set_visible(chrome.dock);
-        let dock_menu_supported =
-            chrome.dock || self.model.active_mode == asher_layout::ModeId::Panel;
-        if !dock_menu_supported {
-            self.close_dock_menu();
-        }
-        self.surfaces.sidebar.set_visible(chrome.sidebar);
         if changed && !chrome.panel {
             self.quick_visible = false;
             self.date_visible = false;
@@ -113,15 +100,12 @@ impl WebShell {
                 status: &self.status,
                 tray: self.tray.snapshot(),
                 notifications: self.notifications.snapshot(),
-                dock_apps: &self.dock_apps,
-                dock_menu_command: self.dock_menu_command.as_deref(),
-                dock_menu_x: self.dock_menu_x,
+                panel_apps: &self.panel_apps,
+                panel_menu_command: self.panel_menu_command.as_deref(),
+                panel_menu_x: self.panel_menu_x,
                 applications: &self.applications,
-                wallpaper_uri: self.wallpaper_uri.clone(),
-                glass_blur_wallpaper_uri: self.glass_blur_wallpaper_uri.clone(),
                 palette: self.palette,
                 config: &self.config,
-                safe_mode: self.config.general.safe_mode,
                 start_menu_open: self.start_menu_visible,
                 quick_settings_open: self.quick_visible,
                 date_center_open: self.date_visible,

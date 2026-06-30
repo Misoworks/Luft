@@ -2,15 +2,15 @@ use super::{
     appearance::WebAppearance,
     icons::icon_data_uri,
     model::{
-        WebApplication, WebDockApp, WebProfile, WebShellSnapshot, WebTrayItem, WebTrayStatus,
+        WebApplication, WebPanelApp, WebProfile, WebShellSnapshot, WebTrayItem, WebTrayStatus,
         WebWindow, WebWorkspace,
     },
     palette::WebPalette,
 };
 use crate::{
     apps::{AppEntry, normalize_launch_command},
-    dock::{DockApp, DockAppState, dock_app_matches_window},
     ipc::ShellModel,
+    panel::{PanelApp, PanelAppState, panel_app_matches_window},
     services::{
         notifications::NotificationSnapshot, system_status::SystemStatus, tray::TraySnapshot,
     },
@@ -25,15 +25,12 @@ pub struct WebShellSnapshotInput<'a> {
     pub status: &'a SystemStatus,
     pub tray: &'a TraySnapshot,
     pub notifications: &'a NotificationSnapshot,
-    pub dock_apps: &'a [DockApp],
-    pub dock_menu_command: Option<&'a str>,
-    pub dock_menu_x: Option<i32>,
+    pub panel_apps: &'a [PanelApp],
+    pub panel_menu_command: Option<&'a str>,
+    pub panel_menu_x: Option<i32>,
     pub applications: &'a [AppEntry],
-    pub wallpaper_uri: Option<String>,
-    pub glass_blur_wallpaper_uri: Option<String>,
     pub palette: ShellPalette,
     pub config: &'a AsherConfig,
-    pub safe_mode: bool,
     pub start_menu_open: bool,
     pub quick_settings_open: bool,
     pub date_center_open: bool,
@@ -46,26 +43,23 @@ impl WebShellSnapshot {
             status,
             tray,
             notifications,
-            dock_apps,
-            dock_menu_command,
-            dock_menu_x,
+            panel_apps,
+            panel_menu_command,
+            panel_menu_x,
             applications,
-            wallpaper_uri,
-            glass_blur_wallpaper_uri,
             palette,
             config,
-            safe_mode,
             start_menu_open,
             quick_settings_open,
             date_center_open,
         } = input;
         let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
         let windows: Vec<WebWindow> = model.windows.iter().map(WebWindow::from).collect();
-        let mut web_dock_apps: Vec<WebDockApp> = dock_apps
+        let mut web_panel_apps: Vec<WebPanelApp> = panel_apps
             .iter()
             .map(|app| {
-                let state = DockAppState::for_app(app, model);
-                WebDockApp {
+                let state = PanelAppState::for_app(app, model);
+                WebPanelApp {
                     label: app.label.clone(),
                     command: app.command.clone(),
                     icon_uri: app.icon_path.as_deref().and_then(icon_data_uri),
@@ -78,9 +72,9 @@ impl WebShellSnapshot {
             .collect();
 
         for window in &model.windows {
-            if dock_apps
+            if panel_apps
                 .iter()
-                .any(|app| dock_app_matches_window(app, window))
+                .any(|app| panel_app_matches_window(app, window))
             {
                 continue;
             }
@@ -95,7 +89,7 @@ impl WebShellSnapshot {
                 .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
                 .as_deref()
                 .and_then(icon_data_uri);
-            web_dock_apps.push(WebDockApp {
+            web_panel_apps.push(WebPanelApp {
                 label,
                 command: format!("window:{}", window.id.0),
                 icon_uri,
@@ -119,12 +113,8 @@ impl WebShellSnapshot {
             active_workspace: model.active_workspace.0.clone(),
             active_profile: model.active_profile.0.clone(),
             active_mode: mode_name(model.active_mode),
-            panel_taskbar: model.active_mode == asher_layout::ModeId::Panel,
             blur_enabled: model.blur_enabled,
             debug_overlay: model.debug_overlay,
-            safe_mode,
-            wallpaper_uri,
-            glass_blur_wallpaper_uri,
             user_profile_icon_uri: user_profile_icon_uri(),
             palette: WebPalette::from(palette),
             appearance: WebAppearance::from_config(config),
@@ -150,9 +140,9 @@ impl WebShellSnapshot {
                 })
                 .collect(),
             windows,
-            dock_apps: web_dock_apps,
-            dock_menu_command: dock_menu_command.map(str::to_string),
-            dock_menu_x,
+            panel_apps: web_panel_apps,
+            panel_menu_command: panel_menu_command.map(str::to_string),
+            panel_menu_x,
             applications: applications
                 .iter()
                 .map(|app| WebApplication {
@@ -161,9 +151,9 @@ impl WebShellSnapshot {
                     comment: app.comment.clone(),
                     icon: app.icon.clone(),
                     icon_uri: app.icon_path.as_deref().and_then(icon_data_uri),
-                    pinned: dock_apps
+                    pinned: panel_apps
                         .iter()
-                        .any(|dock_app| commands_equal(&dock_app.command, &app.command)),
+                        .any(|panel_app| commands_equal(&panel_app.command, &app.command)),
                 })
                 .collect(),
             status: status.into(),
@@ -206,15 +196,9 @@ fn user_profile_icon_uri() -> Option<String> {
     .find_map(|path| icon_data_uri(path.as_path()))
 }
 
-fn mode_name(mode: asher_layout::ModeId) -> String {
+fn mode_name(mode: asher_ipc::ModeId) -> String {
     match mode {
-        asher_layout::ModeId::Classic => "classic",
-        asher_layout::ModeId::Dock => "dock",
-        asher_layout::ModeId::Panel => "panel",
-        asher_layout::ModeId::Tiling => "tiling",
-        asher_layout::ModeId::Browser => "browser",
-        asher_layout::ModeId::Focus => "focus",
-        asher_layout::ModeId::Tablet => "tablet",
+        asher_ipc::ModeId::Panel => "panel",
     }
     .to_string()
 }

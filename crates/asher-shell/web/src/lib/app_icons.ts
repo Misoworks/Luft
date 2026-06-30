@@ -1,5 +1,5 @@
-import type { DockApp } from "../shell/model";
+import type { PanelApp } from "../shell/model";
 
-export function appIconSignature(app: DockApp) {
+export function appIconSignature(app: PanelApp) {
   return app.iconUri ?? "app";
 }

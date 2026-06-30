@@ -1,4 +1,3 @@
-use crate::{blur_material, layers::LayerMaterial};
 use image::ImageReader;
 use smithay::{
     backend::{
@@ -11,7 +10,7 @@ use smithay::{
             gles::{GlesError, GlesRenderer},
         },
     },
-    utils::{Buffer, Logical, Physical, Point, Rectangle, Size, Transform},
+    utils::{Buffer, Physical, Rectangle, Size, Transform},
 };
 use std::path::{Path, PathBuf};
 use tracing::warn;
@@ -76,51 +75,12 @@ impl Background {
         )
         .map(Some)
     }
-
-    pub fn blurred_render_element(
-        &mut self,
-        renderer: &mut GlesRenderer,
-        size: Size<i32, Physical>,
-    ) -> Result<Option<MemoryRenderBufferRenderElement<GlesRenderer>>, GlesError> {
-        let Some(buffer) = self.ensure_buffer_mut(size) else {
-            return Ok(None);
-        };
-        let material = buffer.fullscreen_blur_patch();
-        let size = normalized_size(size);
-
-        MemoryRenderBufferRenderElement::from_buffer(
-            renderer,
-            (0.0, 0.0),
-            material,
-            None,
-            None,
-            Some(size.to_logical(1)),
-            Kind::Unspecified,
-        )
-        .map(Some)
-    }
-
-    fn ensure_buffer_mut(&mut self, size: Size<i32, Physical>) -> Option<&mut BackgroundBuffer> {
-        let image = self.image.as_ref()?;
-        let size = normalized_size(size);
-        if self
-            .buffer
-            .as_ref()
-            .is_none_or(|buffer| buffer.size != size)
-        {
-            self.buffer = Some(BackgroundBuffer::new(image, size));
-        }
-
-        self.buffer.as_mut()
-    }
 }
 
 #[derive(Debug)]
 struct BackgroundBuffer {
     size: Size<i32, Physical>,
-    pixels: Vec<u8>,
     buffer: MemoryRenderBuffer,
-    fullscreen_blur: Option<MemoryRenderBuffer>,
 }
 
 impl BackgroundBuffer {
@@ -134,25 +94,7 @@ impl BackgroundBuffer {
             Transform::Normal,
             Some(vec![Rectangle::from_size(Size::from((size.w, size.h)))]),
         );
-        Self {
-            size,
-            pixels,
-            buffer,
-            fullscreen_blur: None,
-        }
-    }
-
-    fn fullscreen_blur_patch(&mut self) -> &MemoryRenderBuffer {
-        if self.fullscreen_blur.is_none() {
-            self.fullscreen_blur = Some(blur_material::build_blur_patch_for_material(
-                &self.pixels,
-                self.size,
-                Point::from((0, 0)),
-                Size::<i32, Logical>::from((self.size.w, self.size.h)),
-                LayerMaterial::Rect,
-            ));
-        }
-        self.fullscreen_blur.as_ref().unwrap()
+        Self { size, buffer }
     }
 }
 

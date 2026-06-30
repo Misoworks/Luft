@@ -3,7 +3,7 @@ use crate::{
     state::KestrelState,
     window::{ResizeEdge, WindowFrameControl, WindowFrameHit, WindowGrab},
 };
-use asher_layout::WorkspaceId;
+use asher_ipc::WorkspaceId;
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, Event, InputBackend, InputEvent, KeyState, KeyboardKeyEvent,

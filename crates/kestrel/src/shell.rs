@@ -1,17 +1,14 @@
-use crate::recovery::RecoveryPolicy;
 use asher_config::{AsherConfig, IGNORE_USER_CONFIG_ENV};
 use asher_ipc::{SHELL_SOCKET_ENV, SOCKET_ENV, ShellStatus};
 use std::{
-    collections::VecDeque,
     env,
     path::{Path, PathBuf},
     process::{Child, Command},
     time::{Duration, Instant},
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 const NORMAL_RESTART_DELAY: Duration = Duration::from_millis(500);
-const SAFE_MODE_RESTART_DELAY: Duration = Duration::from_secs(2);
 const PRIVATE_DBUS_ENV: &str = "ASHER_PRIVATE_DBUS";
 const USE_HOST_DBUS_ENV: &str = "ASHER_USE_HOST_DBUS";
 const OUTPUT_REFRESH_ENV: &str = "ASHER_OUTPUT_REFRESH_MILLIHERTZ";
@@ -25,8 +22,6 @@ pub struct ShellProcess {
     ipc_socket: PathBuf,
     shell_socket: PathBuf,
     output_refresh_millihertz: i32,
-    recovery: RecoveryPolicy,
-    crashes: VecDeque<Instant>,
     next_spawn_after: Option<Instant>,
     default_config: bool,
 }
@@ -38,7 +33,6 @@ impl ShellProcess {
         ipc_socket: &Path,
         shell_socket: &Path,
         output_refresh_millihertz: i32,
-        recovery: RecoveryPolicy,
     ) -> Self {
         let binary = shell_binary();
         if binary.is_none() {
@@ -54,8 +48,6 @@ impl ShellProcess {
             ipc_socket: ipc_socket.to_path_buf(),
             shell_socket: shell_socket.to_path_buf(),
             output_refresh_millihertz,
-            recovery,
-            crashes: VecDeque::new(),
             next_spawn_after: None,
             default_config: false,
         };
@@ -85,7 +77,8 @@ impl ShellProcess {
             Ok(Some(status)) => {
                 warn!(%status, "asher shell exited");
                 self.child = None;
-                self.record_crash(config);
+                let _ = config;
+                self.next_spawn_after = Some(Instant::now() + NORMAL_RESTART_DELAY);
                 self.spawn_if_due();
             }
             Ok(None) => {}
@@ -167,40 +160,9 @@ impl ShellProcess {
             Err(error) => {
                 warn!(%error, path = %binary.display(), "failed to start asher shell");
                 self.child = None;
-                self.next_spawn_after = Some(Instant::now() + SAFE_MODE_RESTART_DELAY);
+                self.next_spawn_after = Some(Instant::now() + NORMAL_RESTART_DELAY);
             }
         }
-    }
-
-    fn record_crash(&mut self, config: &mut AsherConfig) {
-        let limit = self.recovery.limit().max(1);
-        let window = self.recovery.window();
-        let now = Instant::now();
-
-        while self
-            .crashes
-            .front()
-            .is_some_and(|crash| now.duration_since(*crash) > window)
-        {
-            self.crashes.pop_front();
-        }
-        self.crashes.push_back(now);
-
-        if self.crashes.len() < limit {
-            self.next_spawn_after = Some(now + NORMAL_RESTART_DELAY);
-            return;
-        }
-
-        if !config.general.safe_mode {
-            info!(
-                crashes = self.crashes.len(),
-                seconds = window.as_secs(),
-                "asher shell crash limit reached; restarting in safe mode"
-            );
-        }
-        enter_safe_mode(config);
-        self.crashes.clear();
-        self.next_spawn_after = Some(now + SAFE_MODE_RESTART_DELAY);
     }
 }
 
@@ -217,15 +179,6 @@ impl Drop for ShellProcess {
         }
         remove_stale_shell_socket(&self.shell_socket);
     }
-}
-
-fn enter_safe_mode(config: &mut AsherConfig) {
-    config.general.safe_mode = true;
-    config.general.enable_effects = false;
-    config.general.enable_animations = false;
-    config.general.enable_blur = false;
-    config.effects.blur = false;
-    config.compositor.debug_overlay = false;
 }
 
 fn shell_binary() -> Option<std::path::PathBuf> {

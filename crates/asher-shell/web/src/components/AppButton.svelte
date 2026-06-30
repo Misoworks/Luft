@@ -1,13 +1,10 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import AppIcon from "./AppIcon.svelte";
-  import type { DockApp } from "../shell/model";
-
-  type Variant = "dock" | "taskbar";
+  import type { PanelApp } from "../shell/model";
 
   let {
     app,
-    variant,
     onlaunch,
     onmenu,
     onreorderstart,
@@ -16,8 +13,7 @@
     onreorderend,
     reorderable = true,
   }: {
-    app: DockApp;
-    variant: Variant;
+    app: PanelApp;
     onlaunch: (command: string) => void;
     onmenu?: (command: string, x: number) => void;
     onreorderstart?: (command: string) => void;
@@ -40,7 +36,7 @@
   let launchTimer: ReturnType<typeof setTimeout> | undefined;
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const className = $derived(`${variant === "dock" ? "dock-item" : "taskbar-app"} app-button`);
+  const className = "panel-app app-button";
 
   function openMenu(event: MouseEvent) {
     event.preventDefault();

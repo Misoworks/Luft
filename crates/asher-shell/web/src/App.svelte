@@ -1,14 +1,10 @@
 <script lang="ts">
   import DateCenter from "./components/DateCenter.svelte";
-  import Dock from "./components/Dock.svelte";
-  import DockMenu from "./components/DockMenu.svelte";
+  import PanelMenu from "./components/PanelMenu.svelte";
   import NotificationToast from "./components/NotificationToast.svelte";
   import StartMenu from "./components/StartMenu.svelte";
   import QuickSettings from "./components/QuickSettings.svelte";
-  import SettingsApp from "./components/settings/SettingsApp.svelte";
-  import Sidebar from "./components/Sidebar.svelte";
-  import Taskbar from "./components/Taskbar.svelte";
-  import TopPanel from "./components/TopPanel.svelte";
+  import Panel from "./components/Panel.svelte";
   import { getSnapshot, sendAction, subscribe } from "./shell/bridge";
   import type { ShellSnapshot } from "./shell/model";
   import { onMount } from "svelte";
@@ -57,27 +53,18 @@
     if (!rootElement) return;
     rootElement.dataset.surface = next.surface ?? "panel";
     rootElement.dataset.mode = next.activeMode;
-    rootElement.dataset.taskbar = next.panelTaskbar ? "true" : "false";
     rootElement.dataset.animations = next.appearance.animationsEnabled ? "true" : "false";
     rootElement.dataset.material = "glass";
-    rootElement.dataset.dockMagnification = next.appearance.dockMagnification ? "true" : "false";
+    rootElement.dataset.panelMagnification = next.appearance.panelMagnification ? "true" : "false";
     rootElement.style.setProperty("--panel", next.palette.panel);
     rootElement.style.setProperty("--panel-control", next.palette.panelControl);
     rootElement.style.setProperty("--panel-text", next.palette.panelText);
-    rootElement.style.setProperty("--dock", next.palette.dock);
+    rootElement.style.setProperty("--panel-bar", next.palette.panelBar);
     rootElement.style.setProperty("--accent", next.palette.accent);
     rootElement.style.setProperty("--text-soft", next.palette.textSoft);
     rootElement.style.setProperty("--text-muted", next.palette.textMuted);
-    rootElement.style.setProperty("--dock-item-size", `${next.appearance.dockIconSize}px`);
-    rootElement.style.setProperty("--dock-icon-size", `${Math.max(24, next.appearance.dockIconSize - 8)}px`);
-    rootElement.style.setProperty(
-      "--wallpaper-image",
-      next.wallpaperUri ? `url("${next.wallpaperUri}")` : "none",
-    );
-    rootElement.style.setProperty(
-      "--glass-blur-image",
-      next.glassBlurWallpaperUri ? `url("${next.glassBlurWallpaperUri}")` : "none",
-    );
+    rootElement.style.setProperty("--panel-item-size", `${next.appearance.panelIconSize}px`);
+    rootElement.style.setProperty("--panel-icon-size", `${Math.max(24, next.appearance.panelIconSize - 8)}px`);
   }
 
   function runSurfaceAnimation(phase: "opening" | "closing") {
@@ -152,7 +139,7 @@
       return;
     }
     if (event.key === "Escape") {
-      sendAction({ type: "dock-menu-close" });
+      sendAction({ type: "panel-menu-close" });
     }
   }
 
@@ -171,19 +158,15 @@
       }
       return;
     }
-    if (target.closest(".dock-menu, .dock-item, .app-button")) return;
-    sendAction({ type: "dock-menu-close" });
+    if (target.closest(".panel-menu, .panel-item, .app-button")) return;
+    sendAction({ type: "panel-menu-close" });
   }
 </script>
 
 <svelte:document onkeydown={keydown} onpointerdown={pointerdown} />
 
-{#if surface === "dock"}
-  <Dock {snapshot} />
-{:else if surface === "dock-menu"}
-  <DockMenu {snapshot} />
-{:else if surface === "sidebar"}
-  <Sidebar {snapshot} />
+{#if surface === "panel-menu"}
+  <PanelMenu {snapshot} />
 {:else if surface === "quick-settings"}
   <QuickSettings {snapshot} />
 {:else if surface === "date-center"}
@@ -198,10 +181,6 @@
     setQuery={(query) => (startMenuQuery = query)}
     setSelection={(selection) => (startMenuSelection = selection)}
   />
-{:else if surface === "settings"}
-  <SettingsApp />
-{:else if snapshot.activeMode === "panel"}
-  <Taskbar {snapshot} />
 {:else}
-  <TopPanel {snapshot} />
+  <Panel {snapshot} />
 {/if}

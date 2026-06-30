@@ -62,7 +62,7 @@ pub fn loading_overlay_geometry(output_size: Size<i32, Physical>) -> Rectangle<i
 }
 
 pub fn shell_layers_ready(output: &Output, shell_status: ShellStatus) -> bool {
-    shell_status == ShellStatus::Running && layers::has_shell_surface(output)
+    shell_status == ShellStatus::Running && layers::has_panel_surface(output)
 }
 
 pub fn should_show_loading_overlay(

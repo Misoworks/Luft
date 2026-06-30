@@ -1,4 +1,4 @@
-use asher_layout::Rect;
+use asher_ipc::Rect;
 use smithay::utils::{Physical, Size};
 use std::time::{Duration, Instant};
 
@@ -7,7 +7,7 @@ const RESTORE_DURATION: Duration = Duration::from_millis(190);
 const MINIMIZE_DURATION: Duration = Duration::from_millis(210);
 const GEOMETRY_DURATION: Duration = Duration::from_millis(180);
 const CLOSE_DURATION: Duration = Duration::from_millis(150);
-const DOCK_TARGET_Y: i32 = 54;
+const PANEL_TARGET_Y: i32 = 54;
 const MINIMIZED_SCALE: f64 = 0.18;
 
 #[derive(Debug, Clone)]
@@ -112,11 +112,11 @@ impl WindowAnimation {
             }
             WindowAnimationKind::Restore => {
                 let progress = ease_out(self.raw_progress(RESTORE_DURATION));
-                dock_transform(bounds, output, progress)
+                panel_transform(bounds, output, progress)
             }
             WindowAnimationKind::Minimize => {
                 let progress = ease_in(self.raw_progress(MINIMIZE_DURATION));
-                let mut transform = dock_transform(bounds, output, 1.0 - progress);
+                let mut transform = panel_transform(bounds, output, 1.0 - progress);
                 transform.alpha = (1.0 - progress).clamp(0.0, 1.0) as f32;
                 transform
             }
@@ -170,15 +170,15 @@ impl WindowAnimation {
     }
 }
 
-fn dock_transform(bounds: Rect, output: Size<i32, Physical>, progress: f64) -> WindowTransform {
+fn panel_transform(bounds: Rect, output: Size<i32, Physical>, progress: f64) -> WindowTransform {
     let progress = progress.clamp(0.0, 1.0);
     let scale = lerp(MINIMIZED_SCALE, 1.0, progress);
     let window_center_x = bounds.x as f64 + bounds.width as f64 / 2.0;
     let window_center_y = bounds.y as f64 + bounds.height as f64 / 2.0;
-    let dock_center_x = output.w as f64 / 2.0;
-    let dock_center_y = (output.h - DOCK_TARGET_Y) as f64;
-    let center_x = lerp(dock_center_x, window_center_x, progress);
-    let center_y = lerp(dock_center_y, window_center_y, progress);
+    let panel_center_x = output.w as f64 / 2.0;
+    let panel_center_y = (output.h - PANEL_TARGET_Y) as f64;
+    let center_x = lerp(panel_center_x, window_center_x, progress);
+    let center_y = lerp(panel_center_y, window_center_y, progress);
 
     WindowTransform {
         x: center_x - bounds.width as f64 * scale / 2.0,

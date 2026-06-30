@@ -1,44 +1,21 @@
 use super::WebShell;
+use crate::{apps::spawn_command, ipc::reload_config};
 use asher_config::ConfigPaths;
 use tracing::warn;
 
 impl WebShell {
     pub(super) fn reload_config_from_command(&mut self) {
-        self.close_transient_popovers();
+        self.apply_model_result(reload_config());
         self.reload_shell_config();
     }
 
     pub(super) fn open_logs_folder(&mut self) {
-        self.close_transient_popovers();
-        let file_manager = self.config.default_apps.file_manager.trim();
-        if file_manager.is_empty() {
-            warn!("cannot open logs folder without a configured file manager");
+        let Ok(paths) = ConfigPaths::discover() else {
             return;
-        }
-        match ConfigPaths::discover() {
-            Ok(paths) => {
-                let logs_dir = paths.logs_dir();
-                if let Err(error) = std::fs::create_dir_all(&logs_dir) {
-                    warn!(%error, path = %logs_dir.display(), "failed to create Asher logs directory");
-                    return;
-                }
-                self.launch(format!(
-                    "{file_manager} {}",
-                    shell_quote(&logs_dir.display().to_string())
-                ));
-            }
-            Err(error) => warn!(%error, "failed to locate Asher logs directory"),
+        };
+        let command = format!("xdg-open {}", paths.logs_dir().display());
+        if let Err(error) = spawn_command(&command, self.model.xwayland_display.as_deref()) {
+            warn!(%error, "failed to open Asher logs folder");
         }
     }
-
-    pub(super) fn toggle_safe_mode(&mut self) {
-        self.close_transient_popovers();
-        let mut config = self.config.clone();
-        config.general.safe_mode = !config.general.safe_mode;
-        self.save_shell_config(config);
-    }
-}
-
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
 }

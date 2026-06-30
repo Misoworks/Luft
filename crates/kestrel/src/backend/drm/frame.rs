@@ -162,11 +162,10 @@ impl SessionFrameRenderer {
             .windows
             .fullscreen_on_workspace(state.layout.active_workspace())
             .is_some();
-        let panel_taskbar = state.layout.active_mode() == asher_layout::ModeId::Panel;
         let mut top_targets = if fullscreen_active {
             Vec::new()
         } else {
-            layers::render_targets(state.output(), Layer::Top, panel_taskbar)
+            layers::render_targets(state.output(), Layer::Top)
         };
         if !fullscreen_active {
             top_targets.extend(background_effect::layer_popup_blur_targets(
@@ -177,7 +176,7 @@ impl SessionFrameRenderer {
         let mut overlay_targets = if fullscreen_active {
             Vec::new()
         } else {
-            layers::render_targets(state.output(), Layer::Overlay, panel_taskbar)
+            layers::render_targets(state.output(), Layer::Overlay)
         };
         if !fullscreen_active {
             overlay_targets.extend(background_effect::layer_popup_blur_targets(
@@ -185,18 +184,11 @@ impl SessionFrameRenderer {
                 Layer::Overlay,
             ));
         }
-        let background_element = if show_loading {
-            self.background
-                .blurred_render_element(renderer, state.output_size())
-                .map_err(render_error)?
-        } else {
-            self.background
-                .render_element(renderer, state.output_size())
-                .map_err(render_error)?
-        };
-        let blur_enabled = state.config.general.enable_blur
-            && state.config.effects.blur
-            && !state.config.general.safe_mode;
+        let background_element = self
+            .background
+            .render_element(renderer, state.output_size())
+            .map_err(render_error)?;
+        let blur_enabled = state.config.general.enable_blur && state.config.effects.blur;
         let background_layer =
             render_stage_elements(renderer, state, RenderStage::Layer(Layer::Background));
         let bottom_layer =

@@ -1,6 +1,6 @@
 use crate::state::KestrelState;
 use asher_ipc::{OutputSummary, ProfileSummary, StatusPayload, WindowSummary, WorkspaceSummary};
-use asher_layout::{ProfileId, WindowState, mode_for_profile};
+use asher_ipc::{ProfileId, WindowState, mode_for_profile};
 use smithay::wayland::{
     compositor,
     shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData},
@@ -20,7 +20,6 @@ pub fn status_payload(state: &KestrelState) -> StatusPayload {
         active_mode: mode_for_profile(&active_profile),
         active_profile,
         nested: state.shell_control_path.is_some(),
-        safe_mode: state.config.general.safe_mode,
         blur_enabled: state.config.general.enable_blur && state.config.effects.blur,
         debug_overlay: state.config.compositor.debug_overlay,
     }
@@ -104,10 +103,7 @@ pub fn known_profiles(state: &KestrelState) -> Vec<ProfileId> {
         .chain(std::iter::once(ProfileId(
             state.config.general.default_profile.clone(),
         )))
-        .chain([
-            ProfileId("panel-default".to_string()),
-            ProfileId("dock-default".to_string()),
-        ])
+        .chain([ProfileId("panel-default".to_string())])
         .collect::<Vec<_>>();
     profiles.sort_by(|left, right| left.0.cmp(&right.0));
     profiles.dedup();

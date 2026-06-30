@@ -196,9 +196,9 @@
   function pinApp(event: MouseEvent, app: ApplicationItem) {
     event.preventDefault();
     if (app.pinned) {
-      sendAction({ type: "dock-unpin", command: app.command });
+      sendAction({ type: "panel-unpin", command: app.command });
     } else {
-      sendAction({ type: "dock-pin", label: app.name, command: app.command, icon: app.icon });
+      sendAction({ type: "panel-pin", label: app.name, command: app.command, icon: app.icon });
     }
   }
 

@@ -1,9 +1,9 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
   import { appIconSignature } from "../lib/app_icons";
-  import type { DockApp } from "../shell/model";
+  import type { PanelApp } from "../shell/model";
 
-  let { app }: { app: DockApp } = $props();
+  let { app }: { app: PanelApp } = $props();
 </script>
 
 <span class="app-icon" data-icon={appIconSignature(app)}>

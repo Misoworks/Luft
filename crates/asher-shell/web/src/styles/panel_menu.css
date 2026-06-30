@@ -1,0 +1,115 @@
+.panel-menu-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.panel-item {
+  --app-icon-lift: -10px;
+}
+
+.panel-menu {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: grid;
+  box-sizing: border-box;
+  width: 100%;
+  align-content: start;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 16px;
+  background: var(--material-popover);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025),
+    0 20px 44px rgba(0, 0, 0, 0.28);
+  transform-origin: center bottom;
+}
+
+#app.is-surface-opening[data-surface="panel-menu"] .panel-menu {
+  animation: panel-menu-shell-in 170ms var(--ease-shell) both;
+  will-change: transform;
+}
+
+#app.is-surface-closing[data-surface="panel-menu"] .panel-menu {
+  pointer-events: none;
+}
+
+#app.is-surface-opening[data-surface="panel-menu"] .panel-menu > * {
+  animation: panel-menu-content-in 135ms var(--ease-shell) both;
+}
+
+#app.is-surface-closing[data-surface="panel-menu"] .panel-menu > * {
+  pointer-events: none;
+}
+
+.panel-menu strong {
+  overflow: hidden;
+  padding: 5px 8px 6px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-menu-item {
+  --control-scale: 1;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 9px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.91);
+  font-size: 13px;
+  transform: translate3d(0, 0, 0) scale(var(--control-scale));
+  transform-origin: center;
+  transition: background-color 140ms var(--ease-shell), transform 140ms var(--ease-shell);
+}
+
+.panel-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.panel-menu-item:active {
+  --control-scale: 0.96;
+}
+
+.panel-menu-item.is-danger {
+  color: color-mix(in srgb, var(--accent), white 40%);
+}
+
+@keyframes panel-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scaleX(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleX(1);
+  }
+}
+
+@keyframes panel-menu-content-in {
+  from {
+    transform: translateY(4px);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes panel-menu-shell-in {
+  from {
+    transform: translate3d(0, 14px, 0);
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}

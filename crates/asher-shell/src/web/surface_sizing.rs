@@ -1,4 +1,4 @@
-use super::model::{WebDockApp, WebShellSnapshot, WebWindow};
+use super::model::{WebPanelApp, WebShellSnapshot, WebWindow};
 use crate::apps::normalize_launch_command;
 
 pub(crate) const QUICK_SETTINGS_WIDTH: i32 = 420;
@@ -36,11 +36,11 @@ pub(crate) fn notification_toast_size(snapshot: &WebShellSnapshot) -> (i32, i32)
     (NOTIFICATION_TOAST_WIDTH, height)
 }
 
-pub(crate) fn dock_menu_size(snapshot: &WebShellSnapshot) -> (i32, i32) {
-    let Some(command) = &snapshot.dock_menu_command else {
+pub(crate) fn panel_menu_size(snapshot: &WebShellSnapshot) -> (i32, i32) {
+    let Some(command) = &snapshot.panel_menu_command else {
         return (DOCK_MENU_WIDTH, 128);
     };
-    let Some(app) = snapshot.dock_apps.iter().find(|entry| {
+    let Some(app) = snapshot.panel_apps.iter().find(|entry| {
         normalize_launch_command(&entry.command) == normalize_launch_command(command)
     }) else {
         return (DOCK_MENU_WIDTH, 128);
@@ -55,16 +55,16 @@ pub(crate) fn dock_menu_size(snapshot: &WebShellSnapshot) -> (i32, i32) {
     } else {
         2
     };
-    (DOCK_MENU_WIDTH, dock_menu_height(action_count))
+    (DOCK_MENU_WIDTH, panel_menu_height(action_count))
 }
 
-fn dock_menu_height(action_count: i32) -> i32 {
+fn panel_menu_height(action_count: i32) -> i32 {
     let content_items = action_count + 1;
     let content_height = 16 + 23 + action_count * 34 + (content_items - 1) * 4;
     content_height.clamp(128, 264)
 }
 
-fn matched_window<'a>(app: &WebDockApp, windows: &'a [WebWindow]) -> Option<&'a WebWindow> {
+fn matched_window<'a>(app: &WebPanelApp, windows: &'a [WebWindow]) -> Option<&'a WebWindow> {
     windows
         .iter()
         .find(|window| window.active && window.visible && window_matches_app(window, app))
@@ -80,7 +80,7 @@ fn matched_window<'a>(app: &WebDockApp, windows: &'a [WebWindow]) -> Option<&'a 
         })
 }
 
-fn window_matches_app(window: &WebWindow, app: &WebDockApp) -> bool {
+fn window_matches_app(window: &WebWindow, app: &WebPanelApp) -> bool {
     if app.window_id.is_some_and(|id| id == window.id) {
         return true;
     }

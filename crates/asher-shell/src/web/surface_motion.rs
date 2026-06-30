@@ -20,10 +20,10 @@ pub(super) fn close_animation_duration(kind: WebShellSurface) -> Option<Duration
         WebShellSurface::QuickSettings | WebShellSurface::DateCenter => {
             Some(Duration::from_millis(170))
         }
-        WebShellSurface::DockMenu | WebShellSurface::NotificationToast => {
+        WebShellSurface::PanelMenu | WebShellSurface::NotificationToast => {
             Some(Duration::from_millis(170))
         }
-        WebShellSurface::Panel | WebShellSurface::Dock | WebShellSurface::Sidebar => None,
+        WebShellSurface::Panel => None,
     }
 }
 
@@ -33,10 +33,10 @@ pub(super) fn open_animation_duration(kind: WebShellSurface) -> Option<Duration>
         WebShellSurface::QuickSettings | WebShellSurface::DateCenter => {
             Some(Duration::from_millis(190))
         }
-        WebShellSurface::DockMenu | WebShellSurface::NotificationToast => {
+        WebShellSurface::PanelMenu | WebShellSurface::NotificationToast => {
             Some(Duration::from_millis(190))
         }
-        WebShellSurface::Panel | WebShellSurface::Dock | WebShellSurface::Sidebar => None,
+        WebShellSurface::Panel => None,
     }
 }
 
@@ -50,7 +50,7 @@ pub(super) fn surface_margin_animates(kind: WebShellSurface) -> bool {
         WebShellSurface::StartMenu
             | WebShellSurface::QuickSettings
             | WebShellSurface::DateCenter
-            | WebShellSurface::DockMenu
+            | WebShellSurface::PanelMenu
             | WebShellSurface::NotificationToast
     )
 }
@@ -60,11 +60,9 @@ pub(super) fn hidden_process_ttl(kind: WebShellSurface) -> Option<Duration> {
         WebShellSurface::StartMenu
         | WebShellSurface::QuickSettings
         | WebShellSurface::DateCenter
-        | WebShellSurface::DockMenu
+        | WebShellSurface::PanelMenu
         | WebShellSurface::NotificationToast
-        | WebShellSurface::Sidebar
-        | WebShellSurface::Panel
-        | WebShellSurface::Dock => None,
+        | WebShellSurface::Panel => None,
     }
 }
 
@@ -72,23 +70,16 @@ pub(super) fn hidden_shell_margin(
     kind: WebShellSurface,
     base: ShellSurfaceMargin,
     size: (i32, i32),
-    panel_taskbar: bool,
 ) -> ShellSurfaceMargin {
     let mut margin = base;
     match kind {
-        WebShellSurface::QuickSettings if panel_taskbar => {
+        WebShellSurface::QuickSettings => {
             margin.bottom = -(size.1 + 8);
-        }
-        WebShellSurface::StartMenu if panel_taskbar => {
-            margin.bottom = -(size.1 + 58);
         }
         WebShellSurface::StartMenu => {
-            margin.bottom = -(size.1 + 8);
+            margin.bottom = -(size.1 + 58);
         }
-        WebShellSurface::QuickSettings => {
-            margin.top = -(size.1 + 8);
-        }
-        WebShellSurface::DockMenu => {
+        WebShellSurface::PanelMenu => {
             margin.bottom = -(size.1 + 8);
         }
         WebShellSurface::NotificationToast => {

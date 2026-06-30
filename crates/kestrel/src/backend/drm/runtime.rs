@@ -9,7 +9,6 @@ use crate::{
     input::handle_input_event,
     ipc::IpcServer,
     output::DEFAULT_REFRESH_MILLIHERTZ,
-    recovery::RecoveryPolicy,
     session_services,
     shell::ShellProcess,
     state::{KestrelState, ShellRestartRequest},
@@ -57,10 +56,6 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
         .and_then(|name| name.to_str())
         .unwrap_or("unknown")
         .to_string();
-    let recovery = RecoveryPolicy::new(
-        state.config.recovery.crash_limit as usize,
-        Duration::from_secs(state.config.recovery.crash_window_seconds),
-    );
     let keyboard = state
         .seat
         .add_keyboard(Default::default(), 200, 200)
@@ -122,13 +117,11 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
         ipc.path(),
         &shell_control_socket,
         state.output_refresh_millihertz(),
-        recovery.clone(),
     );
     state.shell_status = shell.status();
     info!(
         wayland_display = %socket_name,
         ipc_socket = %ipc.path().display(),
-        safe_mode = state.config.general.safe_mode,
         blur_enabled = state.config.general.enable_blur,
         refresh_millihertz = state.output_refresh_millihertz(),
         outputs = device.descriptors().len(),

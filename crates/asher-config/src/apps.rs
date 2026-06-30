@@ -16,7 +16,7 @@ impl Default for DefaultAppsConfig {
             terminal: "ghostty".to_string(),
             file_manager: "rover".to_string(),
             browser: "google-chrome-stable".to_string(),
-            settings: "asher-settings".to_string(),
+            settings: String::new(),
             launcher: "vicinae".to_string(),
         }
     }

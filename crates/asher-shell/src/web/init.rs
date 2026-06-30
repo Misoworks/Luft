@@ -1,7 +1,7 @@
 use super::*;
 use super::{model::WebShellSnapshot, snapshot::WebShellSnapshotInput};
 use crate::{
-    apps::{dock_apps, launcher_apps},
+    apps::{launcher_apps, panel_apps},
     ipc::load_model,
     theme::shell_palette,
 };
@@ -14,13 +14,11 @@ impl WebShell {
         actions_rx: Receiver<WebShellAction>,
     ) -> Result<Self, Box<dyn Error>> {
         let palette = shell_palette(&config);
-        let wallpaper_uri = super::wallpaper::wallpaper_uri(&config);
-        let glass_blur_wallpaper_uri = super::wallpaper::glass_blur_wallpaper_uri(&config);
         let model = load_model()?;
         let status = SystemStatus::read();
         let chrome = ShellChrome::for_mode(model.active_mode);
-        let dock_apps = dock_apps(&config);
-        let applications = launcher_apps(&config, &dock_apps);
+        let panel_apps = panel_apps(&config);
+        let applications = launcher_apps(&config, &panel_apps);
         let tray = TrayService::start();
         let notifications = NotificationService::start();
         let snapshot = WebShellSnapshot::from_shell(WebShellSnapshotInput {
@@ -28,42 +26,29 @@ impl WebShell {
             status: &status,
             tray: tray.snapshot(),
             notifications: notifications.snapshot(),
-            dock_apps: &dock_apps,
-            dock_menu_command: None,
-            dock_menu_x: None,
+            panel_apps: &panel_apps,
+            panel_menu_command: None,
+            panel_menu_x: None,
             applications: &applications,
-            wallpaper_uri: wallpaper_uri.clone(),
-            glass_blur_wallpaper_uri: glass_blur_wallpaper_uri.clone(),
             palette,
             config: &config,
-            safe_mode: config.general.safe_mode,
             start_menu_open: false,
             quick_settings_open: false,
             date_center_open: false,
         });
-        let mut surfaces = WebSurfaces::new(
-            actions_tx,
-            &snapshot,
-            &dock_apps,
-            config.appearance.dock_icon_size,
-            model.active_mode == asher_layout::ModeId::Panel,
-        )?;
+        let mut surfaces = WebSurfaces::new(actions_tx, &snapshot)?;
         surfaces.set_panel_visible(chrome.panel);
-        surfaces.dock.set_visible(chrome.dock);
-        surfaces.sidebar.set_visible(chrome.sidebar);
 
         Ok(Self {
             launcher_command: config.default_apps.launcher.clone(),
             config,
             palette,
-            wallpaper_uri,
-            glass_blur_wallpaper_uri,
             model,
             status,
             chrome,
             tray,
             notifications,
-            dock_apps,
+            panel_apps,
             applications,
             surfaces,
             actions_rx,
@@ -73,9 +58,9 @@ impl WebShell {
             start_menu_visible: false,
             quick_visible: false,
             date_visible: false,
-            dock_menu_open: false,
-            dock_menu_command: None,
-            dock_menu_x: None,
+            panel_menu_open: false,
+            panel_menu_command: None,
+            panel_menu_x: None,
             last_model_refresh: Instant::now(),
             last_status_refresh: Instant::now(),
             last_config_refresh: Instant::now(),

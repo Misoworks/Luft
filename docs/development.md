@@ -20,30 +20,14 @@ bun install
 bun run build
 ```
 
-The generated bundle is embedded by `asher-shell`. Settings uses the same shell bundle in settings mode.
-
-## Dev CLI
-
-```sh
-cargo run -p asherctl -- dev setup
-sudo target/debug/asherctl dev install-session
-cargo run -p asherctl -- dev apply
-cargo run -p asherctl -- dev watch
-```
-
-`dev setup` installs Bun dependencies, builds the shell web bundle, and builds Kestrel with the DRM/KMS session backend plus `asher-session`, `asher-shell`, `asher-settings`, and `asherctl`.
-
-`dev install-session` installs the display-manager entry, portal preferences, and `asher-greeter` PAM policy. By default the entry points at `target/debug` binaries, so rebuilds affect the next Asher login. Pass `--copy-binaries --release` to install built binaries into `/usr/local/bin`.
-
-`dev apply` rebuilds shell assets, rebuilds `asher-shell` and `asher-settings`, asks a live compositor to restart only the shell process, and reloads config. `dev apply kestrel` rebuilds Kestrel with `--features session-backend` and reports that the compositor must be restarted manually.
-
-`dev watch` watches shell web UI, shell Rust code, settings code, default/user config, and Kestrel/session source groups. It applies shell and config changes through IPC; it does not restart the compositor.
+The generated bundle is embedded by `asher-shell`.
 
 ## Validation
 
 ```sh
 cargo fmt --check
 cargo check --workspace
+cargo check -p kestrel --features session-backend
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```

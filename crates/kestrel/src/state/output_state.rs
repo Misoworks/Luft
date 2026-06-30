@@ -1,6 +1,6 @@
 use super::KestrelState;
 use crate::layers;
-use asher_layout::Rect;
+use asher_ipc::Rect;
 use smithay::{
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,

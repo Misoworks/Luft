@@ -1,19 +1,15 @@
 # Asher
 
-Asher is a Linux desktop environment built around the Kestrel Wayland compositor, a web-rendered shell, and native Rust services for session, IPC, notifications, tray hosting, and settings.
+Asher is a Linux desktop environment built around the Kestrel Wayland compositor, a web-rendered panel shell, and native Rust services for session, IPC, notifications, and tray hosting.
 
 ## Workspace
 
 ```txt
 crates/kestrel          Wayland compositor and render backends
-crates/asher-shell      Shell service and Fenestra web chrome
-crates/asher-settings   Settings app
+crates/asher-shell      Panel shell service and Fenestra web chrome
 crates/asher-session    Display-manager/session launcher
-crates/asherctl         CLI for status, config, recovery, and dev workflows
 crates/asher-config     Shared config model and XDG path handling
 crates/asher-ipc        Typed compositor IPC payloads
-crates/asher-layout     Workspace and window layout engine
-crates/asher-material   Wallpaper-derived material color helpers
 crates/asher-greeter    Session discovery and PAM launch helper
 ```
 
@@ -57,13 +53,6 @@ Run the protocol/headless backend for smoke tests:
 ASHER_IPC_SOCKET=/tmp/asher-headless.sock cargo run -p kestrel -- --headless --socket asher-headless
 ```
 
-Install a display-manager session entry for local development:
-
-```sh
-cargo run -p asherctl -- dev setup
-sudo target/debug/asherctl dev install-session
-```
-
 ## Checks
 
 ```sh
@@ -79,19 +68,3 @@ cargo test --workspace
 - [Configuration](docs/configuration.md)
 - [Shell and Compositor Behavior](docs/shell-and-compositor.md)
 - [Shortcuts](docs/shortcuts.md)
-
-## CLI
-
-```sh
-cargo run -p asherctl -- status
-cargo run -p asherctl -- status --json
-cargo run -p asherctl -- config path
-cargo run -p asherctl -- config validate
-cargo run -p asherctl -- doctor
-cargo run -p asherctl -- logs
-cargo run -p asherctl -- reload
-cargo run -p asherctl -- shell restart
-cargo run -p asherctl -- workspace list
-cargo run -p asherctl -- window list
-cargo run -p asherctl -- output list
-```

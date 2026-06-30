@@ -1,4 +1,4 @@
-use asher_layout::{ProfileId, WindowId, WorkspaceId};
+use asher_ipc::{ProfileId, WindowId, WorkspaceId};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -37,26 +37,26 @@ pub enum WebShellAction {
         window: u64,
         workspace: String,
     },
-    DockLaunch {
+    PanelLaunch {
         command: String,
     },
-    DockMenuOpen {
+    PanelMenuOpen {
         command: String,
         x: Option<i32>,
     },
-    DockMenuClose,
-    DockPin {
+    PanelMenuClose,
+    PanelPin {
         label: String,
         command: String,
         icon: Option<String>,
     },
-    DockUnpin {
+    PanelUnpin {
         command: String,
     },
-    DockForceQuit {
+    PanelForceQuit {
         command: String,
     },
-    DockReorder {
+    PanelReorder {
         commands: Vec<String>,
     },
     AppLaunch {
@@ -84,7 +84,6 @@ pub enum WebShellAction {
     },
     ReloadConfig,
     OpenLogsFolder,
-    ToggleSafeMode,
     NotificationClose {
         notification: u32,
     },

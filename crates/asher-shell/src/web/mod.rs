@@ -2,8 +2,8 @@ use crate::{
     apps::AppEntry,
     chrome::ShellChrome,
     control::ShellControlServer,
-    dock::DockApp,
     ipc::ShellModel,
+    panel::PanelApp,
     services::{
         notifications::NotificationService, system_status::SystemStatus, tray::TrayService,
     },
@@ -13,13 +13,13 @@ mod action_dispatch;
 mod actions;
 mod appearance;
 mod command_actions;
-mod dock_actions;
 mod icons;
 mod init;
 mod launched_process;
 mod lazy_surface;
 mod model;
 mod palette;
+mod panel_actions;
 mod popover_actions;
 mod settings_command;
 mod snapshot;
@@ -28,7 +28,6 @@ mod surface_layout;
 mod surface_motion;
 mod surface_sizing;
 mod sync;
-mod wallpaper;
 mod web_surface;
 mod window_actions;
 use actions::WebShellAction;
@@ -91,14 +90,12 @@ fn animation_tick_interval() -> Duration {
 pub(super) struct WebShell {
     pub(super) config: AsherConfig,
     pub(super) palette: ShellPalette,
-    pub(super) wallpaper_uri: Option<String>,
-    pub(super) glass_blur_wallpaper_uri: Option<String>,
     pub(super) model: ShellModel,
     pub(super) status: SystemStatus,
     pub(super) chrome: ShellChrome,
     pub(super) tray: TrayService,
     pub(super) notifications: NotificationService,
-    pub(super) dock_apps: Vec<DockApp>,
+    pub(super) panel_apps: Vec<PanelApp>,
     pub(super) applications: Vec<AppEntry>,
     pub(super) surfaces: WebSurfaces,
     actions_rx: Receiver<WebShellAction>,
@@ -109,9 +106,9 @@ pub(super) struct WebShell {
     pub(super) start_menu_visible: bool,
     pub(super) quick_visible: bool,
     pub(super) date_visible: bool,
-    pub(super) dock_menu_open: bool,
-    pub(super) dock_menu_command: Option<String>,
-    pub(super) dock_menu_x: Option<i32>,
+    pub(super) panel_menu_open: bool,
+    pub(super) panel_menu_command: Option<String>,
+    pub(super) panel_menu_x: Option<i32>,
     last_model_refresh: Instant,
     last_status_refresh: Instant,
     last_config_refresh: Instant,

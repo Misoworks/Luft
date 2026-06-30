@@ -2,7 +2,7 @@ use crate::window_animation::{WindowAnimation, WindowTransform};
 mod hit;
 mod ops;
 mod stack;
-use asher_layout::{Rect, WindowId, WindowState, WorkspaceId};
+use asher_ipc::{Rect, WindowId, WindowState, WorkspaceId};
 pub use hit::{ResizeEdge, WindowFrameControl, WindowFrameHit};
 pub use ops::WindowGrab;
 use smithay::{

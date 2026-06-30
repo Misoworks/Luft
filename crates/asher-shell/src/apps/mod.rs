@@ -1,4 +1,4 @@
-use crate::dock::DockApp;
+use crate::panel::PanelApp;
 
 mod desktop_entry;
 mod icon_theme;
@@ -16,11 +16,11 @@ use std::{
     process::{Child, Command, Stdio},
 };
 
-pub fn dock_apps(config: &AsherConfig) -> Vec<DockApp> {
-    if config.dock.customized || !config.dock.pinned.is_empty() {
+pub fn panel_apps(config: &AsherConfig) -> Vec<PanelApp> {
+    if config.panel.customized || !config.panel.pinned.is_empty() {
         let applications = discover_applications(config);
         return config
-            .dock
+            .panel
             .pinned
             .iter()
             .map(|app| {
@@ -30,7 +30,7 @@ pub fn dock_apps(config: &AsherConfig) -> Vec<DockApp> {
                 let icon_path = matched
                     .and_then(|entry| entry.icon_path.clone())
                     .or_else(|| resolve_icon_path(app.icon.as_deref()));
-                DockApp::new(
+                PanelApp::new(
                     app.label.clone(),
                     normalize_launch_command(&app.command),
                     icon_path,
@@ -41,7 +41,7 @@ pub fn dock_apps(config: &AsherConfig) -> Vec<DockApp> {
 
     let applications = discover_applications(config);
     vec![
-        default_dock_app(
+        default_panel_app(
             "Terminal",
             &config.default_apps.terminal,
             &[
@@ -57,7 +57,7 @@ pub fn dock_apps(config: &AsherConfig) -> Vec<DockApp> {
             ],
             &applications,
         ),
-        default_dock_app(
+        default_panel_app(
             "Files",
             &config.default_apps.file_manager,
             &[
@@ -71,7 +71,7 @@ pub fn dock_apps(config: &AsherConfig) -> Vec<DockApp> {
             ],
             &applications,
         ),
-        default_dock_app(
+        default_panel_app(
             "Browser",
             &config.default_apps.browser,
             &[
@@ -87,23 +87,10 @@ pub fn dock_apps(config: &AsherConfig) -> Vec<DockApp> {
             ],
             &applications,
         ),
-        default_dock_app(
-            "Settings",
-            &config.default_apps.settings,
-            &[
-                &config.default_apps.settings,
-                "org.gnome.Settings",
-                "preferences-system",
-                "systemsettings",
-                "org.kde.systemsettings",
-                "settings",
-            ],
-            &applications,
-        ),
     ]
 }
 
-pub fn launcher_apps(config: &AsherConfig, fallback: &[DockApp]) -> Vec<AppEntry> {
+pub fn launcher_apps(config: &AsherConfig, fallback: &[PanelApp]) -> Vec<AppEntry> {
     let applications = discover_applications(config);
     if !applications.is_empty() {
         return applications;
@@ -392,12 +379,12 @@ fn log_app_launch(command: &str) {
     }
 }
 
-fn default_dock_app(
+fn default_panel_app(
     label: &str,
     command: &str,
     fallback_icons: &[&str],
     applications: &[AppEntry],
-) -> DockApp {
+) -> PanelApp {
     let matched = applications
         .iter()
         .find(|app| commands_match(&app.command, command));
@@ -408,7 +395,7 @@ fn default_dock_app(
         .map(|app| app.name.clone())
         .unwrap_or_else(|| label.to_string());
 
-    DockApp::new(label, normalize_launch_command(command), icon_path)
+    PanelApp::new(label, normalize_launch_command(command), icon_path)
 }
 
 fn resolve_first_icon_path(icons: &[&str]) -> Option<PathBuf> {

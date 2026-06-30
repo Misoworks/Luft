@@ -8,8 +8,8 @@ use crate::{
     workspace_transition::{WorkspaceTransition, WorkspaceTransitionSnapshot},
 };
 use asher_config::AsherConfig;
+use asher_ipc::{LayoutEngine, LayoutError, Rect, WindowId, WindowInfo, WorkspaceId};
 use asher_ipc::{ShellStatus, XwaylandStatus};
-use asher_layout::{LayoutEngine, LayoutError, Rect, WindowId, WindowInfo, WorkspaceId};
 use smithay::{
     backend::allocator::format::FormatSet,
     desktop::PopupManager,
@@ -193,7 +193,7 @@ impl KestrelState {
     pub fn map_toplevel(&mut self, surface: ToplevelSurface) {
         let workspace = self.layout.active_workspace().clone();
         let geometry = self.next_initial_window_geometry();
-        let info = WindowInfo::new(asher_layout::WindowId(0), workspace.clone(), geometry);
+        let info = WindowInfo::new(asher_ipc::WindowId(0), workspace.clone(), geometry);
 
         match self.layout.register_window(info) {
             Ok(id) => {
@@ -475,9 +475,7 @@ impl KestrelState {
     }
 
     pub(crate) fn animations_enabled(&self) -> bool {
-        self.config.general.enable_animations
-            && self.config.performance.animations
-            && !self.config.general.safe_mode
+        self.config.general.enable_animations && self.config.performance.animations
     }
 
     pub fn map_layer_surface(&mut self, surface: LayerSurface, namespace: String) {

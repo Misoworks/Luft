@@ -1,7 +1,6 @@
 mod backend;
 mod background;
 mod background_effect;
-mod blur_material;
 mod client;
 mod compositor_damage;
 mod cursor;
@@ -17,7 +16,6 @@ mod loading_overlay;
 mod output;
 mod protocol_state;
 mod protocols;
-mod recovery;
 mod render;
 mod scene_blur;
 mod scene_render;

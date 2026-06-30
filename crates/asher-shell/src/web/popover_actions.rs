@@ -93,7 +93,7 @@ impl WebShell {
         self.quick_visible = false;
         self.date_visible = false;
         self.start_menu_visible = false;
-        self.close_dock_menu();
+        self.close_panel_menu();
         self.sync_chrome();
         self.sync_surfaces();
         self.surfaces.quick.set_visible(false);

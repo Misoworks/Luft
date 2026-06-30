@@ -200,10 +200,10 @@ function startMenuCommands(snapshot: ShellSnapshot): StartMenuCommand[] {
     },
     {
       title: "Appearance Settings",
-      detail: "Dock, panel, blur, wallpaper, and shell presentation",
+      detail: "Panel, panel, blur, wallpaper, and shell presentation",
       icon: "palette",
       label: "Settings",
-      keywords: ["dock", "panel", "taskbar", "mode", "style", "appearance", "wallpaper"],
+      keywords: ["panel", "mode", "style", "appearance", "wallpaper"],
       action: { type: "quick-open-settings", page: "appearance" },
     },
     {
@@ -293,14 +293,6 @@ function startMenuCommands(snapshot: ShellSnapshot): StartMenuCommand[] {
       label: "Logs",
       keywords: ["logs", "journal", "debug", "diagnostics", "folder"],
       action: { type: "open-logs-folder" },
-    },
-    {
-      title: snapshot.safeMode ? "Exit Safe Mode" : "Enter Safe Mode",
-      detail: snapshot.safeMode ? "Re-enable configured effects and shell customizations" : "Disable risky shell effects and customizations",
-      icon: "shield",
-      label: "Recovery",
-      keywords: ["safe", "safe mode", "recovery", "effects", "customization"],
-      action: { type: "toggle-safe-mode" },
     },
   ];
 }

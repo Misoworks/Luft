@@ -10,7 +10,6 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 smithay.workspace = true
 asher-config.workspace = true
 asher-ipc = { version = "0.1.0", path = "../asher-ipc" }
-asher-layout.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

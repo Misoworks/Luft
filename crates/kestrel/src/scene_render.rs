@@ -6,7 +6,7 @@ use crate::{
     window::ManagedWindow,
     window_clip::{RoundedWindowElement, window_elements_for_window},
 };
-use asher_layout::WorkspaceId;
+use asher_ipc::WorkspaceId;
 use smithay::{
     backend::renderer::{
         Color32F, Frame, Renderer, RendererSuper,

@@ -5,7 +5,7 @@ use crate::{
     window::{ManagedWindow, TITLEBAR_HEIGHT},
     window_clip::{RoundedWindowElement, WINDOW_RADIUS},
 };
-use asher_layout::WorkspaceId;
+use asher_ipc::WorkspaceId;
 use smithay::{
     backend::renderer::{
         element::{

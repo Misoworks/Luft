@@ -87,7 +87,7 @@
     powerMenuNative = false;
   }
 
-  function runSessionCommand(command: string) {
+  function runSessionCommand(command: "lock" | "suspend" | "reboot" | "power-off") {
     sendAction({ type: "session-command", command });
     powerMenuOpen = false;
     powerMenuNative = false;

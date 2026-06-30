@@ -8,7 +8,7 @@ use super::{
     surface_has_client_frame_extents,
 };
 use crate::window_animation::WindowAnimation;
-use asher_layout::{Rect, WindowId, WorkspaceId};
+use asher_ipc::{Rect, WindowId, WorkspaceId};
 use smithay::{
     desktop::{WindowSurfaceType, utils::under_from_surface_tree},
     reexports::wayland_server::protocol::wl_surface::WlSurface,

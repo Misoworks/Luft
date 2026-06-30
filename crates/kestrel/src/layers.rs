@@ -51,22 +51,10 @@ pub fn surfaces(output: &Output) -> Vec<WlSurface> {
         .collect()
 }
 
-pub fn has_shell_surface(output: &Output) -> bool {
-    const SHELL_NAMESPACES: &[&str] = &[
-        "asher-panel",
-        "asher-dock",
-        "asher-dock-menu",
-        "asher-date-center",
-        "asher-launcher",
-        "asher-quick-settings",
-        "asher-sidebar",
-        "asher-start-menu",
-        "asher-notifications",
-    ];
-
+pub fn has_panel_surface(output: &Output) -> bool {
     layer_map_for_output(output)
         .layers()
-        .any(|layer| SHELL_NAMESPACES.contains(&layer.namespace()))
+        .any(|layer| layer.namespace() == "asher-panel")
 }
 
 pub fn pointer_focus(output: &Output, point: Point<f64, Logical>) -> Option<LayerPointerFocus> {
@@ -106,7 +94,7 @@ pub fn has_layer_above_windows(output: &Output, point: Point<f64, Logical>) -> b
         .any(|layer| pointer_focus_on_layer(output, point, layer).is_some())
 }
 
-const SHELL_CHROME_NAMESPACES: &[&str] = &["asher-panel", "asher-sidebar", "asher-dock"];
+const SHELL_CHROME_NAMESPACES: &[&str] = &["asher-panel"];
 
 pub fn layer_surface_rects(output: &Output) -> Vec<(WlSurface, Rectangle<i32, Physical>)> {
     let layer_map = layer_map_for_output(output);
@@ -140,7 +128,7 @@ pub fn should_close_transient_popover(output: &Output, point: Point<f64, Logical
                 "asher-quick-settings"
                     | "asher-date-center"
                     | "asher-start-menu"
-                    | "asher-dock-menu"
+                    | "asher-panel-menu"
             ) {
                 continue;
             }
@@ -156,11 +144,7 @@ pub fn should_close_transient_popover(output: &Output, point: Point<f64, Logical
     has_transient
 }
 
-pub fn render_targets(
-    output: &Output,
-    layer: Layer,
-    panel_taskbar: bool,
-) -> Vec<LayerRenderTarget> {
+pub fn render_targets(output: &Output, layer: Layer) -> Vec<LayerRenderTarget> {
     let layer_map = layer_map_for_output(output);
     layer_map
         .layers_on(layer)
@@ -170,12 +154,8 @@ pub fn render_targets(
             }
             let geometry = layer_map.layer_geometry(surface)?;
             let material = material_for(surface.namespace())?;
-            let (location, size) = material_geometry(
-                surface.namespace(),
-                geometry.loc,
-                geometry.size,
-                panel_taskbar,
-            );
+            let (location, size) =
+                material_geometry(surface.namespace(), geometry.loc, geometry.size);
             let opacity = material_opacity(
                 surface.wl_surface(),
                 (location.x - geometry.loc.x, location.y - geometry.loc.y).into(),
@@ -210,9 +190,7 @@ pub fn render_surfaces(output: &Output, layer: Layer) -> Vec<LayerRenderSurface>
         .collect()
 }
 
-const DOCK_BLUR_HEIGHT: i32 = 50;
-const DOCK_BLUR_RADIUS: i32 = 18;
-const TASKBAR_BLUR_HEIGHT: i32 = 48;
+const PANEL_BLUR_HEIGHT: i32 = 48;
 #[derive(Debug, Clone)]
 pub struct LayerPointerFocus {
     pub surface: WlSurface,
@@ -265,14 +243,10 @@ impl BlurLayer {
 pub(crate) fn material_for(namespace: &str) -> Option<LayerMaterial> {
     match namespace {
         "asher-panel" => Some(LayerMaterial::Rect),
-        "asher-dock" => Some(LayerMaterial::RoundRect {
-            radius: DOCK_BLUR_RADIUS,
-        }),
-        "asher-dock-menu" => Some(LayerMaterial::RoundRect { radius: 16 }),
+        "asher-panel-menu" => Some(LayerMaterial::RoundRect { radius: 16 }),
         "asher-date-center" => Some(LayerMaterial::RoundRect { radius: 26 }),
         "asher-launcher" => Some(LayerMaterial::RoundRect { radius: 22 }),
         "asher-quick-settings" => Some(LayerMaterial::RoundRect { radius: 26 }),
-        "asher-sidebar" => Some(LayerMaterial::Rect),
         "asher-start-menu" => Some(LayerMaterial::RoundRect { radius: 24 }),
         "asher-notifications" => Some(LayerMaterial::RoundRect { radius: 26 }),
         _ => None,
@@ -283,13 +257,12 @@ fn material_geometry(
     namespace: &str,
     location: Point<i32, Logical>,
     size: smithay::utils::Size<i32, Logical>,
-    _panel_taskbar: bool,
 ) -> (Point<i32, Logical>, smithay::utils::Size<i32, Logical>) {
-    if namespace == "asher-panel" && size.h > TASKBAR_BLUR_HEIGHT {
-        let vertical_inset = (size.h - TASKBAR_BLUR_HEIGHT).max(0);
+    if namespace == "asher-panel" && size.h > PANEL_BLUR_HEIGHT {
+        let vertical_inset = (size.h - PANEL_BLUR_HEIGHT).max(0);
         return (
             (location.x, location.y + vertical_inset).into(),
-            (size.w, TASKBAR_BLUR_HEIGHT).into(),
+            (size.w, PANEL_BLUR_HEIGHT).into(),
         );
     }
 
@@ -297,15 +270,7 @@ fn material_geometry(
         return (location, size);
     }
 
-    if namespace != "asher-dock" || size.h <= DOCK_BLUR_HEIGHT {
-        return (location, size);
-    }
-
-    let vertical_inset = (size.h - DOCK_BLUR_HEIGHT).max(0);
-    (
-        (location.x, location.y + vertical_inset).into(),
-        (size.w, DOCK_BLUR_HEIGHT).into(),
-    )
+    (location, size)
 }
 
 fn material_opacity(
@@ -375,8 +340,7 @@ fn point_inside_layer_material(
     let Some(geometry) = layer_map.layer_geometry(surface) else {
         return false;
     };
-    let (location, size) =
-        material_geometry(surface.namespace(), geometry.loc, geometry.size, false);
+    let (location, size) = material_geometry(surface.namespace(), geometry.loc, geometry.size);
     point_in_rect(point, location, size)
 }
 

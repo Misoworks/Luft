@@ -47,11 +47,11 @@ impl WebShell {
 
     pub(super) fn close_task_window(&mut self, window: u64) {
         self.apply_model_result(close_window(window_id(window)));
-        self.close_dock_menu();
+        self.close_panel_menu();
     }
 
     pub(super) fn minimize_task_window(&mut self, window: u64) {
         self.apply_model_result(minimize_window(window_id(window)));
-        self.close_dock_menu();
+        self.close_panel_menu();
     }
 }

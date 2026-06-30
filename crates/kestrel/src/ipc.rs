@@ -9,7 +9,7 @@ use asher_config::load_config;
 use asher_ipc::{
     IpcRequest, IpcResponse, ensure_socket_parent, read_request, socket_path, write_response,
 };
-use asher_layout::{ProfileId, WindowId, WorkspaceId};
+use asher_ipc::{ProfileId, WindowId, WorkspaceId};
 use smithay::input::keyboard::KeyboardHandle;
 use std::{
     fs, io,
@@ -143,11 +143,7 @@ fn handle_request(
         }
         IpcRequest::Reload => reload_config(state),
         IpcRequest::SetDebugOverlay { enabled } => {
-            let mutated = state.config.compositor.debug_overlay != enabled
-                || (enabled && state.config.general.safe_mode);
-            if enabled {
-                state.config.general.safe_mode = false;
-            }
+            let mutated = state.config.compositor.debug_overlay != enabled;
             state.config.compositor.debug_overlay = enabled;
             debug!(enabled, "ipc set debug overlay");
             IpcResult::accepted(mutated)
@@ -155,34 +151,13 @@ fn handle_request(
         IpcRequest::SetBlur { enabled } => {
             let mutated = state.config.general.enable_blur != enabled
                 || state.config.effects.blur != enabled
-                || (enabled
-                    && (!state.config.general.enable_effects || state.config.general.safe_mode));
+                || (enabled && !state.config.general.enable_effects);
             if enabled {
-                state.config.general.safe_mode = false;
                 state.config.general.enable_effects = true;
             }
             state.config.general.enable_blur = enabled;
             state.config.effects.blur = enabled;
             debug!(enabled, "ipc set blur");
-            IpcResult::accepted(mutated)
-        }
-        IpcRequest::SetSafeMode { enabled } => {
-            let mutated = state.config.general.safe_mode != enabled
-                || (enabled
-                    && (state.config.general.enable_effects
-                        || state.config.general.enable_animations
-                        || state.config.general.enable_blur
-                        || state.config.effects.blur
-                        || state.config.compositor.debug_overlay));
-            state.config.general.safe_mode = enabled;
-            if enabled {
-                state.config.general.enable_effects = false;
-                state.config.general.enable_animations = false;
-                state.config.general.enable_blur = false;
-                state.config.effects.blur = false;
-                state.config.compositor.debug_overlay = false;
-            }
-            debug!(enabled, "ipc set safe mode");
             IpcResult::accepted(mutated)
         }
         IpcRequest::SetOutputScale { output, scale } => set_output_scale(state, output, scale),
@@ -231,7 +206,7 @@ fn activate_window(
             debug!(window = window.0, "ipc activated window");
             IpcResponse::Accepted
         }
-        Err(asher_layout::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },
@@ -249,7 +224,7 @@ fn close_window(
             debug!(window = window.0, "ipc requested window close");
             IpcResponse::Accepted
         }
-        Err(asher_layout::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },
@@ -266,7 +241,7 @@ fn minimize_window(
             debug!(window = window.0, "ipc minimized window");
             IpcResponse::Accepted
         }
-        Err(asher_layout::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },
@@ -279,7 +254,7 @@ fn toggle_maximize_window(state: &mut KestrelState, window: WindowId) -> IpcResp
             debug!(window = window.0, "ipc toggled window maximize");
             IpcResponse::Accepted
         }
-        Err(asher_layout::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },
@@ -296,7 +271,7 @@ fn move_window_to_workspace(
             debug!(window = window.0, workspace = %workspace.0, "ipc moved window to workspace");
             IpcResponse::Accepted
         }
-        Err(asher_layout::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },

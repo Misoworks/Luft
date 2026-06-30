@@ -3,13 +3,9 @@ members = [
     "crates/kestrel",
     "crates/asher-config",
     "crates/asher-ipc",
-    "crates/asher-layout",
-    "crates/asher-material",
     "crates/asher-greeter",
     "crates/asher-session",
     "crates/asher-shell",
-    "crates/asher-settings",
-    "crates/asherctl",
 ]
 resolver = "3"
 
@@ -33,17 +29,12 @@ users = { version = "0.11.0", default-features = false }
 
 asher-config = { path = "crates/asher-config" }
 asher-ipc = { path = "crates/asher-ipc" }
-asher-layout = { path = "crates/asher-layout" }
-asher-material = { path = "crates/asher-material" }
 asher-session = { path = "crates/asher-session" }
 
 [profile.dev.package."kestrel"]
 opt-level = 2
 
 [profile.dev.package."asher-shell"]
-opt-level = 2
-
-[profile.dev.package."asher-settings"]
 opt-level = 2
 
 [profile.dev.package."smithay"]

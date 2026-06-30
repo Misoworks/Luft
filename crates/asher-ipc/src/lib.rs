@@ -1,9 +1,18 @@
-use asher_layout::{ModeId, ProfileId, Rect, WindowId, WindowState, WorkspaceId};
 use serde::{Deserialize, Serialize};
 use std::{
     env, fs, io,
     os::unix::net::UnixStream,
     path::{Path, PathBuf},
+};
+
+mod layout;
+
+pub use layout::{
+    ActionResult, AppId, Arrangement, ChromeSpec, GroupId, GroupNode, LayoutContext, LayoutEngine,
+    LayoutError, LayoutNode, ModeContext, ModeId, PanelMode, ProfileId, Rect, ShellAction,
+    ShellMode, ShellProfile, SplitAxis, SplitNode, SplitNodeId, TabStack, TabStackId, WindowId,
+    WindowInfo, WindowState, Workspace, WorkspaceId, WorkspaceRule, mode_for_profile, shell_mode,
+    state_for_mode,
 };
 
 pub const SOCKET_ENV: &str = "ASHER_IPC_SOCKET";
@@ -127,9 +136,6 @@ pub enum IpcRequest {
     SetBlur {
         enabled: bool,
     },
-    SetSafeMode {
-        enabled: bool,
-    },
     SetOutputScale {
         output: Option<String>,
         scale: f64,
@@ -194,7 +200,6 @@ pub struct StatusPayload {
     pub active_profile: ProfileId,
     pub active_mode: ModeId,
     pub nested: bool,
-    pub safe_mode: bool,
     pub blur_enabled: bool,
     pub debug_overlay: bool,
 }

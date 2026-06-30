@@ -21,11 +21,10 @@ When run directly for development, Kestrel wraps `asher-shell` in a private D-Bu
 ASHER_IPC_SOCKET=/tmp/asher-headless.sock cargo run -p kestrel -- --headless --socket asher-headless
 ```
 
-The headless backend binds a Wayland socket and runs compositor protocol, layout, frame-callback, and IPC loops without opening a host window or starting the shell. `asherctl status` reports `Shell: NotStarted` for this backend.
+The headless backend binds a Wayland socket and runs compositor protocol, layout, frame-callback, and IPC loops without opening a host window or starting the shell.
 
 ```sh
 WAYLAND_DISPLAY=asher-headless wayland-info
-ASHER_IPC_SOCKET=/tmp/asher-headless.sock asherctl status
 ```
 
 ## Session Launcher
@@ -41,15 +40,6 @@ cargo run -p asher-session -- --session --dry-run
 ```
 
 The guarded session returns to the display manager after an early Kestrel crash. Set `ASHER_FALLBACK_SESSION` or pass `--fallback-session` to launch another desktop after startup failure.
-
-## Display Manager Install
-
-```sh
-cargo run -p asherctl -- dev setup --release
-sudo target/release/asherctl dev install-session --release --copy-binaries
-```
-
-This installs `/usr/share/wayland-sessions/asher.desktop`, copies Asher binaries to `/usr/local/bin`, installs xdg-desktop-portal preferences, and installs the `asher-greeter` PAM policy. If the display manager was already open, restart it or reboot so it refreshes the session list.
 
 ## Greeter Helper
 

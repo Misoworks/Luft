@@ -4,7 +4,7 @@ use crate::{
     window::ManagedWindow,
     window_clip::WINDOW_RADIUS,
 };
-use asher_layout::WorkspaceId;
+use asher_ipc::WorkspaceId;
 use smithay::{
     desktop::{PopupManager, layer_map_for_output},
     reexports::{

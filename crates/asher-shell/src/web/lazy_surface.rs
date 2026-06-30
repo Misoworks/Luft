@@ -27,8 +27,7 @@ pub(crate) struct LazyWebSurface {
     hide_started_at: Option<Instant>,
     hide_start_margin: Option<ShellSurfaceMargin>,
     release_at: Option<Instant>,
-    panel_taskbar: bool,
-    dock_menu_x: Option<i32>,
+    panel_menu_x: Option<i32>,
     surface: Option<WebSurface>,
 }
 
@@ -36,7 +35,6 @@ impl LazyWebSurface {
     pub(super) fn new(
         kind: WebShellSurface,
         size: (i32, i32),
-        panel_taskbar: bool,
         actions_tx: &Sender<WebShellAction>,
         snapshot: &WebShellSnapshot,
     ) -> Self {
@@ -55,8 +53,7 @@ impl LazyWebSurface {
             hide_started_at: None,
             hide_start_margin: None,
             release_at: None,
-            panel_taskbar,
-            dock_menu_x: None,
+            panel_menu_x: None,
             surface: None,
         }
     }
@@ -130,7 +127,6 @@ impl LazyWebSurface {
                     self.kind,
                     target_margin,
                     surface.size,
-                    self.panel_taskbar,
                 ));
             }
             let initial_alpha = if open_duration.is_some() && animates_alpha && !was_closing {
@@ -197,7 +193,6 @@ impl LazyWebSurface {
                         self.kind,
                         surface.base_shell_margin(),
                         surface.size,
-                        self.panel_taskbar,
                     ));
                     surface.set_visible(false);
                 }
@@ -230,13 +225,11 @@ impl LazyWebSurface {
             size: self.size,
             visible: false,
             keep_alive_when_hidden: true,
-            panel_taskbar: self.panel_taskbar,
-            dock_menu_x: self.dock_menu_x,
+            panel_menu_x: self.panel_menu_x,
             actions_tx: &self.actions_tx,
             snapshot: &self.snapshot,
         }) {
             Ok(mut surface) => {
-                surface.set_panel_taskbar(self.panel_taskbar);
                 surface.evaluate_snapshot(&self.snapshot, &self.snapshot_json);
                 self.surface = Some(surface);
             }
@@ -276,20 +269,13 @@ impl LazyWebSurface {
         }
     }
 
-    pub(super) fn set_panel_taskbar(&mut self, taskbar: bool) {
-        self.panel_taskbar = taskbar;
-        if let Some(surface) = &mut self.surface {
-            surface.set_panel_taskbar(taskbar);
-        }
-    }
-
-    pub(super) fn set_dock_menu_x(&mut self, x: Option<i32>) {
-        if self.dock_menu_x == x {
+    pub(super) fn set_panel_menu_x(&mut self, x: Option<i32>) {
+        if self.panel_menu_x == x {
             return;
         }
-        self.dock_menu_x = x;
+        self.panel_menu_x = x;
         if let Some(surface) = &mut self.surface {
-            surface.set_dock_menu_x(x);
+            surface.set_panel_menu_x(x);
         }
     }
 
@@ -320,12 +306,7 @@ impl LazyWebSurface {
             let from = self
                 .hide_start_margin
                 .unwrap_or_else(|| surface.base_shell_margin());
-            let to = hidden_shell_margin(
-                self.kind,
-                surface.base_shell_margin(),
-                surface.size,
-                self.panel_taskbar,
-            );
+            let to = hidden_shell_margin(self.kind, surface.base_shell_margin(), surface.size);
             surface.set_shell_margin(lerp_margin(from, to, motion));
         }
     }
@@ -353,12 +334,7 @@ impl LazyWebSurface {
         }
         if surface_margin_animates(self.kind) {
             let from = self.show_start_margin.unwrap_or_else(|| {
-                hidden_shell_margin(
-                    self.kind,
-                    surface.base_shell_margin(),
-                    surface.size,
-                    self.panel_taskbar,
-                )
+                hidden_shell_margin(self.kind, surface.base_shell_margin(), surface.size)
             });
             let to = surface.base_shell_margin();
             let margin = if progress >= 1.0 {

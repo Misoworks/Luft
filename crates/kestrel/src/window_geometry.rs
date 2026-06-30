@@ -1,5 +1,5 @@
 use crate::window::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, ResizeEdge};
-use asher_layout::Rect;
+use asher_ipc::Rect;
 use smithay::utils::{Logical, Point};
 
 pub fn move_geometry(

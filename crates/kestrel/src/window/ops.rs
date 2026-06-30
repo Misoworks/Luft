@@ -5,7 +5,7 @@ use crate::{
     state::KestrelState,
     window_geometry::{move_geometry, resize_geometry},
 };
-use asher_layout::{LayoutError, ModeId, Rect, WindowId, WindowState};
+use asher_ipc::{LayoutError, Rect, WindowId, WindowState};
 use smithay::{
     input::keyboard::KeyboardHandle,
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
@@ -14,7 +14,6 @@ use smithay::{
 };
 
 const MAXIMIZED_MARGIN: i32 = 0;
-const TOP_PANEL_HEIGHT: i32 = 34;
 const BOTTOM_PANEL_HEIGHT: i32 = 48;
 
 #[derive(Debug, Clone)]
@@ -518,17 +517,11 @@ impl KestrelState {
     }
 
     fn reserved_top(&self) -> i32 {
-        match self.layout.active_mode() {
-            ModeId::Panel => 0,
-            _ => TOP_PANEL_HEIGHT,
-        }
+        0
     }
 
     fn reserved_bottom(&self) -> i32 {
-        match self.layout.active_mode() {
-            ModeId::Panel => BOTTOM_PANEL_HEIGHT,
-            _ => 0,
-        }
+        BOTTOM_PANEL_HEIGHT
     }
 }
 
