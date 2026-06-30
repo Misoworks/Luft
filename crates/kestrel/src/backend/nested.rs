@@ -231,10 +231,10 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
         }
 
         let shell_layers_ready = shell_layers_ready(state.output(), state.shell_status);
+        let show_loading = should_show_loading_overlay(shell_layers_ready, shell_layers_seen_ready);
         if shell_layers_ready {
             shell_layers_seen_ready = true;
         }
-        let show_loading = should_show_loading_overlay(shell_layers_ready, shell_layers_seen_ready);
         let workspace_transition_active = state.workspace_transition().is_some();
         let scene_dirty = state.take_scene_dirty();
         let debug_needs_render =

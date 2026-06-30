@@ -2,7 +2,8 @@ use super::{normalize_launch_command, resolve_icon_path, xdg};
 use asher_config::AsherConfig;
 use std::{
     collections::BTreeMap,
-    fs,
+    env, fs,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
     time::{Duration, Instant},
@@ -25,6 +26,7 @@ pub struct AppEntry {
     pub comment: Option<String>,
     pub icon: Option<String>,
     pub icon_path: Option<PathBuf>,
+    pub startup_wm_class: Option<String>,
 }
 
 pub fn discover_applications(config: &AsherConfig) -> Vec<AppEntry> {
@@ -151,6 +153,12 @@ fn parse_desktop_entry(
     if !entry_visible_in_context(&values, context) {
         return None;
     }
+    if values
+        .get("TryExec")
+        .is_some_and(|value| !try_exec_available(value))
+    {
+        return None;
+    }
 
     let name = values.get("Name")?.trim().to_string();
     let exec = clean_exec(values.get("Exec")?)?;
@@ -164,6 +172,10 @@ fn parse_desktop_entry(
     let icon = values.get("Icon").map(|value| value.trim().to_string());
     let icon_path = resolve_icon_path(icon.as_deref())
         .or_else(|| resolve_icon_path(xdg::command_name(&command)));
+    let startup_wm_class = values
+        .get("StartupWMClass")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
 
     Some(AppEntry {
         name,
@@ -171,6 +183,7 @@ fn parse_desktop_entry(
         comment: values.get("Comment").cloned(),
         icon,
         icon_path,
+        startup_wm_class,
     })
 }
 
@@ -242,4 +255,30 @@ fn clean_exec(exec: &str) -> Option<String> {
 
     let cleaned = cleaned.trim().to_string();
     (!cleaned.is_empty()).then_some(cleaned)
+}
+
+fn try_exec_available(value: &str) -> bool {
+    let Some(command) = value
+        .split_whitespace()
+        .next()
+        .map(|value| value.trim_matches('"').trim_matches('\''))
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+
+    let path = Path::new(command);
+    if path.is_absolute() || command.contains('/') {
+        return executable_file(path);
+    }
+
+    let Some(path) = env::var_os("PATH") else {
+        return false;
+    };
+    env::split_paths(&path).any(|dir| executable_file(&dir.join(command)))
+}
+
+fn executable_file(path: &Path) -> bool {
+    fs::metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
 }

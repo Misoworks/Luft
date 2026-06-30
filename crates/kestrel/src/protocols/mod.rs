@@ -89,7 +89,6 @@ impl XdgShellHandler for KestrelState {
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         surface.with_pending_state(|state| {
-            state.size = Some((900, 560).into());
             state.states.set(xdg_toplevel::State::Activated);
         });
         self.map_toplevel(surface.clone());
@@ -447,8 +446,12 @@ impl CompositorHandler for KestrelState {
         let needs_render = self.commit_surface_needs_render(surface) || popup_needs_render;
         handle_commit(surface);
         self.popup_manager.commit(surface);
+        let initial_size_adopted = self.adopt_initial_toplevel_size(surface);
         let decoration_changed = self.reconcile_decoration_after_commit(surface);
         if needs_render {
+            self.mark_scene_dirty();
+        }
+        if initial_size_adopted {
             self.mark_scene_dirty();
         }
         if decoration_changed {

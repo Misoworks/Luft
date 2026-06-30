@@ -17,7 +17,10 @@ use crate::{
     theme::ShellPalette,
 };
 use asher_config::AsherConfig;
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 use time::{OffsetDateTime, macros::format_description};
 
 pub struct WebShellSnapshotInput<'a> {
@@ -72,23 +75,33 @@ impl WebShellSnapshot {
             .collect();
 
         for window in &model.windows {
+            if !window_has_identity(window) {
+                continue;
+            }
             if panel_apps
                 .iter()
                 .any(|app| panel_app_matches_window(app, window))
             {
                 continue;
             }
+            let matched_app = application_for_window(window, applications);
             let label = window
                 .title
                 .clone()
+                .or_else(|| matched_app.map(|app| app.name.clone()))
                 .or_else(|| window.app_id.clone())
                 .unwrap_or_else(|| "Window".to_string());
-            let icon_uri = window
-                .app_id
-                .as_deref()
-                .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
-                .as_deref()
-                .and_then(icon_data_uri);
+            let icon_uri = matched_app
+                .and_then(|app| app.icon_path.as_deref())
+                .and_then(icon_data_uri)
+                .or_else(|| {
+                    window
+                        .app_id
+                        .as_deref()
+                        .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
+                        .as_deref()
+                        .and_then(icon_data_uri)
+                });
             web_panel_apps.push(WebPanelApp {
                 label,
                 command: format!("window:{}", window.id.0),
@@ -205,4 +218,63 @@ fn mode_name(mode: asher_ipc::ModeId) -> String {
 
 fn commands_equal(left: &str, right: &str) -> bool {
     normalize_launch_command(left) == normalize_launch_command(right)
+}
+
+fn window_has_identity(window: &asher_ipc::WindowSummary) -> bool {
+    window
+        .title
+        .as_deref()
+        .is_some_and(|value| !value.trim().is_empty())
+        || window
+            .app_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty())
+}
+
+fn application_for_window<'a>(
+    window: &asher_ipc::WindowSummary,
+    applications: &'a [AppEntry],
+) -> Option<&'a AppEntry> {
+    applications.iter().find(|app| {
+        [window.app_id.as_deref(), window.title.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|identifier| app_matches_window_identifier(app, identifier))
+    })
+}
+
+fn app_matches_window_identifier(app: &AppEntry, identifier: &str) -> bool {
+    let identifier = normalized_identifier(identifier);
+    if identifier.is_empty() {
+        return false;
+    }
+
+    [
+        app.startup_wm_class.as_deref(),
+        app.icon.as_deref(),
+        Some(app.name.as_str()),
+        command_name(&app.command),
+    ]
+    .into_iter()
+    .flatten()
+    .map(normalized_identifier)
+    .filter(|candidate| !candidate.is_empty())
+    .any(|candidate| identifier.contains(&candidate) || candidate.contains(&identifier))
+}
+
+fn normalized_identifier(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn command_name(command: &str) -> Option<&str> {
+    let first = command
+        .split_whitespace()
+        .next()?
+        .trim_matches('"')
+        .trim_matches('\'');
+    Path::new(first).file_name()?.to_str()
 }

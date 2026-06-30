@@ -12,7 +12,7 @@ use asher_ipc::{Rect, WindowId, WorkspaceId};
 use smithay::{
     desktop::{WindowSurfaceType, utils::under_from_surface_tree},
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Logical, Point},
+    utils::{Logical, Point, Size},
     wayland::shell::xdg::ToplevelSurface,
 };
 
@@ -52,6 +52,7 @@ impl WindowStack {
             size: (geometry.width, geometry.height).into(),
             requested_server_decoration,
             server_decorated,
+            initial_size_pending: true,
             hidden: false,
             closing: false,
             close_sent: false,
@@ -136,6 +137,25 @@ impl WindowStack {
 
     pub fn window(&self, id: WindowId) -> Option<&ManagedWindow> {
         self.windows.iter().find(|window| window.id == id)
+    }
+
+    pub fn initial_size_pending(&self, id: WindowId) -> bool {
+        self.window(id)
+            .is_some_and(|window| window.initial_size_pending)
+    }
+
+    pub fn set_initial_size_pending(&mut self, id: WindowId, pending: bool) -> bool {
+        let Some(window) = self.windows.iter_mut().find(|window| window.id == id) else {
+            return false;
+        };
+
+        window.initial_size_pending = pending;
+        true
+    }
+
+    pub fn committed_surface_size(&self, id: WindowId) -> Option<Size<i32, Logical>> {
+        let geometry = self.window(id)?.committed_surface_geometry()?;
+        (geometry.size.w > 0 && geometry.size.h > 0).then_some(geometry.size)
     }
 
     pub fn id_for_surface(&self, surface: &ToplevelSurface) -> Option<WindowId> {

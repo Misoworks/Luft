@@ -104,6 +104,8 @@ pub(super) struct WebShell {
     control: Option<ShellControlServer>,
     pub(super) app_processes: Vec<LaunchedProcess>,
     pub(super) startup_apps: Vec<String>,
+    pub(super) startup_apps_launched: bool,
+    pub(super) startup_apps_launch_after: Instant,
     pub(super) launcher_command: String,
     pub(super) start_menu_visible: bool,
     pub(super) quick_visible: bool,

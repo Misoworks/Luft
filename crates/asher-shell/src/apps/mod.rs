@@ -104,6 +104,7 @@ pub fn launcher_apps(config: &AsherConfig, fallback: &[PanelApp]) -> Vec<AppEntr
             comment: None,
             icon: None,
             icon_path: None,
+            startup_wm_class: None,
         })
         .collect()
 }

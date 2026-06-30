@@ -52,9 +52,10 @@ pub fn surfaces(output: &Output) -> Vec<WlSurface> {
 }
 
 pub fn has_panel_surface(output: &Output) -> bool {
-    layer_map_for_output(output)
-        .layers()
-        .any(|layer| layer.namespace() == "asher-panel")
+    layer_map_for_output(output).layers().any(|layer| {
+        layer.namespace() == "asher-panel"
+            && !bbox_from_surface_tree(layer.wl_surface(), (0, 0)).is_empty()
+    })
 }
 
 pub fn pointer_focus(output: &Output, point: Point<f64, Logical>) -> Option<LayerPointerFocus> {

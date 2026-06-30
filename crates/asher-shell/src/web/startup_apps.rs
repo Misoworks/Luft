@@ -1,10 +1,16 @@
 use super::{LaunchedProcess, WebShell};
 use crate::apps::{discover_user_autostart, normalize_launch_command, spawn_command};
 use std::collections::HashSet;
+use std::time::Instant;
 use tracing::{debug, warn};
 
 impl WebShell {
     pub(super) fn launch_startup_apps(&mut self) {
+        if self.startup_apps_launched || Instant::now() < self.startup_apps_launch_after {
+            return;
+        }
+
+        self.startup_apps_launched = true;
         let commands = self.startup_commands();
         for command in commands {
             match spawn_command(&command, self.model.xwayland_display.as_deref()) {

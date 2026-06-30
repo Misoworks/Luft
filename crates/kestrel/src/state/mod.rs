@@ -208,11 +208,32 @@ impl KestrelState {
                     self.animations_enabled(),
                 );
                 self.enter_output(surface.wl_surface());
-                self.apply_active_arrangement();
                 self.mark_scene_dirty();
             }
             Err(error) => debug!(?error, "failed to register toplevel in layout"),
         }
+    }
+
+    pub fn adopt_initial_toplevel_size(&mut self, surface: &WlSurface) -> bool {
+        let Some(id) = self.windows.id_for_wl_surface(surface) else {
+            return false;
+        };
+        if !self.windows.initial_size_pending(id) {
+            return false;
+        }
+        let Some(size) = self.windows.committed_surface_size(id) else {
+            return false;
+        };
+
+        let geometry = self.next_initial_window_geometry_for_size(size);
+        let Some((_surface, geometry)) = self.windows.set_geometry(id, geometry) else {
+            return false;
+        };
+
+        self.windows.set_initial_size_pending(id, false);
+        let _ = self.layout.set_window_geometry(id, geometry);
+        self.apply_active_arrangement();
+        true
     }
 
     pub fn unmap_toplevel(&mut self, surface: &ToplevelSurface) {

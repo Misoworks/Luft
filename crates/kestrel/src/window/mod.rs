@@ -33,6 +33,7 @@ pub struct ManagedWindow {
     pub size: Size<i32, Logical>,
     pub requested_server_decoration: bool,
     pub server_decorated: bool,
+    pub initial_size_pending: bool,
     pub hidden: bool,
     pub closing: bool,
     close_sent: bool,
@@ -85,20 +86,30 @@ impl ManagedWindow {
 
     pub fn surface_geometry(&self) -> Rectangle<i32, Logical> {
         let fallback = Rectangle::from_size(self.size);
-        let geometry = compositor::with_states(self.surface.wl_surface(), |states| {
-            states
-                .cached_state
-                .get::<SurfaceCachedState>()
-                .current()
-                .geometry
-        })
-        .unwrap_or(fallback);
+        let geometry = self.committed_surface_geometry().unwrap_or(fallback);
 
         if geometry.size.w > 0 && geometry.size.h > 0 {
             geometry
         } else {
             fallback
         }
+    }
+
+    pub fn committed_surface_geometry(&self) -> Option<Rectangle<i32, Logical>> {
+        let geometry = compositor::with_states(self.surface.wl_surface(), |states| {
+            states
+                .cached_state
+                .get::<SurfaceCachedState>()
+                .current()
+                .geometry
+        })?;
+
+        if geometry.size.w > 0 && geometry.size.h > 0 {
+            return Some(geometry);
+        }
+
+        let bounds = bbox_from_surface_tree(self.surface.wl_surface(), (0, 0));
+        (!bounds.is_empty()).then_some(bounds)
     }
 
     pub fn titlebar_height(&self) -> i32 {
