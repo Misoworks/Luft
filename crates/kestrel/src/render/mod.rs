@@ -198,7 +198,9 @@ fn layer_material_radius(
 ) -> i32 {
     match material {
         layers::LayerMaterial::Rect => 0,
-        layers::LayerMaterial::RoundRect { radius } => {
+        layers::LayerMaterial::RoundRect { radius }
+        | layers::LayerMaterial::RoundLeft { radius }
+        | layers::LayerMaterial::RoundRight { radius } => {
             radius.max(0).min(size.w / 2).min(size.h / 2)
         }
     }

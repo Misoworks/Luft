@@ -43,6 +43,7 @@ uniform float alpha;
 uniform vec2 texel;
 uniform vec2 target_size;
 uniform float radius;
+uniform float shape;
 uniform vec2 direction;
 uniform float final_pass;
 uniform float mask_pass;
@@ -72,6 +73,41 @@ float roundedCoverage(vec2 pixel) {
     return distance <= 0.0 ? 1.0 : 0.0;
 }
 
+float cornerCoverage(vec2 pixel, vec2 center) {
+    return distance(pixel + vec2(0.5), center) <= radius ? 1.0 : 0.0;
+}
+
+float leftRoundedCoverage(vec2 pixel) {
+    if (radius <= 0.0 || pixel.x >= radius || (pixel.y >= radius && pixel.y < target_size.y - radius)) {
+        return 1.0;
+    }
+
+    vec2 center = vec2(radius, pixel.y < radius ? radius : target_size.y - radius);
+    return cornerCoverage(pixel, center);
+}
+
+float rightRoundedCoverage(vec2 pixel) {
+    if (radius <= 0.0 || pixel.x < target_size.x - radius || (pixel.y >= radius && pixel.y < target_size.y - radius)) {
+        return 1.0;
+    }
+
+    vec2 center = vec2(target_size.x - radius, pixel.y < radius ? radius : target_size.y - radius);
+    return cornerCoverage(pixel, center);
+}
+
+float materialCoverage(vec2 pixel) {
+    if (shape < 0.5) {
+        return 1.0;
+    }
+    if (shape < 1.5) {
+        return roundedCoverage(pixel);
+    }
+    if (shape < 2.5) {
+        return leftRoundedCoverage(pixel);
+    }
+    return rightRoundedCoverage(pixel);
+}
+
 vec2 blurSampleUv(vec2 uv) {
     return clamp(uv, vec2(0.0), vec2(1.0));
 }
@@ -81,7 +117,7 @@ void main() {
     vec4 color;
 
     if (mask_pass > 0.5) {
-        color = texture2D(tex, uv);
+        color = texture2D(tex, blurSampleUv(uv));
     } else {
         vec2 step = texel * direction;
         color = texture2D(tex, blurSampleUv(uv)) * 0.227027;
@@ -100,7 +136,7 @@ void main() {
     color.rgb = luma + (color.rgb - vec3(luma)) * 1.06;
     color.rgb += hash(uv * target_size) * 0.0028;
 
-    float coverage = roundedCoverage(uv * target_size);
+    float coverage = final_pass > 0.5 ? materialCoverage(uv * target_size) : 1.0;
     if (coverage <= 0.0) {
         discard;
     }
@@ -214,6 +250,7 @@ impl SceneBlurCache {
                 UniformName::new("texel", UniformType::_2f),
                 UniformName::new("target_size", UniformType::_2f),
                 UniformName::new("radius", UniformType::_1f),
+                UniformName::new("shape", UniformType::_1f),
                 UniformName::new("direction", UniformType::_2f),
                 UniformName::new("final_pass", UniformType::_1f),
                 UniformName::new("mask_pass", UniformType::_1f),
@@ -254,14 +291,8 @@ impl SceneBlurCache {
         let sample_rect = padded_target_rect(output_size, target, rect);
         let capture_size = blur_texture_size(target, sample_rect.size, quality);
         let texture_size = blur_texture_size(target, rect.size, quality);
-        let source = source_rect_for_visible_target(
-            output_size,
-            target_transform,
-            sample_rect,
-            rect,
-            capture_size,
-        );
-        let (capture, scratch, blurred) = match cached {
+        let visible_source = source_rect_for_visible_target(sample_rect, rect, capture_size);
+        let (capture, scratch, blurred, output) = match cached {
             Some(index)
                 if self.entries[index].texture_size == texture_size
                     && self.entries[index].capture_size == capture_size =>
@@ -284,10 +315,11 @@ impl SceneBlurCache {
                         visible_size: rect.size,
                         texture_size,
                         capture_size,
-                        source,
+                        visible_source,
                         capture: &entry.capture,
                         scratch: &mut entry.scratch,
                         blurred: &mut entry.blurred,
+                        output: &mut entry.output,
                     },
                 )?;
                 entry.rect = rect;
@@ -304,9 +336,13 @@ impl SceneBlurCache {
                 )?;
                 let mut scratch = renderer.create_buffer(
                     Fourcc::Abgr8888,
-                    Size::<i32, Buffer>::from((texture_size.w, texture_size.h)),
+                    Size::<i32, Buffer>::from((capture_size.w, capture_size.h)),
                 )?;
                 let mut blurred = renderer.create_buffer(
+                    Fourcc::Abgr8888,
+                    Size::<i32, Buffer>::from((capture_size.w, capture_size.h)),
+                )?;
+                let mut output = renderer.create_buffer(
                     Fourcc::Abgr8888,
                     Size::<i32, Buffer>::from((texture_size.w, texture_size.h)),
                 )?;
@@ -327,13 +363,14 @@ impl SceneBlurCache {
                         visible_size: rect.size,
                         texture_size,
                         capture_size,
-                        source,
+                        visible_source,
                         capture: &capture,
                         scratch: &mut scratch,
                         blurred: &mut blurred,
+                        output: &mut output,
                     },
                 )?;
-                (capture, scratch, blurred)
+                (capture, scratch, blurred, output)
             }
         };
 
@@ -353,6 +390,7 @@ impl SceneBlurCache {
                     capture,
                     scratch,
                     blurred,
+                    output,
                     target_opacity: target.opacity,
                 };
             }
@@ -370,6 +408,7 @@ impl SceneBlurCache {
                 capture,
                 scratch,
                 blurred,
+                output,
                 target_opacity: target.opacity,
             }),
         }
@@ -459,6 +498,7 @@ struct SceneBlurCacheEntry {
     capture: GlesTexture,
     scratch: GlesTexture,
     blurred: GlesTexture,
+    output: GlesTexture,
     target_opacity: f32,
 }
 
@@ -511,10 +551,11 @@ struct BlurRenderPass<'a> {
     visible_size: Size<i32, Physical>,
     texture_size: Size<i32, Physical>,
     capture_size: Size<i32, Physical>,
-    source: Rectangle<f64, Buffer>,
+    visible_source: Rectangle<f64, Buffer>,
     capture: &'a GlesTexture,
     scratch: &'a mut GlesTexture,
     blurred: &'a mut GlesTexture,
+    output: &'a mut GlesTexture,
 }
 
 fn render_blur_texture(
@@ -522,30 +563,31 @@ fn render_blur_texture(
     pass: BlurRenderPass<'_>,
 ) -> Result<(), GlesError> {
     let full_damage = [Rectangle::<i32, Physical>::from_size(pass.texture_size)];
-    let full_source = Rectangle::<f64, Buffer>::from_size(Size::<f64, Buffer>::from((
-        pass.texture_size.w as f64,
-        pass.texture_size.h as f64,
+    let capture_source = Rectangle::<f64, Buffer>::from_size(Size::<f64, Buffer>::from((
+        pass.capture_size.w as f64,
+        pass.capture_size.h as f64,
     )));
+    let capture_damage = [Rectangle::<i32, Physical>::from_size(pass.capture_size)];
     {
         let mut scratch_target = renderer.bind(pass.scratch)?;
         let mut frame =
-            renderer.render(&mut scratch_target, pass.texture_size, Transform::Normal)?;
+            renderer.render(&mut scratch_target, pass.capture_size, Transform::Normal)?;
         frame.clear(
             smithay::backend::renderer::Color32F::new(0.0, 0.0, 0.0, 0.0),
-            &full_damage,
+            &capture_damage,
         )?;
         frame.render_texture_from_to(
             pass.capture,
-            pass.source,
-            Rectangle::<i32, Physical>::from_size(pass.texture_size),
-            &full_damage,
+            capture_source,
+            Rectangle::<i32, Physical>::from_size(pass.capture_size),
+            &capture_damage,
             &[],
             Transform::Normal,
             1.0,
             Some(pass.program),
             &blur_uniforms(BlurUniforms {
                 texel_size: pass.capture_size,
-                target_size: pass.texture_size,
+                target_size: pass.capture_size,
                 visible_size: pass.visible_size,
                 material: pass.material,
                 direction: (1.0, 0.0),
@@ -559,23 +601,23 @@ fn render_blur_texture(
     {
         let mut blurred_target = renderer.bind(pass.blurred)?;
         let mut frame =
-            renderer.render(&mut blurred_target, pass.texture_size, Transform::Normal)?;
+            renderer.render(&mut blurred_target, pass.capture_size, Transform::Normal)?;
         frame.clear(
             smithay::backend::renderer::Color32F::new(0.0, 0.0, 0.0, 0.0),
-            &full_damage,
+            &capture_damage,
         )?;
         frame.render_texture_from_to(
             pass.scratch,
-            full_source,
-            Rectangle::<i32, Physical>::from_size(pass.texture_size),
-            &full_damage,
+            capture_source,
+            Rectangle::<i32, Physical>::from_size(pass.capture_size),
+            &capture_damage,
             &[],
             Transform::Normal,
             1.0,
             Some(pass.program),
             &blur_uniforms(BlurUniforms {
-                texel_size: pass.texture_size,
-                target_size: pass.texture_size,
+                texel_size: pass.capture_size,
+                target_size: pass.capture_size,
                 visible_size: pass.visible_size,
                 material: pass.material,
                 direction: (0.0, 1.0),
@@ -587,16 +629,16 @@ fn render_blur_texture(
     }
 
     {
-        let mut scratch_target = renderer.bind(pass.scratch)?;
+        let mut output_target = renderer.bind(pass.output)?;
         let mut frame =
-            renderer.render(&mut scratch_target, pass.texture_size, Transform::Normal)?;
+            renderer.render(&mut output_target, pass.texture_size, Transform::Normal)?;
         frame.clear(
             smithay::backend::renderer::Color32F::new(0.0, 0.0, 0.0, 0.0),
             &full_damage,
         )?;
         frame.render_texture_from_to(
             pass.blurred,
-            full_source,
+            pass.visible_source,
             Rectangle::<i32, Physical>::from_size(pass.texture_size),
             &full_damage,
             &[],
@@ -630,7 +672,7 @@ fn render_element(
         entry.id.clone(),
         renderer.context_id(),
         Point::<f64, Physical>::from((rect.loc.x as f64, rect.loc.y as f64)),
-        entry.scratch.clone(),
+        entry.output.clone(),
         1,
         display_transform,
         Some(opacity.clamp(0.0, 1.0)),
@@ -654,7 +696,7 @@ struct BlurUniforms {
     mask_pass: bool,
 }
 
-fn blur_uniforms(uniforms: BlurUniforms) -> [Uniform<'static>; 6] {
+fn blur_uniforms(uniforms: BlurUniforms) -> [Uniform<'static>; 7] {
     [
         Uniform::new(
             "texel",
@@ -674,6 +716,15 @@ fn blur_uniforms(uniforms: BlurUniforms) -> [Uniform<'static>; 6] {
                 uniforms.target_size,
                 uniforms.visible_size,
             )),
+        ),
+        Uniform::new(
+            "shape",
+            UniformValue::_1f(match uniforms.material {
+                LayerMaterial::Rect => 0.0,
+                LayerMaterial::RoundRect { .. } => 1.0,
+                LayerMaterial::RoundLeft { .. } => 2.0,
+                LayerMaterial::RoundRight { .. } => 3.0,
+            }),
         ),
         Uniform::new(
             "direction",
@@ -697,7 +748,9 @@ fn material_radius(
 ) -> f32 {
     match material {
         LayerMaterial::Rect => 0.0,
-        LayerMaterial::RoundRect { radius } => {
+        LayerMaterial::RoundRect { radius }
+        | LayerMaterial::RoundLeft { radius }
+        | LayerMaterial::RoundRight { radius } => {
             let scale_x = visible_size.w.max(1) as f32 / texture_size.w.max(1) as f32;
             let scale_y = visible_size.h.max(1) as f32 / texture_size.h.max(1) as f32;
             let scale = scale_x.min(scale_y).max(1.0);
@@ -739,27 +792,25 @@ fn blur_sample_padding(target: &LayerRenderTarget) -> i32 {
 }
 
 fn source_rect_for_visible_target(
-    output_size: Size<i32, Physical>,
-    transform: Transform,
     sample_rect: Rectangle<i32, Physical>,
     visible_rect: Rectangle<i32, Physical>,
     capture_size: Size<i32, Physical>,
 ) -> Rectangle<f64, Buffer> {
-    let sample_buffer = transform.transform_rect_in(sample_rect, &output_size);
-    let visible_buffer = transform.transform_rect_in(visible_rect, &output_size);
     let scale_x = capture_size.w as f64 / sample_rect.size.w.max(1) as f64;
     let scale_y = capture_size.h as f64 / sample_rect.size.h.max(1) as f64;
+    let max_x = capture_size.w.max(1) as f64;
+    let max_y = capture_size.h.max(1) as f64;
+    let left = ((visible_rect.loc.x - sample_rect.loc.x) as f64 * scale_x).clamp(0.0, max_x);
+    let top = ((visible_rect.loc.y - sample_rect.loc.y) as f64 * scale_y).clamp(0.0, max_y);
+    let right = (left + visible_rect.size.w as f64 * scale_x).clamp(left, max_x);
+    let bottom = (top + visible_rect.size.h as f64 * scale_y).clamp(top, max_y);
+    let left = (left + 0.5).min(right);
+    let top = (top + 0.5).min(bottom);
+    let right = (right - 0.5).max(left);
+    let bottom = (bottom - 0.5).max(top);
     Rectangle::<f64, Buffer>::new(
-        (
-            (visible_buffer.loc.x - sample_buffer.loc.x) as f64 * scale_x,
-            (visible_buffer.loc.y - sample_buffer.loc.y) as f64 * scale_y,
-        )
-            .into(),
-        (
-            visible_buffer.size.w as f64 * scale_x,
-            visible_buffer.size.h as f64 * scale_y,
-        )
-            .into(),
+        (left, top).into(),
+        ((right - left).max(1.0), (bottom - top).max(1.0)).into(),
     )
 }
 

@@ -286,23 +286,28 @@ fn append_workspace_targets(
             continue;
         };
         let clip = Rectangle::from_size(window.surface_geometry().size);
-        for rect in rects_for_region(&region, clip) {
+        for target in targets_for_region(&region, clip) {
             let location = Point::from((
-                (transform.x + (surface_offset.x + rect.loc.x) as f64 * transform.scale).round()
-                    as i32,
+                (transform.x + (surface_offset.x + target.rect.loc.x) as f64 * transform.scale)
+                    .round() as i32,
                 (transform.y
-                    + (titlebar_height + surface_offset.y + rect.loc.y) as f64 * transform.scale)
+                    + (titlebar_height + surface_offset.y + target.rect.loc.y) as f64
+                        * transform.scale)
                     .round() as i32,
             ));
             let size = (
-                (rect.size.w as f64 * transform.scale).round().max(1.0) as i32,
-                (rect.size.h as f64 * transform.scale).round().max(1.0) as i32,
+                (target.rect.size.w as f64 * transform.scale)
+                    .round()
+                    .max(1.0) as i32,
+                (target.rect.size.h as f64 * transform.scale)
+                    .round()
+                    .max(1.0) as i32,
             )
                 .into();
             targets.push(LayerRenderTarget {
                 surface: surface.clone(),
                 blur_layer: BlurLayer::Window,
-                material: LayerMaterial::Rect,
+                material: scaled_material(target.material, transform.scale),
                 opacity: 1.0,
                 location,
                 size,
@@ -322,14 +327,22 @@ fn append_surface_region_targets(
     let Some(region) = current_blur_region(surface) else {
         return;
     };
-    for rect in rects_for_region(&region, Rectangle::from_size(size)) {
+    for target in targets_for_region(&region, Rectangle::from_size(size)) {
         targets.push(LayerRenderTarget {
             surface: surface.clone(),
             blur_layer,
-            material,
+            material: if target.material == LayerMaterial::Rect {
+                material
+            } else {
+                target.material
+            },
             opacity: 1.0,
-            location: (location.x + rect.loc.x, location.y + rect.loc.y).into(),
-            size: rect.size,
+            location: (
+                location.x + target.rect.loc.x,
+                location.y + target.rect.loc.y,
+            )
+                .into(),
+            size: target.rect.size,
         });
     }
 }
@@ -339,6 +352,22 @@ fn titlebar_radius(window: &ManagedWindow, scale: f64) -> i32 {
         0
     } else {
         ((WINDOW_RADIUS as f64) * scale).round().max(1.0) as i32
+    }
+}
+
+fn scaled_material(material: LayerMaterial, scale: f64) -> LayerMaterial {
+    let scale_radius = |radius: i32| ((radius as f64) * scale).round().max(1.0) as i32;
+    match material {
+        LayerMaterial::Rect => LayerMaterial::Rect,
+        LayerMaterial::RoundRect { radius } => LayerMaterial::RoundRect {
+            radius: scale_radius(radius),
+        },
+        LayerMaterial::RoundLeft { radius } => LayerMaterial::RoundLeft {
+            radius: scale_radius(radius),
+        },
+        LayerMaterial::RoundRight { radius } => LayerMaterial::RoundRight {
+            radius: scale_radius(radius),
+        },
     }
 }
 
@@ -372,6 +401,107 @@ fn rects_for_region(
         }
     }
     rects
+}
+
+struct RegionTarget {
+    rect: Rectangle<i32, Logical>,
+    material: LayerMaterial,
+}
+
+fn targets_for_region(
+    region: &RegionAttributes,
+    clip: Rectangle<i32, Logical>,
+) -> Vec<RegionTarget> {
+    let rects = rects_for_region(region, clip);
+    if let Some(target) = coalesced_region_target(&rects, clip) {
+        return vec![target];
+    }
+
+    rects
+        .into_iter()
+        .map(|rect| RegionTarget {
+            rect,
+            material: LayerMaterial::Rect,
+        })
+        .collect()
+}
+
+fn coalesced_region_target(
+    rects: &[Rectangle<i32, Logical>],
+    clip: Rectangle<i32, Logical>,
+) -> Option<RegionTarget> {
+    if rects.len() < 8 {
+        return None;
+    }
+
+    let mut rows = rects.to_vec();
+    rows.sort_by_key(|rect| (rect.loc.y, rect.loc.x));
+    if rows.iter().any(|rect| rect.size.h != 1) {
+        return None;
+    }
+
+    let bounds = bounding_rect(&rows)?;
+    if rows.len() != bounds.size.h as usize {
+        return None;
+    }
+    for (index, row) in rows.iter().enumerate() {
+        if row.loc.y != bounds.loc.y + index as i32 {
+            return None;
+        }
+    }
+
+    let right = bounds.loc.x + bounds.size.w;
+    let clip_right = clip.loc.x + clip.size.w;
+    let radius = rows
+        .iter()
+        .map(|row| {
+            let left_inset = row.loc.x - bounds.loc.x;
+            let right_inset = right - (row.loc.x + row.size.w);
+            left_inset.max(right_inset)
+        })
+        .max()
+        .unwrap_or(0);
+    if radius <= 0 {
+        return None;
+    }
+
+    let material = if bounds == clip
+        && rows.iter().all(|row| {
+            let left_inset = row.loc.x - bounds.loc.x;
+            let right_inset = right - (row.loc.x + row.size.w);
+            left_inset == right_inset
+        }) {
+        LayerMaterial::RoundRect { radius }
+    } else if bounds.loc.x == clip.loc.x && rows.iter().all(|row| row.loc.x + row.size.w == right) {
+        LayerMaterial::RoundLeft { radius }
+    } else if right == clip_right && rows.iter().all(|row| row.loc.x == bounds.loc.x) {
+        LayerMaterial::RoundRight { radius }
+    } else {
+        return None;
+    };
+
+    Some(RegionTarget {
+        rect: bounds,
+        material,
+    })
+}
+
+fn bounding_rect(rects: &[Rectangle<i32, Logical>]) -> Option<Rectangle<i32, Logical>> {
+    let first = rects.first()?;
+    let mut left = first.loc.x;
+    let mut top = first.loc.y;
+    let mut right = first.loc.x + first.size.w;
+    let mut bottom = first.loc.y + first.size.h;
+    for rect in &rects[1..] {
+        left = left.min(rect.loc.x);
+        top = top.min(rect.loc.y);
+        right = right.max(rect.loc.x + rect.size.w);
+        bottom = bottom.max(rect.loc.y + rect.size.h);
+    }
+    Some(Rectangle::new(
+        (left, top).into(),
+        (right - left, bottom - top).into(),
+    ))
 }
 
 fn subtract_rect(rects: &mut Vec<Rectangle<i32, Logical>>, cut: Rectangle<i32, Logical>) {

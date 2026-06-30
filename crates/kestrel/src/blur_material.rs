@@ -192,6 +192,12 @@ fn material_coverage(material: LayerMaterial, x: i32, y: i32, width: i32, height
     match material {
         LayerMaterial::Rect => 1.0,
         LayerMaterial::RoundRect { radius } => round_rect_coverage(x, y, width, height, radius),
+        LayerMaterial::RoundLeft { radius } => {
+            left_round_rect_coverage(x, y, width, height, radius)
+        }
+        LayerMaterial::RoundRight { radius } => {
+            right_round_rect_coverage(x, y, width, height, radius)
+        }
     }
 }
 
@@ -241,6 +247,22 @@ fn inside_round_rect(x: f64, y: f64, width: i32, height: i32, radius: f64) -> bo
     let dx = x - cx;
     let dy = y - cy;
     dx * dx + dy * dy <= radius * radius
+}
+
+fn left_round_rect_coverage(x: i32, y: i32, width: i32, height: i32, radius: i32) -> f32 {
+    if x >= radius.max(0).min(width) {
+        return 1.0;
+    }
+
+    round_rect_coverage(x, y, width + radius.max(0), height, radius)
+}
+
+fn right_round_rect_coverage(x: i32, y: i32, width: i32, height: i32, radius: i32) -> f32 {
+    if x < width - radius.max(0).min(width) {
+        return 1.0;
+    }
+
+    round_rect_coverage(x + radius.max(0), y, width + radius.max(0), height, radius)
 }
 
 fn box_blur(pixels: &mut [u8], width: i32, height: i32, radius: i32) {
