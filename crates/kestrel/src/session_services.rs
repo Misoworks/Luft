@@ -1,3 +1,4 @@
+use asher_config::cursor_environment_entries;
 use std::{
     env,
     path::PathBuf,
@@ -42,6 +43,7 @@ pub fn sync_activation_environment(wayland_display: &str, x11_display: Option<&s
         "DESKTOP_SESSION=asher".to_string(),
         "XDG_SESSION_TYPE=wayland".to_string(),
     ];
+    entries.extend(cursor_environment_entries().map(|(name, value)| format!("{name}={value}")));
     if let Some(display) = x11_display {
         entries.push(format!("DISPLAY={display}"));
     }

@@ -33,6 +33,24 @@ default_scale = 1.0
 scale = 1.25
 ```
 
+Asher picks the largest available mode at the highest refresh rate by default. Pin a mode when needed:
+
+```toml
+[display."DP-1"]
+width = 3440
+height = 1440
+refresh_millihertz = 165000
+```
+
+## Startup Apps
+
+Asher launches user desktop entries from `~/.config/autostart` once when the shell starts. Add explicit commands when you want startup apps that are not represented by desktop files:
+
+```toml
+[session]
+startup_apps = ["rover", "ghostty"]
+```
+
 ## Panel Pins
 
 Pinned panel apps are stored in config:

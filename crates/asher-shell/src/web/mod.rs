@@ -23,6 +23,7 @@ mod panel_actions;
 mod popover_actions;
 mod settings_command;
 mod snapshot;
+mod startup_apps;
 mod surface;
 mod surface_layout;
 mod surface_motion;
@@ -102,6 +103,7 @@ pub(super) struct WebShell {
     queued_actions: VecDeque<WebShellAction>,
     control: Option<ShellControlServer>,
     pub(super) app_processes: Vec<LaunchedProcess>,
+    pub(super) startup_apps: Vec<String>,
     pub(super) launcher_command: String,
     pub(super) start_menu_visible: bool,
     pub(super) quick_visible: bool,
@@ -156,6 +158,7 @@ impl WebShell {
         self.tray.refresh();
         self.notifications.refresh();
         self.refresh_model();
+        self.launch_startup_apps();
         self.refresh_status();
         self.refresh_config();
         self.sync_chrome();

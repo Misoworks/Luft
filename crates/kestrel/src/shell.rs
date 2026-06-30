@@ -1,4 +1,4 @@
-use asher_config::{AsherConfig, IGNORE_USER_CONFIG_ENV};
+use asher_config::{AsherConfig, IGNORE_USER_CONFIG_ENV, cursor_environment_entries};
 use asher_ipc::{SHELL_SOCKET_ENV, SOCKET_ENV, ShellStatus};
 use std::{
     env,
@@ -142,6 +142,9 @@ impl ShellProcess {
             )
             .env(SOCKET_ENV, &self.ipc_socket)
             .env(SHELL_SOCKET_ENV, &self.shell_socket);
+        for (name, value) in cursor_environment_entries() {
+            command.env(name, value);
+        }
         if self.default_config {
             command.env(IGNORE_USER_CONFIG_ENV, "1");
         } else {

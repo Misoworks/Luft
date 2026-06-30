@@ -8,6 +8,7 @@ use thiserror::Error;
 
 mod appearance;
 mod apps;
+mod cursor_theme;
 mod display;
 mod panel;
 mod paths;
@@ -16,6 +17,10 @@ mod session;
 
 pub use appearance::AppearanceConfig;
 pub use apps::DefaultAppsConfig;
+pub use cursor_theme::{
+    DEFAULT_CURSOR_SIZE, DEFAULT_CURSOR_THEME_DIR, DEFAULT_CURSOR_THEME_NAME,
+    DEFAULT_CURSOR_THEME_PARENT, cursor_environment_entries,
+};
 pub use display::{DisplayConfig, OutputConfig};
 pub use panel::{PanelConfig, PinnedAppConfig};
 pub use paths::ConfigPaths;

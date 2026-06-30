@@ -4,10 +4,10 @@ mod desktop_entry;
 mod icon_theme;
 mod xdg;
 
-pub use desktop_entry::{AppEntry, discover_applications};
+pub use desktop_entry::{AppEntry, discover_applications, discover_user_autostart};
 pub(crate) use icon_theme::resolve_icon_path;
 
-use asher_config::{AsherConfig, ConfigPaths};
+use asher_config::{AsherConfig, ConfigPaths, cursor_environment_entries};
 use std::{
     env,
     fs::OpenOptions,
@@ -353,6 +353,9 @@ fn apply_app_environment(command: &mut Command, xwayland_display: Option<&str>) 
     command.env("MOZ_ENABLE_WAYLAND", "1");
     command.env("ELECTRON_OZONE_PLATFORM_HINT", "wayland");
     command.env("NIXOS_OZONE_WL", "1");
+    for (name, value) in cursor_environment_entries() {
+        command.env(name, value);
+    }
     command.env_remove("WAYLAND_DISPLAY");
     if let Some(display) = asher_wayland_display() {
         command.env("WAYLAND_DISPLAY", display);

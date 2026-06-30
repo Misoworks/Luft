@@ -41,6 +41,7 @@ impl WebShell {
 
         Ok(Self {
             launcher_command: config.default_apps.launcher.clone(),
+            startup_apps: config.session.startup_apps.clone(),
             config,
             palette,
             model,

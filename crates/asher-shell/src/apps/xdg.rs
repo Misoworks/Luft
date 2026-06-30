@@ -17,6 +17,12 @@ pub(super) fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+pub(super) fn config_home() -> Option<PathBuf> {
+    env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+}
+
 pub(super) fn command_name(command: &str) -> Option<&str> {
     let first = command
         .split_whitespace()

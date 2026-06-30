@@ -64,7 +64,7 @@ impl Default for SessionEnvironment {
 
 impl SessionEnvironment {
     pub fn entries(&self) -> Vec<(&'static str, &str)> {
-        vec![
+        let mut entries = vec![
             ("XDG_CURRENT_DESKTOP", self.xdg_current_desktop.as_str()),
             ("XDG_SESSION_DESKTOP", self.xdg_session_desktop.as_str()),
             ("DESKTOP_SESSION", self.desktop_session.as_str()),
@@ -76,7 +76,9 @@ impl SessionEnvironment {
             ("MOZ_ENABLE_WAYLAND", "1"),
             ("ELECTRON_OZONE_PLATFORM_HINT", "auto"),
             ("NO_AT_BRIDGE", "1"),
-        ]
+        ];
+        entries.extend(asher_config::cursor_environment_entries());
+        entries
     }
 
     pub fn apply_to_command(&self, command: &mut Command) {

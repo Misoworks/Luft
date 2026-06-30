@@ -131,6 +131,7 @@ impl SessionFrameRenderer {
         }
         let show_loading =
             should_show_loading_overlay(shell_layers_ready, self.shell_layers_seen_ready);
+        let workspace_transition_active = state.workspace_transition().is_some();
         let scene_dirty = state.take_scene_dirty();
         let debug_needs_render =
             state.config.compositor.debug_overlay && self.debug_overlay_cache.needs_refresh();
@@ -146,6 +147,7 @@ impl SessionFrameRenderer {
             || removed_windows
             || finished_window_closes
             || state.animations_active()
+            || workspace_transition_active
             || blur_animating
             || show_loading
             || self
@@ -264,6 +266,12 @@ impl SessionFrameRenderer {
             DrmError::Unsupported(format!("failed to bind GBM buffer: {error}"))
         })?;
         let debug_overlay = self.debug_overlay(state, renderer, content_render_needed)?;
+        let force_scene_full_damage = force_full_damage
+            || blur_animating
+            || self.previous_frame_direct
+            || show_loading
+            || workspace_transition_active
+            || layer_geometry_changed;
         let CompositorDamagePlan {
             damage,
             blur_damage,
@@ -274,9 +282,7 @@ impl SessionFrameRenderer {
                 output_size: state.output_size(),
                 output: state.output(),
                 buffer_age: usize::from(buffer_age),
-                force_full_damage: force_full_damage
-                    || blur_animating
-                    || self.previous_frame_direct,
+                force_full_damage: force_scene_full_damage,
                 blur_enabled,
                 blur_animating,
                 window_effect_targets: &window_effect_targets,

@@ -54,6 +54,15 @@ pub fn discover_applications(config: &AsherConfig) -> Vec<AppEntry> {
     entries
 }
 
+pub fn discover_user_autostart(config: &AsherConfig) -> Vec<AppEntry> {
+    let Some(dir) = xdg::config_home().map(|config_home| config_home.join("autostart")) else {
+        return Vec::new();
+    };
+    let mut entries = BTreeMap::new();
+    collect_autostart_entries(&dir, config, &mut entries);
+    entries.into_values().collect()
+}
+
 fn collect_desktop_entries(
     dir: &Path,
     config: &AsherConfig,
@@ -72,13 +81,43 @@ fn collect_desktop_entries(
         if path.extension().and_then(|ext| ext.to_str()) != Some("desktop") {
             continue;
         }
-        if let Some(app) = parse_desktop_entry(&path, config) {
+        if let Some(app) = parse_desktop_entry(&path, config, DesktopEntryContext::Applications) {
             entries.entry(app.name.to_lowercase()).or_insert(app);
         }
     }
 }
 
-fn parse_desktop_entry(path: &Path, config: &AsherConfig) -> Option<AppEntry> {
+fn collect_autostart_entries(
+    dir: &Path,
+    config: &AsherConfig,
+    entries: &mut BTreeMap<String, AppEntry>,
+) {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("desktop") {
+            continue;
+        }
+        if let Some(app) = parse_desktop_entry(&path, config, DesktopEntryContext::Autostart) {
+            entries.entry(app.name.to_lowercase()).or_insert(app);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum DesktopEntryContext {
+    Applications,
+    Autostart,
+}
+
+fn parse_desktop_entry(
+    path: &Path,
+    config: &AsherConfig,
+    context: DesktopEntryContext,
+) -> Option<AppEntry> {
     let content = fs::read_to_string(path).ok()?;
     let mut in_desktop_entry = false;
     let mut values = BTreeMap::new();
@@ -109,7 +148,7 @@ fn parse_desktop_entry(path: &Path, config: &AsherConfig) -> Option<AppEntry> {
     {
         return None;
     }
-    if truthy(values.get("NoDisplay")) || truthy(values.get("Hidden")) {
+    if !entry_visible_in_context(&values, context) {
         return None;
     }
 
@@ -135,8 +174,49 @@ fn parse_desktop_entry(path: &Path, config: &AsherConfig) -> Option<AppEntry> {
     })
 }
 
+fn entry_visible_in_context(
+    values: &BTreeMap<String, String>,
+    context: DesktopEntryContext,
+) -> bool {
+    if truthy(values.get("Hidden")) {
+        return false;
+    }
+
+    match context {
+        DesktopEntryContext::Applications => !truthy(values.get("NoDisplay")),
+        DesktopEntryContext::Autostart => {
+            if falsey(values.get("X-GNOME-Autostart-enabled")) {
+                return false;
+            }
+            if values
+                .get("OnlyShowIn")
+                .is_some_and(|value| !desktop_list_contains(value, "Asher"))
+            {
+                return false;
+            }
+            if values
+                .get("NotShowIn")
+                .is_some_and(|value| desktop_list_contains(value, "Asher"))
+            {
+                return false;
+            }
+            true
+        }
+    }
+}
+
 fn truthy(value: Option<&String>) -> bool {
     value.is_some_and(|value| value.eq_ignore_ascii_case("true"))
+}
+
+fn falsey(value: Option<&String>) -> bool {
+    value.is_some_and(|value| value.eq_ignore_ascii_case("false"))
+}
+
+fn desktop_list_contains(value: &str, desktop: &str) -> bool {
+    value
+        .split(';')
+        .any(|entry| entry.trim().eq_ignore_ascii_case(desktop))
 }
 
 fn clean_exec(exec: &str) -> Option<String> {

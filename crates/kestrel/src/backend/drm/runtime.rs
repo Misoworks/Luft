@@ -36,7 +36,7 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
         DrmError::Unsupported(format!("failed to create Wayland display: {error}"))
     })?;
     let dh = display.handle();
-    let opened = device::open(&dh)?;
+    let opened = device::open(&dh, &options.config.display)?;
     let mut device = opened.device;
     let device::SessionSources {
         session_notifier,
@@ -146,7 +146,7 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
             }
             match event {
                 UdevEvent::Changed { .. } => {
-                    if device.rescan_outputs()? {
+                    if device.rescan_outputs(&state.config.display)? {
                         state.set_output_descriptors(device.descriptors());
                         frame_renderer.reset_for_output(&state);
                         force_full_damage = true;

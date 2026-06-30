@@ -17,6 +17,7 @@ lock_command = "if command -v asher-lock >/dev/null 2>&1; then exec asher-lock; 
 suspend_command = "systemctl suspend"
 reboot_command = "systemctl reboot"
 poweroff_command = "systemctl poweroff"
+startup_apps = []
 
 [appearance]
 animations = true

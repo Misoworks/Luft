@@ -235,6 +235,7 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             shell_layers_seen_ready = true;
         }
         let show_loading = should_show_loading_overlay(shell_layers_ready, shell_layers_seen_ready);
+        let workspace_transition_active = state.workspace_transition().is_some();
         let scene_dirty = state.take_scene_dirty();
         let debug_needs_render =
             state.config.compositor.debug_overlay && debug_overlay_cache.needs_refresh();
@@ -247,6 +248,7 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             || removed_windows
             || finished_window_closes
             || state.animations_active()
+            || workspace_transition_active
             || blur_animating
             || show_loading;
         let render_needed = content_render_needed || debug_needs_render;
@@ -369,7 +371,11 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                     output_size: output.size,
                     output: state.output(),
                     buffer_age,
-                    force_full_damage: force_full_damage || blur_animating,
+                    force_full_damage: force_full_damage
+                        || blur_animating
+                        || show_loading
+                        || workspace_transition_active
+                        || layer_geometry_changed,
                     blur_enabled,
                     blur_animating,
                     window_effect_targets: &window_effect_targets,

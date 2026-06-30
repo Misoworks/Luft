@@ -1,5 +1,6 @@
 use super::DrmError;
 use crate::state::KestrelState;
+use asher_config::DEFAULT_CURSOR_THEME_DIR;
 use smithay::{
     backend::drm::{DrmDevice, DrmDeviceFd},
     input::pointer::{CursorIcon, CursorImageStatus},
@@ -8,6 +9,7 @@ use smithay::{
         control::{Device as ControlDevice, crtc, dumbbuffer::DumbBuffer},
     },
 };
+use std::{env, fs, path::PathBuf};
 use tracing::warn;
 
 const ARROW_WIDTH: u32 = 28;
@@ -211,8 +213,32 @@ fn load_cursor_pixels(
     max_width: u32,
     max_height: u32,
 ) -> Option<(Vec<u8>, (u32, u32), String)> {
-    let bytes = cursor_bytes(name);
-    let image = parse_xcursor(&bytes, max_width, max_height)?;
+    if let Some((bytes, cursor_name)) = cursor_theme_bytes(name)
+        && let Some(image) = parse_xcursor(&bytes, max_width, max_height)
+    {
+        return Some(cursor_pixels_from_image(
+            image,
+            max_width,
+            max_height,
+            cursor_name,
+        ));
+    }
+
+    let image = parse_xcursor(cursor_bytes(name), max_width, max_height)?;
+    Some(cursor_pixels_from_image(
+        image,
+        max_width,
+        max_height,
+        name.to_string(),
+    ))
+}
+
+fn cursor_pixels_from_image(
+    image: XcursorImage,
+    max_width: u32,
+    max_height: u32,
+    cursor_name: String,
+) -> (Vec<u8>, (u32, u32), String) {
     let mut pixels = vec![0; max_width as usize * max_height as usize * 4];
     let copy_width = image.width.min(max_width);
     let copy_height = image.height.min(max_height);
@@ -223,14 +249,29 @@ fn load_cursor_pixels(
             pixels[dst..dst + 4].copy_from_slice(&image.pixels[src..src + 4]);
         }
     }
-    Some((
+    (
         pixels,
         (
             image.xhot.min(max_width.saturating_sub(1)),
             image.yhot.min(max_height.saturating_sub(1)),
         ),
-        name.to_string(),
-    ))
+        cursor_name,
+    )
+}
+
+fn cursor_theme_bytes(name: &str) -> Option<(Vec<u8>, String)> {
+    let theme_dir = env::var_os("ASHER_CURSOR_THEME_DIR")
+        .map(PathBuf::from)
+        .or_else(default_cursor_theme_dir)?;
+    let path = theme_dir.join("cursors").join(name);
+    fs::read(&path)
+        .ok()
+        .map(|bytes| (bytes, path.display().to_string()))
+}
+
+fn default_cursor_theme_dir() -> Option<PathBuf> {
+    let path = PathBuf::from(DEFAULT_CURSOR_THEME_DIR);
+    path.join("cursors").is_dir().then_some(path)
 }
 
 fn cursor_bytes(name: &str) -> &'static [u8] {

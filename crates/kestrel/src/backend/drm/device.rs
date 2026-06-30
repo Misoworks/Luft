@@ -1,5 +1,6 @@
 use super::{DrmError, cursor::HardwareCursor, scanout::DirectScanout};
 use crate::output::OutputDescriptor;
+use asher_config::{DisplayConfig, OutputConfig};
 use smithay::{
     backend::{
         allocator::{
@@ -29,6 +30,7 @@ use smithay::{
     },
     utils::{DeviceFd, Physical, Raw, Size, Transform},
 };
+use std::cmp::Ordering;
 use tracing::{debug, info};
 
 pub type SessionSurface = GbmBufferedSurface<GbmAllocator<DrmDeviceFd>, ()>;
@@ -58,7 +60,10 @@ pub struct SessionDevice {
     pub renderer: GlesRenderer,
 }
 
-pub fn open(_display: &DisplayHandle) -> Result<OpenedSessionDevice, DrmError> {
+pub fn open(
+    _display: &DisplayHandle,
+    display_config: &DisplayConfig,
+) -> Result<OpenedSessionDevice, DrmError> {
     let (mut session, session_notifier) = LibSeatSession::new().map_err(|error| {
         DrmError::Unsupported(format!("failed to open libseat session: {error}"))
     })?;
@@ -102,7 +107,7 @@ pub fn open(_display: &DisplayHandle) -> Result<OpenedSessionDevice, DrmError> {
             path.display()
         ))
     })?;
-    let outputs = ConnectedOutput::discover_all(&drm)?;
+    let outputs = ConnectedOutput::discover_all(&drm, display_config)?;
     let output = outputs.first().cloned().ok_or_else(|| {
         DrmError::Unsupported("no connected DRM outputs with usable modes were found".to_string())
     })?;
@@ -170,8 +175,8 @@ pub fn open(_display: &DisplayHandle) -> Result<OpenedSessionDevice, DrmError> {
 }
 
 impl SessionDevice {
-    pub fn rescan_outputs(&mut self) -> Result<bool, DrmError> {
-        let connected = ConnectedOutput::discover_all(&self.drm)?;
+    pub fn rescan_outputs(&mut self, display_config: &DisplayConfig) -> Result<bool, DrmError> {
+        let connected = ConnectedOutput::discover_all(&self.drm, display_config)?;
         let output = connected.first().cloned().ok_or_else(|| {
             DrmError::Unsupported(
                 "no connected DRM outputs with usable modes were found".to_string(),
@@ -395,14 +400,17 @@ impl ConnectedOutput {
         self.connector == other.connector && self.crtc == other.crtc && self.mode == other.mode
     }
 
-    fn discover_all(device: &DrmDevice) -> Result<Vec<Self>, DrmError> {
+    fn discover_all(
+        device: &DrmDevice,
+        display_config: &DisplayConfig,
+    ) -> Result<Vec<Self>, DrmError> {
         let resources = device.resource_handles().map_err(|error| {
             DrmError::Unsupported(format!("failed to read DRM resources: {error}"))
         })?;
         let mut outputs = Vec::new();
         let mut used_crtcs = Vec::new();
         for connector in resources.connectors() {
-            match Self::for_connector(device, &resources, *connector, &used_crtcs) {
+            match Self::for_connector(device, &resources, *connector, &used_crtcs, display_config) {
                 Ok(Some(output)) => {
                     used_crtcs.push(output.crtc);
                     outputs.push(output);
@@ -425,6 +433,7 @@ impl ConnectedOutput {
         resources: &ResourceHandles,
         connector: connector::Handle,
         used_crtcs: &[crtc::Handle],
+        display_config: &DisplayConfig,
     ) -> Result<Option<Self>, DrmError> {
         let info = device.get_connector(connector, true).map_err(|error| {
             DrmError::Unsupported(format!(
@@ -436,7 +445,8 @@ impl ConnectedOutput {
             return Ok(None);
         }
 
-        let Some(mode) = info.modes().first().copied() else {
+        let connector_name = info.to_string();
+        let Some(mode) = select_mode(&info, display_config.outputs.get(&connector_name)) else {
             debug!(connector = %info, "skipping connected DRM connector without modes");
             return Ok(None);
         };
@@ -446,7 +456,6 @@ impl ConnectedOutput {
             )));
         };
         let (width, height) = mode.size();
-        let connector_name = info.to_string();
         Ok(Some(Self {
             descriptor: OutputDescriptor {
                 name: connector_name.clone(),
@@ -472,6 +481,72 @@ fn connector_physical_size(info: &connector::Info) -> Size<i32, Raw> {
         .and_then(|(width, height)| Some((i32::try_from(width).ok()?, i32::try_from(height).ok()?)))
         .unwrap_or_default()
         .into()
+}
+
+fn select_mode(info: &connector::Info, output_config: Option<&OutputConfig>) -> Option<Mode> {
+    if let Some(mode) = output_config.and_then(|config| configured_mode(info.modes(), config)) {
+        return Some(mode);
+    }
+
+    info.modes().iter().copied().max_by_key(|mode| {
+        let (width, height) = mode.size();
+        (
+            u64::from(width) * u64::from(height),
+            mode_refresh_millihertz(*mode),
+        )
+    })
+}
+
+fn configured_mode(modes: &[Mode], config: &OutputConfig) -> Option<Mode> {
+    let mut best = None;
+    for mode in modes
+        .iter()
+        .copied()
+        .filter(|mode| mode_matches_config_dimensions(*mode, config))
+    {
+        if best.is_none_or(|current| compare_configured_modes(mode, current, config).is_gt()) {
+            best = Some(mode);
+        }
+    }
+    best
+}
+
+fn compare_configured_modes(left: Mode, right: Mode, config: &OutputConfig) -> Ordering {
+    if let Some(refresh) = config.refresh_millihertz {
+        let left_delta = mode_refresh_millihertz(left).abs_diff(refresh);
+        let right_delta = mode_refresh_millihertz(right).abs_diff(refresh);
+        let refresh_ordering = right_delta.cmp(&left_delta);
+        if refresh_ordering != Ordering::Equal {
+            return refresh_ordering;
+        }
+    }
+
+    default_mode_ordering(left, right)
+}
+
+fn default_mode_ordering(left: Mode, right: Mode) -> Ordering {
+    let (left_width, left_height) = left.size();
+    let (right_width, right_height) = right.size();
+    let left_area = u64::from(left_width) * u64::from(left_height);
+    let right_area = u64::from(right_width) * u64::from(right_height);
+    left_area
+        .cmp(&right_area)
+        .then_with(|| mode_refresh_millihertz(left).cmp(&mode_refresh_millihertz(right)))
+}
+
+fn mode_matches_config_dimensions(mode: Mode, config: &OutputConfig) -> bool {
+    let (width, height) = mode.size();
+    config
+        .width
+        .is_none_or(|requested| i32::from(width) == requested)
+        && config
+            .height
+            .is_none_or(|requested| i32::from(height) == requested)
+}
+
+fn mode_refresh_millihertz(mode: Mode) -> i32 {
+    i32::try_from(mode.vrefresh().saturating_mul(1000))
+        .unwrap_or(crate::output::DEFAULT_REFRESH_MILLIHERTZ)
 }
 
 fn select_crtc(
