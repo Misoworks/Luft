@@ -11,10 +11,11 @@ use smithay::{
     delegate_presentation, delegate_primary_selection, delegate_seat, delegate_shm,
     delegate_text_input_manager, delegate_viewporter, delegate_xdg_activation,
     delegate_xdg_decoration, delegate_xdg_shell, delegate_xdg_toplevel_icon,
-    desktop::PopupKind,
+    desktop::{PopupKeyboardGrab, PopupKind, PopupPointerGrab},
     input::{
         Seat, SeatHandler,
-        pointer::{CursorIcon, CursorImageStatus},
+        keyboard::LedState,
+        pointer::{CursorIcon, CursorImageStatus, Focus},
     },
     output::Output,
     reexports::{
@@ -100,6 +101,7 @@ impl XdgShellHandler for KestrelState {
     }
 
     fn new_popup(&mut self, surface: PopupSurface, _positioner: PositionerState) {
+        self.enter_output(surface.wl_surface());
         let _ = self
             .popup_manager
             .track_popup(PopupKind::from(surface.clone()));
@@ -139,7 +141,26 @@ impl XdgShellHandler for KestrelState {
         self.begin_client_resize(surface, edge);
     }
 
-    fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {}
+    fn grab(&mut self, surface: PopupSurface, _seat: wl_seat::WlSeat, serial: Serial) {
+        let popup = PopupKind::from(surface);
+        let Ok(root) = smithay::desktop::find_popup_root_surface(&popup) else {
+            return;
+        };
+        let seat = self.seat.clone();
+        let Ok(grab) = self
+            .popup_manager
+            .grab_popup::<Self>(root, popup, &seat, serial)
+        else {
+            return;
+        };
+
+        if let Some(keyboard) = seat.get_keyboard() {
+            keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
+        }
+        if let Some(pointer) = seat.get_pointer() {
+            pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
+        }
+    }
 
     fn reposition_request(
         &mut self,
@@ -147,7 +168,13 @@ impl XdgShellHandler for KestrelState {
         _positioner: PositionerState,
         token: u32,
     ) {
-        let _ = surface.send_repositioned(token);
+        surface.send_repositioned(token);
+        self.mark_scene_dirty();
+    }
+
+    fn popup_destroyed(&mut self, surface: PopupSurface) {
+        self.leave_output(surface.wl_surface());
+        self.mark_scene_dirty();
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
@@ -385,6 +412,7 @@ impl WlrLayerShellHandler for KestrelState {
     }
 
     fn new_popup(&mut self, _parent: LayerSurface, popup: PopupSurface) {
+        self.enter_output(popup.wl_surface());
         let _ = self
             .popup_manager
             .track_popup(PopupKind::from(popup.clone()));
@@ -446,9 +474,10 @@ impl CompositorHandler for KestrelState {
         let needs_render = self.commit_surface_needs_render(surface) || popup_needs_render;
         handle_commit(surface);
         self.popup_manager.commit(surface);
+        let popup_mapped = !popup_needs_render && self.popup_manager.find_popup(surface).is_some();
         let initial_size_adopted = self.adopt_initial_toplevel_size(surface);
         let decoration_changed = self.reconcile_decoration_after_commit(surface);
-        if needs_render {
+        if needs_render || popup_mapped {
             self.mark_scene_dirty();
         }
         if initial_size_adopted {
@@ -493,6 +522,10 @@ impl SeatHandler for KestrelState {
             image => image,
         };
         self.cursor_dirty = true;
+    }
+
+    fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {
+        self.set_pending_keyboard_led_state(led_state);
     }
 }
 

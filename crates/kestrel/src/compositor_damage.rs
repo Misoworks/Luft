@@ -5,6 +5,7 @@ use crate::{
     },
     layers::{self, LayerRenderTarget},
     render::LayerElement,
+    scene_blur::blur_sample_rect,
     submitted_damage::SubmittedDamageHistory,
     window_clip::RoundedWindowElement,
 };
@@ -56,7 +57,7 @@ pub fn plan_compositor_damage(
     layer_geometry: &mut LayerGeometryTracker,
     submitted_damage: &SubmittedDamageHistory,
 ) -> CompositorDamagePlan {
-    let force_damage = ctx.force_full_damage || ctx.blur_animating;
+    let force_damage = ctx.force_full_damage;
     let damage_plan = {
         let elements = damage_elements(
             ctx.background,
@@ -80,11 +81,9 @@ pub fn plan_compositor_damage(
         );
         blur_damage_tracker.plan(ctx.output_size, ctx.buffer_age, force_damage, &elements)
     };
-    let damage = if ctx.blur_enabled {
-        expand_damage_for_blur_targets(
+    let blur_animation_damage = if ctx.blur_enabled && ctx.blur_animating {
+        blur_target_rectangles(
             ctx.output_size,
-            &damage_plan.rectangles,
-            &blur_damage_plan.rectangles,
             &[
                 ctx.window_effect_targets,
                 ctx.top_targets,
@@ -92,7 +91,25 @@ pub fn plan_compositor_damage(
             ],
         )
     } else {
-        damage_plan.rectangles.clone()
+        Vec::new()
+    };
+    let mut damage_rectangles = damage_plan.rectangles.clone();
+    damage_rectangles.extend(blur_animation_damage.iter().copied());
+    let mut blur_damage_rectangles = blur_damage_plan.rectangles.clone();
+    blur_damage_rectangles.extend(blur_animation_damage);
+    let damage = if ctx.blur_enabled {
+        expand_damage_for_blur_targets(
+            ctx.output_size,
+            &damage_rectangles,
+            &blur_damage_rectangles,
+            &[
+                ctx.window_effect_targets,
+                ctx.top_targets,
+                ctx.overlay_targets,
+            ],
+        )
+    } else {
+        damage_rectangles
     };
     let (damage, geometry_changed) = layer_geometry.expand_damage(
         ctx.output_size,
@@ -102,8 +119,8 @@ pub fn plan_compositor_damage(
     let blur_damage = if ctx.blur_enabled {
         expand_damage_for_blur_targets(
             ctx.output_size,
-            &blur_damage_plan.rectangles,
-            &damage_plan.rectangles,
+            &blur_damage_rectangles,
+            &damage,
             &[
                 ctx.window_effect_targets,
                 ctx.top_targets,
@@ -111,7 +128,7 @@ pub fn plan_compositor_damage(
             ],
         )
     } else {
-        blur_damage_plan.rectangles.clone()
+        blur_damage_rectangles
     };
     let blur_damage = merge_damage_rectangles(
         Rectangle::<i32, Physical>::from_size(ctx.output_size),
@@ -120,7 +137,7 @@ pub fn plan_compositor_damage(
             .chain(damage.iter().copied())
             .collect(),
     );
-    let force_geometry_damage = geometry_changed || ctx.blur_animating;
+    let force_geometry_damage = geometry_changed;
     let damage = submitted_damage.accumulate(ctx.output_size, &damage, ctx.buffer_age);
     let blur_damage = if force_geometry_damage && ctx.blur_enabled {
         vec![Rectangle::<i32, Physical>::from_size(ctx.output_size)]
@@ -133,4 +150,19 @@ pub fn plan_compositor_damage(
         damage,
         blur_damage,
     }
+}
+
+fn blur_target_rectangles(
+    output_size: Size<i32, Physical>,
+    target_groups: &[&[LayerRenderTarget]],
+) -> Vec<Rectangle<i32, Physical>> {
+    let output = Rectangle::<i32, Physical>::from_size(output_size);
+    merge_damage_rectangles(
+        output,
+        target_groups
+            .iter()
+            .flat_map(|targets| targets.iter())
+            .filter_map(|target| blur_sample_rect(output_size, target))
+            .collect(),
+    )
 }

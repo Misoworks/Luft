@@ -10,7 +10,7 @@ use super::{
 use crate::window_animation::WindowAnimation;
 use asher_ipc::{Rect, WindowId, WorkspaceId};
 use smithay::{
-    desktop::{WindowSurfaceType, utils::under_from_surface_tree},
+    desktop::{PopupKind, PopupManager, WindowSurfaceType, utils::under_from_surface_tree},
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{Logical, Point, Size},
     wayland::shell::xdg::ToplevelSurface,
@@ -344,6 +344,9 @@ impl WindowStack {
         active_workspace: &WorkspaceId,
     ) -> Option<(WlSurface, Point<f64, Logical>)> {
         for window in self.visible_windows_for_workspace(active_workspace) {
+            if let Some(focus) = popup_pointer_focus(window, point) {
+                return Some(focus);
+            }
             if !content_contains(window, point) {
                 continue;
             }
@@ -457,10 +460,18 @@ impl WindowStack {
     }
 
     pub fn surfaces(&self) -> Vec<WlSurface> {
-        self.windows
+        let mut surfaces = self
+            .windows
             .iter()
             .map(|window| window.surface.wl_surface().clone())
-            .collect()
+            .collect::<Vec<_>>();
+        for root in surfaces.clone() {
+            surfaces.extend(
+                PopupManager::popups_for_surface(&root)
+                    .map(|(popup, _)| popup.wl_surface().clone()),
+            );
+        }
+        surfaces
     }
 
     pub fn animations_active(&self) -> bool {
@@ -528,6 +539,7 @@ fn interactive_contains(window: &ManagedWindow, point: Point<f64, Logical>) -> b
     titlebar_contains(window, point)
         || resize_edge_at(window, point).is_some()
         || surface_contains(window, point)
+        || popup_contains(window, point)
 }
 
 fn surface_contains(window: &ManagedWindow, point: Point<f64, Logical>) -> bool {
@@ -538,6 +550,34 @@ fn surface_contains(window: &ManagedWindow, point: Point<f64, Logical>) -> bool 
         WindowSurfaceType::ALL,
     )
     .is_some()
+}
+
+fn popup_pointer_focus(
+    window: &ManagedWindow,
+    point: Point<f64, Logical>,
+) -> Option<(WlSurface, Point<f64, Logical>)> {
+    for (popup, popup_offset) in PopupManager::popups_for_surface(window.surface.wl_surface()) {
+        let location = popup_location(window, &popup, popup_offset);
+        if let Some((surface, location)) =
+            under_from_surface_tree(popup.wl_surface(), point, location, WindowSurfaceType::ALL)
+        {
+            return Some((surface, location.to_f64()));
+        }
+    }
+
+    None
+}
+
+fn popup_contains(window: &ManagedWindow, point: Point<f64, Logical>) -> bool {
+    popup_pointer_focus(window, point).is_some()
+}
+
+fn popup_location(
+    window: &ManagedWindow,
+    popup: &PopupKind,
+    popup_offset: Point<i32, Logical>,
+) -> Point<i32, Logical> {
+    window.surface_location() + popup_offset - popup.geometry().loc
 }
 
 fn client_drag_region_contains(window: &ManagedWindow, point: Point<f64, Logical>) -> bool {

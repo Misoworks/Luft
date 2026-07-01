@@ -85,6 +85,12 @@ impl WebShellSnapshot {
                 continue;
             }
             let matched_app = application_for_window(window, applications);
+            let app_id_icon_uri = window
+                .app_id
+                .as_deref()
+                .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
+                .as_deref()
+                .and_then(icon_data_uri);
             let label = window
                 .title
                 .clone()
@@ -94,14 +100,10 @@ impl WebShellSnapshot {
             let icon_uri = matched_app
                 .and_then(|app| app.icon_path.as_deref())
                 .and_then(icon_data_uri)
-                .or_else(|| {
-                    window
-                        .app_id
-                        .as_deref()
-                        .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
-                        .as_deref()
-                        .and_then(icon_data_uri)
-                });
+                .or(app_id_icon_uri);
+            if matched_app.is_none() && icon_uri.is_none() {
+                continue;
+            }
             web_panel_apps.push(WebPanelApp {
                 label,
                 command: format!("window:{}", window.id.0),

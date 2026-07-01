@@ -220,6 +220,7 @@ pub struct LayerRenderSurface {
 pub enum LayerMaterial {
     Rect,
     RoundRect { radius: i32 },
+    RoundTop { radius: i32 },
     RoundLeft { radius: i32 },
     RoundRight { radius: i32 },
 }

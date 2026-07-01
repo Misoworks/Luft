@@ -161,8 +161,9 @@ fn blur_uniforms(uniforms: BlurUniforms) -> [Uniform<'static>; 7] {
             UniformValue::_1f(match uniforms.material {
                 LayerMaterial::Rect => 0.0,
                 LayerMaterial::RoundRect { .. } => 1.0,
-                LayerMaterial::RoundLeft { .. } => 2.0,
-                LayerMaterial::RoundRight { .. } => 3.0,
+                LayerMaterial::RoundTop { .. } => 2.0,
+                LayerMaterial::RoundLeft { .. } => 3.0,
+                LayerMaterial::RoundRight { .. } => 4.0,
             }),
         ),
         Uniform::new(

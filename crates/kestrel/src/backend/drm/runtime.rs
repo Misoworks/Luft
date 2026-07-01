@@ -14,6 +14,9 @@ use crate::{
     state::{KestrelState, ShellRestartRequest},
     xwayland::XwaylandSatellite,
 };
+use ::input::{
+    Device as LibinputDevice, DeviceCapability as LibinputDeviceCapability, Led as LibinputLed,
+};
 use asher_ipc::{ShellStatus, shell_socket_path};
 use smithay::{
     backend::{
@@ -64,6 +67,8 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
         })?;
     state.keyboard = Some(keyboard.clone());
     let pointer = state.seat.add_pointer();
+    let mut keyboard_devices = Vec::new();
+    let mut keyboard_led_state = keyboard.led_state();
     let mut frame_renderer =
         SessionFrameRenderer::new(&state, refresh_interval(state.output_refresh_millihertz()));
     let mut clients = Vec::new();
@@ -176,8 +181,22 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
         }
         for event in loop_events.input.drain(..) {
             if active {
-                let output_size = state.output_size();
-                handle_input_event(&mut state, &keyboard, &pointer, event, output_size);
+                match event {
+                    InputEvent::DeviceAdded { device } => {
+                        register_keyboard_device(&mut keyboard_devices, device, keyboard_led_state);
+                    }
+                    InputEvent::DeviceRemoved { device } => {
+                        unregister_keyboard_device(&mut keyboard_devices, &device);
+                    }
+                    event => {
+                        let output_size = state.output_size();
+                        handle_input_event(&mut state, &keyboard, &pointer, event, output_size);
+                        if let Some(led_state) = state.take_pending_keyboard_led_state() {
+                            keyboard_led_state = led_state;
+                            update_keyboard_leds(&mut keyboard_devices, keyboard_led_state);
+                        }
+                    }
+                }
             }
         }
 
@@ -300,6 +319,32 @@ struct LoopEvents {
     drm_errors: Vec<String>,
     session: Vec<SessionEvent>,
     udev: Vec<UdevEvent>,
+}
+
+fn register_keyboard_device(
+    devices: &mut Vec<LibinputDevice>,
+    mut device: LibinputDevice,
+    led_state: smithay::input::keyboard::LedState,
+) {
+    if !device.has_capability(LibinputDeviceCapability::Keyboard) {
+        return;
+    }
+    device.led_update(LibinputLed::from(led_state));
+    devices.push(device);
+}
+
+fn unregister_keyboard_device(devices: &mut Vec<LibinputDevice>, device: &LibinputDevice) {
+    devices.retain(|current| current.sysname() != device.sysname());
+}
+
+fn update_keyboard_leds(
+    devices: &mut [LibinputDevice],
+    led_state: smithay::input::keyboard::LedState,
+) {
+    let leds = LibinputLed::from(led_state);
+    for device in devices {
+        device.led_update(leds);
+    }
 }
 
 fn handle_session_events(

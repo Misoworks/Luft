@@ -205,7 +205,7 @@ impl SessionDevice {
     pub fn handles_udev_event(&self, event: &UdevEvent) -> bool {
         match event {
             UdevEvent::Changed { device_id } | UdevEvent::Removed { device_id } => {
-                *device_id as u64 == self.active_device_id
+                *device_id == self.active_device_id
             }
             UdevEvent::Added { .. } => false,
         }

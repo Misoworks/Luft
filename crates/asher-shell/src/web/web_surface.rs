@@ -185,7 +185,11 @@ impl WebSurface {
     }
 
     pub(crate) fn set_surface_alpha(&mut self, alpha: f32) {
-        self.surface_alpha = alpha.clamp(0.0, 1.0);
+        let alpha = alpha.clamp(0.0, 1.0);
+        if (self.surface_alpha - alpha).abs() < f32::EPSILON {
+            return;
+        }
+        self.surface_alpha = alpha;
         if let Some(process) = &self.process {
             let _ = process.set_shell_surface_alpha(self.surface_alpha);
         }

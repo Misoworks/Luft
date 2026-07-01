@@ -270,7 +270,7 @@ fn append_workspace_targets(
             targets.push(LayerRenderTarget {
                 surface: surface.clone(),
                 blur_layer: BlurLayer::Window,
-                material: LayerMaterial::RoundRect {
+                material: LayerMaterial::RoundTop {
                     radius: titlebar_radius(window, transform.scale),
                 },
                 opacity: 1.0,
@@ -360,6 +360,9 @@ fn scaled_material(material: LayerMaterial, scale: f64) -> LayerMaterial {
     match material {
         LayerMaterial::Rect => LayerMaterial::Rect,
         LayerMaterial::RoundRect { radius } => LayerMaterial::RoundRect {
+            radius: scale_radius(radius),
+        },
+        LayerMaterial::RoundTop { radius } => LayerMaterial::RoundTop {
             radius: scale_radius(radius),
         },
         LayerMaterial::RoundLeft { radius } => LayerMaterial::RoundLeft {

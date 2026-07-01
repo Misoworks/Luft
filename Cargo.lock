@@ -1498,6 +1498,7 @@ dependencies = [
  "bitflags 2.11.1",
  "input-sys",
  "libc",
+ "log",
  "udev",
 ]
 
@@ -1618,6 +1619,7 @@ dependencies = [
  "asher-ipc",
  "clap",
  "image",
+ "input",
  "smithay",
  "thiserror 2.0.18",
  "tracing",

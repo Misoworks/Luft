@@ -189,23 +189,50 @@ fn clean_exec_forwarding_tokens(command: &str) -> String {
     }
 
     if let Some(words) = shell_words(command) {
-        return words
+        return clean_forwarding_words(words)
             .into_iter()
-            .filter(|word| !is_forwarding_token(word))
             .map(|word| shell_quote_word(&word))
             .collect::<Vec<_>>()
             .join(" ");
     }
 
-    command
-        .split_whitespace()
-        .filter(|word| !is_forwarding_token(word))
-        .collect::<Vec<_>>()
-        .join(" ")
+    clean_forwarding_words(
+        command
+            .split_whitespace()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+    )
+    .join(" ")
+}
+
+fn clean_forwarding_words(words: Vec<String>) -> Vec<String> {
+    let strips_file_forwarding = words.iter().any(|word| is_forwarding_token(word));
+    let mut forwarding_payload = false;
+    words
+        .into_iter()
+        .filter(|word| {
+            if is_forwarding_start(word) {
+                forwarding_payload = true;
+                return false;
+            }
+            if word == "@@" {
+                forwarding_payload = false;
+                return false;
+            }
+            if forwarding_payload {
+                return false;
+            }
+            !(strips_file_forwarding && word == "--file-forwarding")
+        })
+        .collect()
 }
 
 fn is_forwarding_token(word: &str) -> bool {
     matches!(word, "@@" | "@@u" | "@@U" | "@@f" | "@@F")
+}
+
+fn is_forwarding_start(word: &str) -> bool {
+    matches!(word, "@@u" | "@@U" | "@@f" | "@@F")
 }
 
 fn shell_quote_word(word: &str) -> String {
@@ -441,7 +468,13 @@ mod tests {
     #[test]
     fn launch_command_removes_flatpak_file_forwarding_tokens() {
         assert_eq!(
-            normalize_launch_command("/usr/bin/flatpak run app.id @@u @@"),
+            normalize_launch_command(
+                "/usr/bin/flatpak run --branch=stable --file-forwarding app.id @@u %U @@",
+            ),
+            "/usr/bin/flatpak run --branch=stable app.id",
+        );
+        assert_eq!(
+            normalize_launch_command("/usr/bin/flatpak run app.id @@u /tmp/file @@"),
             "/usr/bin/flatpak run app.id",
         );
     }

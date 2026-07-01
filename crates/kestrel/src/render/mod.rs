@@ -3,7 +3,7 @@ use crate::{
     state::KestrelState,
     titlebar::{self, TITLEBAR_OVERLAP},
     window::{ManagedWindow, TITLEBAR_HEIGHT},
-    window_clip::{RoundedWindowElement, WINDOW_RADIUS},
+    window_clip::{ClipShape, RoundedWindowElement, WINDOW_RADIUS},
 };
 use asher_ipc::WorkspaceId;
 use smithay::{
@@ -157,10 +157,10 @@ fn append_layer_elements(
             )
             .into_iter()
             .map(|element| {
-                RoundedWindowElement::new(
+                RoundedWindowElement::new_with_shape(
                     element,
                     clip,
-                    layer_material_radius(target.material, target.size),
+                    layer_material_shape(target.material, target.size),
                 )
             }),
         );
@@ -192,16 +192,24 @@ fn append_layer_elements(
     }
 }
 
-fn layer_material_radius(
+fn layer_material_shape(
     material: layers::LayerMaterial,
     size: smithay::utils::Size<i32, Logical>,
-) -> i32 {
+) -> ClipShape {
+    let clamp = |radius: i32| radius.max(0).min(size.w / 2).min(size.h / 2);
     match material {
-        layers::LayerMaterial::Rect => 0,
-        layers::LayerMaterial::RoundRect { radius }
-        | layers::LayerMaterial::RoundLeft { radius }
-        | layers::LayerMaterial::RoundRight { radius } => {
-            radius.max(0).min(size.w / 2).min(size.h / 2)
-        }
+        layers::LayerMaterial::Rect => ClipShape::Rect,
+        layers::LayerMaterial::RoundRect { radius } => ClipShape::RoundRect {
+            radius: clamp(radius),
+        },
+        layers::LayerMaterial::RoundTop { radius } => ClipShape::RoundTop {
+            radius: clamp(radius),
+        },
+        layers::LayerMaterial::RoundLeft { radius } => ClipShape::RoundLeft {
+            radius: clamp(radius),
+        },
+        layers::LayerMaterial::RoundRight { radius } => ClipShape::RoundRight {
+            radius: clamp(radius),
+        },
     }
 }

@@ -70,6 +70,15 @@ float rightRoundedCoverage(vec2 pixel) {
     return cornerCoverage(pixel, center);
 }
 
+float topRoundedCoverage(vec2 pixel) {
+    if (radius <= 0.0 || pixel.y >= radius || (pixel.x >= radius && pixel.x < target_size.x - radius)) {
+        return 1.0;
+    }
+
+    vec2 center = vec2(pixel.x < radius ? radius : target_size.x - radius, radius);
+    return cornerCoverage(pixel, center);
+}
+
 float materialCoverage(vec2 pixel) {
     if (shape < 0.5) {
         return 1.0;
@@ -78,6 +87,9 @@ float materialCoverage(vec2 pixel) {
         return roundedCoverage(pixel);
     }
     if (shape < 2.5) {
+        return topRoundedCoverage(pixel);
+    }
+    if (shape < 3.5) {
         return leftRoundedCoverage(pixel);
     }
     return rightRoundedCoverage(pixel);

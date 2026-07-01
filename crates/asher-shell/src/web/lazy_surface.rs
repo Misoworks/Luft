@@ -94,6 +94,10 @@ impl LazyWebSurface {
             return;
         }
 
+        if self.visible && self.hide_at.is_none() && self.surface.is_some() {
+            return;
+        }
+
         let now = Instant::now();
         let resume_alpha = if surface_alpha_animates(self.kind) {
             self.current_close_alpha(now)

@@ -16,6 +16,7 @@ pub(super) fn material_radius(
     match material {
         LayerMaterial::Rect => 0.0,
         LayerMaterial::RoundRect { radius }
+        | LayerMaterial::RoundTop { radius }
         | LayerMaterial::RoundLeft { radius }
         | LayerMaterial::RoundRight { radius } => {
             let scale_x = visible_size.w.max(1) as f32 / texture_size.w.max(1) as f32;
@@ -39,6 +40,9 @@ pub(super) fn material_clip_shape(
     match material {
         LayerMaterial::Rect => ClipShape::Rect,
         LayerMaterial::RoundRect { radius } => ClipShape::RoundRect {
+            radius: clamp(radius),
+        },
+        LayerMaterial::RoundTop { radius } => ClipShape::RoundTop {
             radius: clamp(radius),
         },
         LayerMaterial::RoundLeft { radius } => ClipShape::RoundLeft {

@@ -9,6 +9,7 @@ use smithay::{
         gles::GlesRenderer,
         utils::{CommitCounter, DamageSet, OpaqueRegions},
     },
+    desktop::PopupManager,
     utils::{Buffer, Physical, Point, Rectangle, Scale, Size},
 };
 
@@ -24,6 +25,7 @@ pub struct RoundedWindowElement<E> {
 pub enum ClipShape {
     Rect,
     RoundRect { radius: i32 },
+    RoundTop { radius: i32 },
     RoundLeft { radius: i32 },
     RoundRight { radius: i32 },
 }
@@ -91,11 +93,11 @@ fn append_window_elements(
     let transform = window.render_transform(offset_x, output_size);
     let titlebar_height = window.titlebar_height();
     let surface_offset = window.surface_offset();
-    let location = (
+    let location = Point::<i32, Physical>::from((
         (transform.x + surface_offset.x as f64 * transform.scale).round() as i32,
         (transform.y + (titlebar_height + surface_offset.y) as f64 * transform.scale).round()
             as i32,
-    );
+    ));
     let frame_clip = Rectangle::<i32, Physical>::new(
         Point::from((transform.x.round() as i32, transform.y.round() as i32)),
         Size::from((
@@ -105,11 +107,12 @@ fn append_window_elements(
                 .max(1.0) as i32,
         )),
     );
+    append_popup_elements(renderer, window, transform, surface_offset, elements);
     elements.extend(
         render_elements_from_surface_tree(
             renderer,
             window.surface.wl_surface(),
-            location,
+            (location.x, location.y),
             transform.scale,
             transform.alpha,
             Kind::Unspecified,
@@ -124,6 +127,48 @@ fn append_window_elements(
             RoundedWindowElement::new(element, clip, radius)
         }),
     );
+}
+
+fn append_popup_elements(
+    renderer: &mut GlesRenderer,
+    window: &ManagedWindow,
+    transform: crate::window_animation::WindowTransform,
+    surface_offset: Point<i32, smithay::utils::Logical>,
+    elements: &mut Vec<RoundedWindowElement<WaylandSurfaceRenderElement<GlesRenderer>>>,
+) {
+    for (popup, popup_offset) in PopupManager::popups_for_surface(window.surface.wl_surface()) {
+        let popup_geometry = popup.geometry();
+        let popup_surface_offset = surface_offset + popup_offset - popup_geometry.loc;
+        let popup_location = Point::<i32, Physical>::from((
+            (transform.x + popup_surface_offset.x as f64 * transform.scale).round() as i32,
+            (transform.y
+                + (window.titlebar_height() + popup_surface_offset.y) as f64 * transform.scale)
+                .round() as i32,
+        ));
+        let popup_size = Size::<i32, Physical>::from((
+            (popup_geometry.size.w as f64 * transform.scale)
+                .round()
+                .max(1.0) as i32,
+            (popup_geometry.size.h as f64 * transform.scale)
+                .round()
+                .max(1.0) as i32,
+        ));
+        let popup_clip = Rectangle::<i32, Physical>::new(popup_location, popup_size);
+        elements.extend(
+            render_elements_from_surface_tree(
+                renderer,
+                popup.wl_surface(),
+                (popup_location.x, popup_location.y),
+                transform.scale,
+                transform.alpha,
+                Kind::Unspecified,
+            )
+            .into_iter()
+            .map(|element| {
+                RoundedWindowElement::new_with_shape(element, popup_clip, ClipShape::Rect)
+            }),
+        );
+    }
 }
 
 impl<E> RoundedWindowElement<E> {
@@ -150,6 +195,9 @@ impl ClipShape {
         match self {
             Self::Rect => Self::Rect,
             Self::RoundRect { radius } => Self::RoundRect {
+                radius: clamp_radius(radius, size),
+            },
+            Self::RoundTop { radius } => Self::RoundTop {
                 radius: clamp_radius(radius, size),
             },
             Self::RoundLeft { radius } => Self::RoundLeft {
@@ -285,7 +333,9 @@ fn clip_strips(rect: Rectangle<i32, Physical>, shape: ClipShape) -> Vec<Rectangl
         }
         let (x, width) = match shape {
             ClipShape::Rect => (rect.loc.x, rect.size.w),
-            ClipShape::RoundRect { .. } => (rect.loc.x + inset, rect.size.w - inset * 2),
+            ClipShape::RoundRect { .. } | ClipShape::RoundTop { .. } => {
+                (rect.loc.x + inset, rect.size.w - inset * 2)
+            }
             ClipShape::RoundLeft { .. } => (rect.loc.x + inset, rect.size.w - inset),
             ClipShape::RoundRight { .. } => (rect.loc.x, rect.size.w - inset),
         };
@@ -304,10 +354,11 @@ fn clip_inset(y: i32, height: i32, shape: ClipShape) -> i32 {
     let radius = match shape {
         ClipShape::Rect => 0,
         ClipShape::RoundRect { radius }
+        | ClipShape::RoundTop { radius }
         | ClipShape::RoundLeft { radius }
         | ClipShape::RoundRight { radius } => radius,
     };
-    if y >= radius && y < height - radius {
+    if y >= radius && (matches!(shape, ClipShape::RoundTop { .. }) || y < height - radius) {
         return 0;
     }
 

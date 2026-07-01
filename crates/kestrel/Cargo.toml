@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 clap.workspace = true
 image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
+input = { workspace = true, optional = true }
 smithay.workspace = true
 asher-config.workspace = true
 asher-ipc = { version = "0.1.0", path = "../asher-ipc" }
@@ -16,6 +17,7 @@ tracing-subscriber.workspace = true
 
 [features]
 session-backend = [
+    "dep:input",
     "smithay/backend_drm",
     "smithay/backend_gbm",
     "smithay/backend_libinput",

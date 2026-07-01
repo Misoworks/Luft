@@ -178,10 +178,7 @@ fn generated_cursor_pixels(width: u32, height: u32) -> (Vec<u8>, (u32, u32), Str
                     width as usize * 4,
                     x,
                     y,
-                    0,
-                    0,
-                    0,
-                    (shadow * 120.0) as u8,
+                    [0, 0, 0, (shadow * 120.0) as u8],
                 );
             }
             if coverage > 0.0 {
@@ -190,10 +187,7 @@ fn generated_cursor_pixels(width: u32, height: u32) -> (Vec<u8>, (u32, u32), Str
                     width as usize * 4,
                     x,
                     y,
-                    255,
-                    255,
-                    255,
-                    (coverage * 245.0) as u8,
+                    [255, 255, 255, (coverage * 245.0) as u8],
                 );
             }
         }
@@ -515,11 +509,12 @@ fn edge_sign(point: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
     (point.0 - b.0) * (a.1 - b.1) - (a.0 - b.0) * (point.1 - b.1)
 }
 
-fn write_argb(buffer: &mut [u8], pitch: usize, x: u32, y: u32, r: u8, g: u8, b: u8, a: u8) {
+fn write_argb(buffer: &mut [u8], pitch: usize, x: u32, y: u32, rgba: [u8; 4]) {
     let index = y as usize * pitch + x as usize * 4;
     if index + 3 >= buffer.len() {
         return;
     }
+    let [r, g, b, a] = rgba;
     buffer[index] = b;
     buffer[index + 1] = g;
     buffer[index + 2] = r;

@@ -267,7 +267,6 @@ impl SessionFrameRenderer {
         })?;
         let debug_overlay = self.debug_overlay(state, renderer, content_render_needed)?;
         let force_scene_full_damage = force_full_damage
-            || blur_animating
             || self.previous_frame_direct
             || show_loading
             || workspace_transition_active
@@ -454,6 +453,7 @@ fn can_direct_scanout(
         && !show_loading
         && !debug_needs_render
         && !blur_animating
+        && !state.has_visible_popups()
         && !state.animations_active()
         && state.workspace_transition().is_none()
         && background_layer.is_empty()

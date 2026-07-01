@@ -15,7 +15,7 @@ use smithay::{
     desktop::PopupManager,
     input::{
         Seat, SeatState,
-        keyboard::KeyboardHandle,
+        keyboard::{KeyboardHandle, LedState},
         pointer::{CursorIcon, CursorImageStatus},
     },
     reexports::{
@@ -73,6 +73,7 @@ pub struct KestrelState {
     pub xwayland_display: Option<String>,
     pub titlebar_cache: RefCell<TitlebarCache>,
     pub dmabuf_formats: FormatSet,
+    pending_keyboard_led_state: Option<LedState>,
     scene_dirty: bool,
     workspace_transition: Option<WorkspaceTransition>,
     serial: u32,
@@ -143,6 +144,7 @@ impl KestrelState {
             xwayland_display: None,
             titlebar_cache: RefCell::new(TitlebarCache::default()),
             dmabuf_formats: FormatSet::default(),
+            pending_keyboard_led_state: None,
             scene_dirty: true,
             workspace_transition: None,
             serial: 1,
@@ -528,6 +530,26 @@ impl KestrelState {
             );
         }
         surfaces
+    }
+
+    #[cfg(feature = "session-backend")]
+    pub fn has_visible_popups(&self) -> bool {
+        self.windows.iter().any(|window| {
+            PopupManager::popups_for_surface(window.surface.wl_surface())
+                .next()
+                .is_some()
+        }) || layers::surfaces(self.output())
+            .iter()
+            .any(|surface| PopupManager::popups_for_surface(surface).next().is_some())
+    }
+
+    pub(crate) fn set_pending_keyboard_led_state(&mut self, led_state: LedState) {
+        self.pending_keyboard_led_state = Some(led_state);
+    }
+
+    #[cfg(feature = "session-backend")]
+    pub(crate) fn take_pending_keyboard_led_state(&mut self) -> Option<LedState> {
+        self.pending_keyboard_led_state.take()
     }
 }
 
