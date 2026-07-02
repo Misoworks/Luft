@@ -1604,6 +1604,7 @@ version = "0.1.0"
 dependencies = [
  "asher-config",
  "asher-ipc",
+ "bitflags 2.11.1",
  "calloop 0.14.4",
  "clap",
  "image",
@@ -1612,6 +1613,9 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",
+ "wayland-backend",
+ "wayland-scanner",
+ "wayland-server",
 ]
 
 [[package]]

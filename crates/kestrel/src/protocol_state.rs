@@ -1,4 +1,7 @@
-use crate::{background_effect::BackgroundEffectGlobal, state::KestrelState};
+use crate::{
+    background_effect::BackgroundEffectGlobal, state::KestrelState,
+    vicinae_hotkey::VicinaeHotkeyState,
+};
 #[cfg(feature = "session-backend")]
 use smithay::wayland::{dmabuf::DmabufGlobal, drm_syncobj::DrmSyncobjState};
 use smithay::{
@@ -35,6 +38,7 @@ pub struct ProtocolState {
     _presentation: PresentationState,
     _output: OutputManagerState,
     _background_effect: BackgroundEffectGlobal,
+    pub vicinae_hotkey: VicinaeHotkeyState,
     _alpha_modifier: AlphaModifierState,
     _relative_pointer: RelativePointerManagerState,
     _pointer_gestures: PointerGesturesState,
@@ -70,6 +74,7 @@ impl ProtocolState {
             ),
             _output: OutputManagerState::new_with_xdg_output::<KestrelState>(display),
             _background_effect: BackgroundEffectGlobal::new(display),
+            vicinae_hotkey: VicinaeHotkeyState::new(display),
             _alpha_modifier: AlphaModifierState::new::<KestrelState>(display),
             _relative_pointer: RelativePointerManagerState::new::<KestrelState>(display),
             _pointer_gestures: PointerGesturesState::new::<KestrelState>(display),

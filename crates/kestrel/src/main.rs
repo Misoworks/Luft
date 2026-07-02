@@ -23,6 +23,7 @@ mod shell;
 mod state;
 mod state_focus;
 mod titlebar;
+mod vicinae_hotkey;
 mod window;
 mod window_animation;
 mod window_clip;

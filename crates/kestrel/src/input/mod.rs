@@ -41,6 +41,7 @@ pub fn handle_input_event<B>(
             let key_state = event.state();
             let mut shortcut = ShortcutAction::Forward;
             let shortcuts_inhibited = shortcuts_inhibited(state, keyboard);
+            let mut hotkey_consumed = false;
             keyboard.input::<(), _>(
                 state,
                 event.key_code(),
@@ -48,16 +49,27 @@ pub fn handle_input_event<B>(
                 serial,
                 event.time_msec(),
                 |state, modifiers, key| {
+                    let key = key.raw_latin_sym_or_raw_current_sym();
+                    if state.handle_vicinae_hotkey(
+                        key,
+                        modifiers,
+                        key_state,
+                        serial,
+                        event.time_msec(),
+                    ) {
+                        hotkey_consumed = true;
+                        if modifiers.logo {
+                            state.super_used = true;
+                        }
+                        return FilterResult::Intercept(());
+                    }
+
                     if shortcuts_inhibited {
                         state.super_active = false;
                         return FilterResult::Forward;
                     }
 
-                    shortcut = shortcut_for_key(
-                        modifiers,
-                        key.raw_latin_sym_or_raw_current_sym(),
-                        key_state,
-                    );
+                    shortcut = shortcut_for_key(modifiers, key, key_state);
                     state.super_active = modifiers.logo;
                     if shortcut.is_forward() {
                         FilterResult::Forward
@@ -66,7 +78,10 @@ pub fn handle_input_event<B>(
                     }
                 },
             );
-            if key_state == KeyState::Pressed || matches!(shortcut, ShortcutAction::SuperRelease) {
+            if !hotkey_consumed
+                && (key_state == KeyState::Pressed
+                    || matches!(shortcut, ShortcutAction::SuperRelease))
+            {
                 handle_shortcut(state, keyboard, shortcut);
             }
         }
