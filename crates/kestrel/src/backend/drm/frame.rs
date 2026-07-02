@@ -77,6 +77,7 @@ pub struct SessionFrameRenderer {
     session_started: Instant,
     shell_layers_seen_ready: bool,
     previous_frame_direct: bool,
+    visible_popups: bool,
     layer_geometry: LayerGeometryTracker,
 }
 
@@ -91,6 +92,7 @@ impl SessionFrameRenderer {
             session_started: Instant::now(),
             shell_layers_seen_ready: false,
             previous_frame_direct: false,
+            visible_popups: state.has_visible_popups(),
             layer_geometry: LayerGeometryTracker::default(),
         }
     }
@@ -115,6 +117,9 @@ impl SessionFrameRenderer {
         }
         let workspace_transition_active = state.workspace_transition().is_some();
         let scene_dirty = state.take_scene_dirty();
+        let visible_popups = state.has_visible_popups();
+        let popup_visibility_changed =
+            std::mem::replace(&mut self.visible_popups, visible_popups) != visible_popups;
         let layer_geometry_changed = self.layer_geometry.geometry_changed(
             state.output_size(),
             &layers::layer_surface_rects(state.output()),
@@ -122,6 +127,7 @@ impl SessionFrameRenderer {
         let content_render_needed = force_full_damage
             || self.previous_frame_direct
             || scene_dirty
+            || popup_visibility_changed
             || layer_geometry_changed
             || removed_windows
             || finished_window_closes
@@ -161,22 +167,12 @@ impl SessionFrameRenderer {
                 Layer::Overlay,
             ));
         }
-        let background_element = self
-            .background
-            .render_element(renderer, state.output_size())
-            .map_err(render_error)?;
-        let background_layer =
-            render_stage_elements(renderer, state, RenderStage::Layer(Layer::Background));
-        let bottom_layer =
-            render_stage_elements(renderer, state, RenderStage::Layer(Layer::Bottom));
         let window_effect_targets = background_effect::window_blur_targets(state);
         let mut blur_targets = window_effect_targets.clone();
         blur_targets.extend(top_targets.iter().cloned());
         blur_targets.extend(overlay_targets.iter().cloned());
         self.blur_cache.retain_targets(&blur_targets);
         let blur_animating = self.blur_cache.is_animating();
-        let windows = window_elements(renderer, state);
-        let window_chrome = window_chrome_elements(renderer, state).map_err(render_error)?;
         let top_layer = if fullscreen_active {
             Vec::new()
         } else {
@@ -204,8 +200,6 @@ impl SessionFrameRenderer {
             fullscreen_active,
             show_loading,
             blur_animating,
-            &background_layer,
-            &bottom_layer,
             &top_layer,
             &overlay_layer,
             &window_effect_targets,
@@ -217,6 +211,17 @@ impl SessionFrameRenderer {
                 callback_surfaces: state.frame_callback_surfaces(),
             });
         }
+
+        let background_element = self
+            .background
+            .render_element(renderer, state.output_size())
+            .map_err(render_error)?;
+        let background_layer =
+            render_stage_elements(renderer, state, RenderStage::Layer(Layer::Background));
+        let bottom_layer =
+            render_stage_elements(renderer, state, RenderStage::Layer(Layer::Bottom));
+        let windows = window_elements(renderer, state);
+        let window_chrome = window_chrome_elements(renderer, state).map_err(render_error)?;
 
         let (mut dmabuf, buffer_age) = surface.next_buffer().map_err(|error| {
             DrmError::Unsupported(format!("failed to acquire GBM buffer: {error}"))
@@ -317,6 +322,7 @@ impl SessionFrameRenderer {
         self.blur_damage_tracker = DamageTracker::from_output(state.output());
         self.blur_cache.retain_targets(&[]);
         self.previous_frame_direct = false;
+        self.visible_popups = state.has_visible_popups();
     }
 
     pub fn effects_active(&self) -> bool {
@@ -338,8 +344,6 @@ fn can_direct_scanout(
     fullscreen_active: bool,
     show_loading: bool,
     blur_animating: bool,
-    background_layer: &[LayerElement],
-    bottom_layer: &[LayerElement],
     top_layer: &[LayerElement],
     overlay_layer: &[LayerElement],
     window_effect_targets: &[layers::LayerRenderTarget],
@@ -350,8 +354,6 @@ fn can_direct_scanout(
         && !state.has_visible_popups()
         && !state.animations_active()
         && state.workspace_transition().is_none()
-        && background_layer.is_empty()
-        && bottom_layer.is_empty()
         && top_layer.is_empty()
         && overlay_layer.is_empty()
         && window_effect_targets.is_empty()

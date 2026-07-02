@@ -2,10 +2,12 @@ use crate::{client::ClientState, render::handle_commit, state::KestrelState};
 use smithay::{
     backend::allocator::Buffer,
     delegate_alpha_modifier, delegate_compositor, delegate_cursor_shape, delegate_data_device,
-    delegate_dmabuf, delegate_fractional_scale, delegate_layer_shell, delegate_output,
-    delegate_presentation, delegate_primary_selection, delegate_seat, delegate_shm,
+    delegate_dmabuf, delegate_fractional_scale, delegate_idle_inhibit,
+    delegate_keyboard_shortcuts_inhibit, delegate_layer_shell, delegate_output,
+    delegate_pointer_constraints, delegate_pointer_gestures, delegate_presentation,
+    delegate_primary_selection, delegate_relative_pointer, delegate_seat, delegate_shm,
     delegate_text_input_manager, delegate_viewporter, delegate_xdg_activation,
-    delegate_xdg_decoration, delegate_xdg_shell, delegate_xdg_toplevel_icon,
+    delegate_xdg_decoration, delegate_xdg_foreign, delegate_xdg_shell, delegate_xdg_toplevel_icon,
     desktop::PopupKind,
     input::{
         Seat, SeatHandler,
@@ -21,7 +23,13 @@ use smithay::{
         buffer::BufferHandler,
         compositor::{CompositorClientState, CompositorHandler, CompositorState},
         dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
+        idle_inhibit::IdleInhibitHandler,
+        keyboard_shortcuts_inhibit::{
+            KeyboardShortcutsInhibitHandler, KeyboardShortcutsInhibitState,
+            KeyboardShortcutsInhibitor,
+        },
         output::OutputHandler,
+        pointer_constraints::{PointerConstraintsHandler, with_pointer_constraint},
         selection::{
             SelectionHandler,
             data_device::{
@@ -39,6 +47,7 @@ use smithay::{
         xdg_activation::{
             XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData,
         },
+        xdg_foreign::{XdgForeignHandler, XdgForeignState},
     },
 };
 #[cfg(feature = "session-backend")]
@@ -115,6 +124,50 @@ impl XdgActivationHandler for KestrelState {
 }
 
 impl KestrelState {}
+
+impl XdgForeignHandler for KestrelState {
+    fn xdg_foreign_state(&mut self) -> &mut XdgForeignState {
+        &mut self.protocol_state.xdg_foreign
+    }
+}
+
+impl IdleInhibitHandler for KestrelState {
+    fn inhibit(&mut self, _surface: WlSurface) {}
+
+    fn uninhibit(&mut self, _surface: WlSurface) {}
+}
+
+impl KeyboardShortcutsInhibitHandler for KestrelState {
+    fn keyboard_shortcuts_inhibit_state(&mut self) -> &mut KeyboardShortcutsInhibitState {
+        &mut self.protocol_state.keyboard_shortcuts_inhibit
+    }
+
+    fn new_inhibitor(&mut self, inhibitor: KeyboardShortcutsInhibitor) {
+        inhibitor.activate();
+    }
+}
+
+impl PointerConstraintsHandler for KestrelState {
+    fn new_constraint(
+        &mut self,
+        surface: &WlSurface,
+        pointer: &smithay::input::pointer::PointerHandle<Self>,
+    ) {
+        with_pointer_constraint(surface, pointer, |constraint| {
+            if let Some(constraint) = constraint {
+                constraint.activate();
+            }
+        });
+    }
+
+    fn cursor_position_hint(
+        &mut self,
+        _surface: &WlSurface,
+        _pointer: &smithay::input::pointer::PointerHandle<Self>,
+        _location: smithay::utils::Point<f64, smithay::utils::Logical>,
+    ) {
+    }
+}
 
 impl WlrLayerShellHandler for KestrelState {
     fn shell_state(&mut self) -> &mut WlrLayerShellState {
@@ -258,6 +311,12 @@ impl TabletSeatHandler for KestrelState {}
 
 delegate_xdg_shell!(KestrelState);
 delegate_xdg_decoration!(KestrelState);
+delegate_xdg_foreign!(KestrelState);
+delegate_idle_inhibit!(KestrelState);
+delegate_keyboard_shortcuts_inhibit!(KestrelState);
+delegate_pointer_constraints!(KestrelState);
+delegate_relative_pointer!(KestrelState);
+delegate_pointer_gestures!(KestrelState);
 delegate_xdg_activation!(KestrelState);
 delegate_xdg_toplevel_icon!(KestrelState);
 delegate_cursor_shape!(KestrelState);

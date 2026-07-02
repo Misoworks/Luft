@@ -3,7 +3,6 @@ use crate::{
     state::KestrelState,
     window::{ResizeEdge, WindowFrameControl, WindowFrameHit, WindowGrab},
 };
-use asher_ipc::WorkspaceId;
 use smithay::{
     backend::input::{
         AbsolutePositionEvent, Axis, Event, InputBackend, InputEvent, KeyState, KeyboardKeyEvent,
@@ -11,10 +10,18 @@ use smithay::{
     },
     input::{
         keyboard::{FilterResult, KeyboardHandle},
-        pointer::{AxisFrame, ButtonEvent, CursorIcon, MotionEvent, PointerHandle},
+        pointer::{
+            AxisFrame, ButtonEvent, CursorIcon, MotionEvent, PointerHandle, RelativeMotionEvent,
+        },
     },
     utils::{Physical, Size},
+    wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitorSeat,
 };
+
+mod gestures;
+mod shortcuts;
+
+use shortcuts::{ShortcutAction, handle_shortcut, shortcut_for_key};
 
 const BTN_LEFT: u32 = 0x110;
 const BTN_RIGHT: u32 = 0x111;
@@ -33,6 +40,7 @@ pub fn handle_input_event<B>(
             let serial = state.next_serial();
             let key_state = event.state();
             let mut shortcut = ShortcutAction::Forward;
+            let shortcuts_inhibited = shortcuts_inhibited(state, keyboard);
             keyboard.input::<(), _>(
                 state,
                 event.key_code(),
@@ -40,6 +48,11 @@ pub fn handle_input_event<B>(
                 serial,
                 event.time_msec(),
                 |state, modifiers, key| {
+                    if shortcuts_inhibited {
+                        state.super_active = false;
+                        return FilterResult::Forward;
+                    }
+
                     shortcut = shortcut_for_key(
                         modifiers,
                         key.raw_latin_sym_or_raw_current_sym(),
@@ -60,7 +73,7 @@ pub fn handle_input_event<B>(
         InputEvent::PointerMotionAbsolute { event } => {
             let frame_hover_before = frame_control_hover(state);
             let location = event.position_transformed(output_size.to_logical(1));
-            move_pointer(state, pointer, location, event.time_msec());
+            move_pointer(state, pointer, location, event.time_msec(), None);
             if frame_hover_before != frame_control_hover(state) {
                 state.mark_scene_dirty();
             }
@@ -74,7 +87,17 @@ pub fn handle_input_event<B>(
                 (state.pointer_location.y + delta.y).clamp(0.0, max.h as f64),
             )
                 .into();
-            move_pointer(state, pointer, location, event.time_msec());
+            move_pointer(
+                state,
+                pointer,
+                location,
+                event.time_msec(),
+                Some(RelativeMotion {
+                    delta,
+                    delta_unaccel: event.delta_unaccel(),
+                    utime: event.time(),
+                }),
+            );
             if frame_hover_before != frame_control_hover(state) {
                 state.mark_scene_dirty();
             }
@@ -85,7 +108,8 @@ pub fn handle_input_event<B>(
             let mut forward_button_release = false;
             let left_button = event.button_code() == BTN_LEFT;
             let right_button = event.button_code() == BTN_RIGHT;
-            let closes_transient = event.state().pressed()
+            let button_pressed = button_pressed(event.state());
+            let closes_transient = button_pressed
                 && (left_button || right_button)
                 && layers::should_close_transient_popover(state.output(), state.pointer_location);
             let hit = if closes_transient {
@@ -97,7 +121,7 @@ pub fn handle_input_event<B>(
             if closes_transient {
                 state.close_shell_transient_popovers();
             }
-            if event.state().pressed() && (left_button || right_button) {
+            if button_pressed && (left_button || right_button) {
                 if let Some(surface) = hit.clone() {
                     state.allow_client_grab(surface, serial);
                 } else {
@@ -106,7 +130,7 @@ pub fn handle_input_event<B>(
             }
 
             if state.super_active
-                && event.state().pressed()
+                && button_pressed
                 && (left_button || right_button)
                 && let Some(surface) = hit.clone()
             {
@@ -122,7 +146,7 @@ pub fn handle_input_event<B>(
                 } {
                     state.begin_resize(surface, edge);
                 }
-            } else if left_button && event.state().pressed() {
+            } else if left_button && button_pressed {
                 let frame_hit = if closes_transient {
                     state.window_frame_hit_below_shell(state.pointer_location)
                 } else {
@@ -161,7 +185,7 @@ pub fn handle_input_event<B>(
                 }
             }
 
-            if (left_button || right_button) && !event.state().pressed() {
+            if (left_button || right_button) && !button_pressed {
                 forward_button_release = state.drag_forwards_button_release();
                 frame_interaction |= state.drag.is_some() && !forward_button_release;
                 state.end_drag();
@@ -208,8 +232,30 @@ pub fn handle_input_event<B>(
             pointer.axis(state, frame);
             pointer.frame(state);
         }
+        InputEvent::GestureSwipeBegin { event } => {
+            gestures::swipe_begin::<B>(state, pointer, event)
+        }
+        InputEvent::GestureSwipeUpdate { event } => {
+            gestures::swipe_update::<B>(state, pointer, event)
+        }
+        InputEvent::GestureSwipeEnd { event } => gestures::swipe_end::<B>(state, pointer, event),
+        InputEvent::GesturePinchBegin { event } => {
+            gestures::pinch_begin::<B>(state, pointer, event)
+        }
+        InputEvent::GesturePinchUpdate { event } => {
+            gestures::pinch_update::<B>(state, pointer, event)
+        }
+        InputEvent::GesturePinchEnd { event } => gestures::pinch_end::<B>(state, pointer, event),
+        InputEvent::GestureHoldBegin { event } => gestures::hold_begin::<B>(state, pointer, event),
+        InputEvent::GestureHoldEnd { event } => gestures::hold_end::<B>(state, pointer, event),
         _ => {}
     }
+}
+
+struct RelativeMotion {
+    delta: smithay::utils::Point<f64, smithay::utils::Logical>,
+    delta_unaccel: smithay::utils::Point<f64, smithay::utils::Logical>,
+    utime: u64,
 }
 
 fn refresh_pointer_focus(
@@ -236,6 +282,7 @@ fn move_pointer(
     pointer: &PointerHandle<KestrelState>,
     location: smithay::utils::Point<f64, smithay::utils::Logical>,
     time: u32,
+    relative: Option<RelativeMotion>,
 ) {
     state.pointer_location = location;
     state.update_drag(location);
@@ -245,14 +292,36 @@ fn move_pointer(
     let focus = state.pointer_focus(location);
     pointer.motion(
         state,
-        focus,
+        focus.clone(),
         &MotionEvent {
             location,
             serial,
             time,
         },
     );
+    if let Some(relative) = relative {
+        pointer.relative_motion(
+            state,
+            focus,
+            &RelativeMotionEvent {
+                delta: relative.delta,
+                delta_unaccel: relative.delta_unaccel,
+                utime: relative.utime,
+            },
+        );
+    }
     pointer.frame(state);
+}
+
+fn shortcuts_inhibited(state: &KestrelState, keyboard: &KeyboardHandle<KestrelState>) -> bool {
+    keyboard
+        .current_focus()
+        .and_then(|surface| {
+            state
+                .seat
+                .keyboard_shortcuts_inhibitor_for_surface(&surface)
+        })
+        .is_some_and(|inhibitor| inhibitor.is_active())
 }
 
 fn frame_control_hover(state: &KestrelState) -> Option<WindowFrameControl> {
@@ -293,136 +362,6 @@ fn resize_cursor(edge: ResizeEdge) -> CursorIcon {
     }
 }
 
-#[derive(Debug)]
-enum ShortcutAction {
-    Forward,
-    SwitchWorkspace(WorkspaceId),
-    SwitchRelativeWorkspace(i32),
-    MoveWindowToWorkspace(WorkspaceId),
-    CloseActiveWindow,
-    CycleWindow { previous: bool },
-    OpenDefaultApp(asher_ipc::DefaultAppKind),
-    OpenLauncher,
-    RestartShell,
-    SuperPress,
-    SuperRelease,
-}
-
-impl ShortcutAction {
-    fn is_forward(&self) -> bool {
-        matches!(self, Self::Forward)
-    }
-}
-
-fn shortcut_for_key(
-    modifiers: &smithay::input::keyboard::ModifiersState,
-    key: Option<smithay::input::keyboard::Keysym>,
-    state: KeyState,
-) -> ShortcutAction {
-    let Some(raw) = key.map(|key| key.raw()) else {
-        return ShortcutAction::Forward;
-    };
-
-    if is_super_key(raw) {
-        return if state == KeyState::Pressed {
-            ShortcutAction::SuperPress
-        } else {
-            ShortcutAction::SuperRelease
-        };
-    }
-
-    if modifiers.alt && !modifiers.logo && !modifiers.ctrl && matches!(raw, 0xff09 | 0xfe20) {
-        return ShortcutAction::CycleWindow {
-            previous: modifiers.shift,
-        };
-    }
-
-    if !modifiers.logo || modifiers.ctrl || modifiers.alt {
-        return ShortcutAction::Forward;
-    }
-
-    if let Some(workspace) = workspace_for_raw_key(raw) {
-        if modifiers.shift {
-            return ShortcutAction::MoveWindowToWorkspace(workspace);
-        }
-
-        return ShortcutAction::SwitchWorkspace(workspace);
-    }
-
-    match raw {
-        0x20 => ShortcutAction::OpenLauncher,
-        0xff0d => ShortcutAction::OpenDefaultApp(asher_ipc::DefaultAppKind::Terminal),
-        0x65 | 0x45 => ShortcutAction::OpenDefaultApp(asher_ipc::DefaultAppKind::FileManager),
-        0x72 | 0x52 if modifiers.shift => ShortcutAction::RestartShell,
-        0x71 | 0x51 => ShortcutAction::CloseActiveWindow,
-        0xff09 | 0xfe20 => ShortcutAction::CycleWindow {
-            previous: modifiers.shift,
-        },
-        0xff51 | 0xff52 => ShortcutAction::SwitchRelativeWorkspace(-1),
-        0xff53 | 0xff54 => ShortcutAction::SwitchRelativeWorkspace(1),
-        _ => ShortcutAction::Forward,
-    }
-}
-
-fn handle_shortcut(
-    state: &mut KestrelState,
-    keyboard: &KeyboardHandle<KestrelState>,
-    shortcut: ShortcutAction,
-) {
-    match shortcut {
-        ShortcutAction::Forward => {}
-        ShortcutAction::SwitchWorkspace(workspace) => {
-            state.super_used = true;
-            let _ = state.switch_workspace(keyboard, &workspace);
-        }
-        ShortcutAction::SwitchRelativeWorkspace(offset) => {
-            state.super_used = true;
-            let _ = state.switch_relative_workspace(keyboard, offset);
-        }
-        ShortcutAction::MoveWindowToWorkspace(workspace) => {
-            state.super_used = true;
-            let _ = state.move_active_window_to_workspace(keyboard, workspace);
-        }
-        ShortcutAction::CloseActiveWindow => {
-            state.super_used = true;
-            if state.close_active_window().is_some() {
-                state.focus_active_workspace(keyboard);
-            }
-        }
-        ShortcutAction::CycleWindow { previous } => {
-            state.super_used = true;
-            let _ = state.cycle_active_window(keyboard, previous);
-        }
-        ShortcutAction::OpenLauncher => {
-            state.super_used = true;
-            state.send_shell_launcher_open();
-        }
-        ShortcutAction::OpenDefaultApp(app) => {
-            state.super_used = true;
-            state.send_shell_default_app_launch(app);
-        }
-        ShortcutAction::RestartShell => {
-            state.super_used = true;
-            state.request_shell_restart();
-        }
-        ShortcutAction::SuperPress => {
-            state.super_active = true;
-            state.super_used = false;
-        }
-        ShortcutAction::SuperRelease => {
-            if !state.super_used {
-                state.send_shell_start_menu_toggle();
-            }
-            state.super_active = false;
-            state.super_used = false;
-        }
-    }
-}
-
-fn is_super_key(raw: u32) -> bool {
-    matches!(raw, 0xffeb | 0xffec)
-}
-
 fn axis_workspace_offset<B: InputBackend>(event: &B::PointerAxisEvent) -> Option<i32> {
     let amount = event
         .amount_v120(Axis::Vertical)
@@ -436,19 +375,6 @@ fn axis_workspace_offset<B: InputBackend>(event: &B::PointerAxisEvent) -> Option
     }
 }
 
-fn workspace_for_raw_key(raw: u32) -> Option<WorkspaceId> {
-    match raw {
-        0x31..=0x39 => Some(WorkspaceId(char::from_u32(raw)?.to_string())),
-        _ => None,
-    }
-}
-
-trait ButtonStateExt {
-    fn pressed(self) -> bool;
-}
-
-impl ButtonStateExt for smithay::backend::input::ButtonState {
-    fn pressed(self) -> bool {
-        matches!(self, Self::Pressed)
-    }
+fn button_pressed(state: smithay::backend::input::ButtonState) -> bool {
+    matches!(state, smithay::backend::input::ButtonState::Pressed)
 }
