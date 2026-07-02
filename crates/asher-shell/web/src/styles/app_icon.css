@@ -36,11 +36,6 @@
   will-change: transform;
 }
 
-#app[data-panel-magnification="false"] .app-button:hover .app-icon {
-  transform: none;
-  will-change: auto;
-}
-
 .app-button:active {
   transform: scale(0.96);
 }

@@ -1,6 +1,5 @@
-use super::{KestrelState, ShellRestartRequest};
+use super::KestrelState;
 use crate::layout_config::layout_from_config;
-use asher_config::AsherConfig;
 use asher_ipc::{Rect, WindowId, WindowInfo, WindowState, WorkspaceId};
 use tracing::warn;
 
@@ -34,19 +33,14 @@ impl KestrelState {
     }
 
     pub fn request_shell_restart(&mut self) {
-        self.shell_restart_requested = Some(ShellRestartRequest::Normal);
+        self.shell_restart_requested = true;
     }
 
-    pub fn take_shell_restart_requested(&mut self) -> Option<ShellRestartRequest> {
-        self.shell_restart_requested.take()
+    pub fn take_shell_restart_requested(&mut self) -> bool {
+        std::mem::take(&mut self.shell_restart_requested)
     }
 
-    pub fn fallback_to_default_config(&mut self) {
-        let config = AsherConfig::default();
-        self.replace_config(config, Some(ShellRestartRequest::DefaultConfig));
-    }
-
-    pub fn replace_config(&mut self, config: AsherConfig, restart: Option<ShellRestartRequest>) {
+    pub fn replace_config(&mut self, config: asher_config::AsherConfig) {
         let mut layout = layout_from_config(&config);
         layout.set_bounds(Rect::new(0, 0, self.output_size().w, self.output_size().h));
 
@@ -92,9 +86,6 @@ impl KestrelState {
         self.set_primary_output_scale(output_scale);
         self.drag = None;
         self.workspace_transition = None;
-        if let Some(restart) = restart {
-            self.shell_restart_requested = Some(restart);
-        }
         self.apply_active_arrangement();
         self.mark_scene_dirty();
     }

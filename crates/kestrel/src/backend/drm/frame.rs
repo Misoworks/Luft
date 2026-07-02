@@ -8,7 +8,6 @@ use crate::{
     background_effect,
     compositor_damage::{CompositorDamageContext, CompositorDamagePlan, plan_compositor_damage},
     damage::{DamageTracker, LayerGeometryTracker},
-    debug_overlay::{DebugOverlayCache, DebugOverlayStats, render_debug_overlay},
     frame_clock::FrameClock,
     frame_clock::FrameTime,
     layers,
@@ -17,7 +16,6 @@ use crate::{
     scene_blur::SceneBlurCache,
     scene_render::{SceneRenderRequest, render_scene},
     state::KestrelState,
-    submitted_damage::SubmittedDamageHistory,
     window_clip::window_elements,
 };
 use smithay::{
@@ -75,18 +73,10 @@ pub struct SessionFrameRenderer {
     damage_tracker: DamageTracker,
     blur_damage_tracker: DamageTracker,
     blur_cache: SceneBlurCache,
-    debug_overlay_cache: DebugOverlayCache,
     session_started: Instant,
-    previous_frame_ms: f32,
-    previous_damage_area: i32,
-    fps: u32,
-    fps_frames: u32,
-    fps_started: Instant,
     shell_layers_seen_ready: bool,
     previous_frame_direct: bool,
-    submitted_damage: SubmittedDamageHistory,
     layer_geometry: LayerGeometryTracker,
-    last_blur_passes: usize,
 }
 
 impl SessionFrameRenderer {
@@ -94,21 +84,13 @@ impl SessionFrameRenderer {
         Self {
             background: Background::new(state.config.compositor.background_image.clone()),
             frame_clock: FrameClock::new(frame_interval),
-            damage_tracker: DamageTracker::new(state.output_size(), Transform::Normal),
-            blur_damage_tracker: DamageTracker::new(state.output_size(), Transform::Normal),
+            damage_tracker: DamageTracker::from_output(state.output()),
+            blur_damage_tracker: DamageTracker::from_output(state.output()),
             blur_cache: SceneBlurCache::default(),
-            debug_overlay_cache: DebugOverlayCache::default(),
             session_started: Instant::now(),
-            previous_frame_ms: 0.0,
-            previous_damage_area: 0,
-            fps: 0,
-            fps_frames: 0,
-            fps_started: Instant::now(),
             shell_layers_seen_ready: false,
             previous_frame_direct: false,
-            submitted_damage: SubmittedDamageHistory::default(),
             layer_geometry: LayerGeometryTracker::default(),
-            last_blur_passes: 0,
         }
     }
 
@@ -120,7 +102,6 @@ impl SessionFrameRenderer {
         direct_scanout: &mut DirectScanout,
         force_full_damage: bool,
     ) -> Result<FrameResult, DrmError> {
-        let frame_started = Instant::now();
         let removed_windows = state.remove_dead_windows();
         let finished_window_closes = state.send_finished_window_closes();
         state.cleanup_layers();
@@ -133,13 +114,10 @@ impl SessionFrameRenderer {
         }
         let workspace_transition_active = state.workspace_transition().is_some();
         let scene_dirty = state.take_scene_dirty();
-        let debug_needs_render =
-            state.config.compositor.debug_overlay && self.debug_overlay_cache.needs_refresh();
         let layer_geometry_changed = self.layer_geometry.geometry_changed(
             state.output_size(),
             &layers::layer_surface_rects(state.output()),
         );
-        let blur_animating = self.blur_cache.is_animating();
         let content_render_needed = force_full_damage
             || self.previous_frame_direct
             || scene_dirty
@@ -148,15 +126,11 @@ impl SessionFrameRenderer {
             || finished_window_closes
             || state.animations_active()
             || workspace_transition_active
-            || blur_animating
             || show_loading
             || self
                 .background
                 .set_path(state.config.compositor.background_image.clone());
-        let render_needed = content_render_needed || debug_needs_render;
-        if !render_needed {
-            self.previous_damage_area = 0;
-            self.previous_frame_ms = 0.0;
+        if !content_render_needed {
             return Ok(FrameResult::Idle);
         }
 
@@ -190,20 +164,15 @@ impl SessionFrameRenderer {
             .background
             .render_element(renderer, state.output_size())
             .map_err(render_error)?;
-        let blur_enabled = state.config.general.enable_blur && state.config.effects.blur;
         let background_layer =
             render_stage_elements(renderer, state, RenderStage::Layer(Layer::Background));
         let bottom_layer =
             render_stage_elements(renderer, state, RenderStage::Layer(Layer::Bottom));
         let window_effect_targets = background_effect::window_blur_targets(state);
-        if blur_enabled {
-            let mut blur_targets = window_effect_targets.clone();
-            blur_targets.extend(top_targets.iter().cloned());
-            blur_targets.extend(overlay_targets.iter().cloned());
-            self.blur_cache.retain_targets(&blur_targets);
-        } else {
-            self.blur_cache.clear();
-        }
+        let mut blur_targets = window_effect_targets.clone();
+        blur_targets.extend(top_targets.iter().cloned());
+        blur_targets.extend(overlay_targets.iter().cloned());
+        self.blur_cache.retain_targets(&blur_targets);
         let blur_animating = self.blur_cache.is_animating();
         let windows = window_elements(renderer, state);
         let window_chrome = window_chrome_elements(renderer, state).map_err(render_error)?;
@@ -229,16 +198,10 @@ impl SessionFrameRenderer {
         } else {
             None
         };
-        self.last_blur_passes = if blur_enabled {
-            window_effect_targets.len() + top_targets.len() + overlay_targets.len()
-        } else {
-            0
-        };
         if can_direct_scanout(
             state,
             fullscreen_active,
             show_loading,
-            debug_needs_render,
             blur_animating,
             &background_layer,
             &bottom_layer,
@@ -247,12 +210,7 @@ impl SessionFrameRenderer {
             &window_effect_targets,
         ) && direct_scanout.try_queue(state, renderer, surface)?
         {
-            self.previous_damage_area = state.output_size().w.saturating_mul(state.output_size().h);
-            self.previous_frame_ms = frame_started.elapsed().as_secs_f32() * 1000.0;
-            self.fps_frames += 1;
             self.previous_frame_direct = true;
-            self.submitted_damage.clear();
-            self.update_fps();
             return Ok(FrameResult::Queued {
                 frame_time: self.frame_clock.next_frame(),
                 submitted: SubmittedFrame::Direct,
@@ -265,7 +223,6 @@ impl SessionFrameRenderer {
         let mut framebuffer = renderer.bind(&mut dmabuf).map_err(|error| {
             DrmError::Unsupported(format!("failed to bind GBM buffer: {error}"))
         })?;
-        let debug_overlay = self.debug_overlay(state, renderer, content_render_needed)?;
         let force_scene_full_damage = force_full_damage
             || self.previous_frame_direct
             || show_loading
@@ -274,7 +231,6 @@ impl SessionFrameRenderer {
         let CompositorDamagePlan {
             damage,
             blur_damage,
-            damage_area: planned_damage_area,
             ..
         } = plan_compositor_damage(
             CompositorDamageContext {
@@ -282,7 +238,6 @@ impl SessionFrameRenderer {
                 output: state.output(),
                 buffer_age: usize::from(buffer_age),
                 force_full_damage: force_scene_full_damage,
-                blur_enabled,
                 blur_animating,
                 window_effect_targets: &window_effect_targets,
                 top_targets: &top_targets,
@@ -295,14 +250,11 @@ impl SessionFrameRenderer {
                 top_layer: &top_layer,
                 overlay_layer: &overlay_layer,
                 loading: loading_overlay.as_ref(),
-                debug: debug_overlay.as_ref(),
             },
             &mut self.damage_tracker,
             &mut self.blur_damage_tracker,
             &mut self.layer_geometry,
-            &self.submitted_damage,
         );
-        self.previous_damage_area = planned_damage_area;
 
         if !damage.is_empty() {
             let output_size = state.output_size();
@@ -316,7 +268,6 @@ impl SessionFrameRenderer {
                     target_transform: Transform::Normal,
                     damage: &damage,
                     blur_damage: &blur_damage,
-                    blur_enabled,
                     background: background_element,
                     background_layer: &background_layer,
                     bottom_layer: &bottom_layer,
@@ -328,7 +279,6 @@ impl SessionFrameRenderer {
                     overlay_targets: &overlay_targets,
                     overlay_layer: &overlay_layer,
                     loading: loading_overlay,
-                    debug: debug_overlay,
                 },
             )
             .map_err(render_error)?;
@@ -338,11 +288,7 @@ impl SessionFrameRenderer {
                 .map_err(|error| {
                     DrmError::Unsupported(format!("failed to queue DRM frame: {error}"))
                 })?;
-            self.submitted_damage.record(state.output_size(), &damage);
-            self.fps_frames += 1;
-            self.previous_frame_ms = frame_started.elapsed().as_secs_f32() * 1000.0;
             self.previous_frame_direct = false;
-            self.update_fps();
             return Ok(FrameResult::Queued {
                 frame_time: self.frame_clock.next_frame(),
                 submitted: SubmittedFrame::Composited,
@@ -359,72 +305,10 @@ impl SessionFrameRenderer {
     pub fn reset_for_output(&mut self, state: &KestrelState) {
         let frame_interval = refresh_interval(state.output_refresh_millihertz());
         self.frame_clock.set_refresh(frame_interval);
-        self.damage_tracker = DamageTracker::new(state.output_size(), Transform::Normal);
-        self.blur_damage_tracker = DamageTracker::new(state.output_size(), Transform::Normal);
-        self.blur_cache.clear();
-        self.debug_overlay_cache.clear();
-        self.submitted_damage.clear();
-        self.previous_damage_area = 0;
-        self.previous_frame_ms = 0.0;
+        self.damage_tracker = DamageTracker::from_output(state.output());
+        self.blur_damage_tracker = DamageTracker::from_output(state.output());
+        self.blur_cache.retain_targets(&[]);
         self.previous_frame_direct = false;
-    }
-
-    fn debug_overlay(
-        &mut self,
-        state: &KestrelState,
-        renderer: &mut GlesRenderer,
-        content_render_needed: bool,
-    ) -> Result<
-        Option<
-            smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement<
-                GlesRenderer,
-            >,
-        >,
-        DrmError,
-    > {
-        if !state.config.compositor.debug_overlay {
-            self.debug_overlay_cache.clear();
-            return Ok(None);
-        }
-
-        let workspace = state.layout.active_workspace().0.as_str();
-        let profile = state
-            .layout
-            .workspaces()
-            .find(|workspace| &workspace.id == state.layout.active_workspace())
-            .map(|workspace| workspace.profile_id.0.as_str())
-            .unwrap_or("-");
-        let xwayland = state.xwayland_display.as_deref().unwrap_or("-");
-        render_debug_overlay(
-            &mut self.debug_overlay_cache,
-            renderer,
-            &DebugOverlayStats {
-                backend: "session",
-                frame_ms: self.previous_frame_ms,
-                fps: self.fps,
-                idle: !content_render_needed,
-                target_hz: super::super::nested_timing::target_hz(
-                    state.output_refresh_millihertz(),
-                ),
-                damage_area: self.previous_damage_area,
-                surfaces: state.windows.surfaces().len() + state.layer_surfaces().len(),
-                blur_passes: self.last_blur_passes,
-                workspace,
-                profile,
-                xwayland,
-            },
-        )
-        .map(Some)
-        .map_err(render_error)
-    }
-
-    fn update_fps(&mut self) {
-        if self.fps_started.elapsed() < Duration::from_secs(1) {
-            return;
-        }
-        self.fps = self.fps_frames;
-        self.fps_frames = 0;
-        self.fps_started = Instant::now();
     }
 }
 
@@ -441,7 +325,6 @@ fn can_direct_scanout(
     state: &KestrelState,
     fullscreen_active: bool,
     show_loading: bool,
-    debug_needs_render: bool,
     blur_animating: bool,
     background_layer: &[LayerElement],
     bottom_layer: &[LayerElement],
@@ -451,7 +334,6 @@ fn can_direct_scanout(
 ) -> bool {
     fullscreen_active
         && !show_loading
-        && !debug_needs_render
         && !blur_animating
         && !state.has_visible_popups()
         && !state.animations_active()

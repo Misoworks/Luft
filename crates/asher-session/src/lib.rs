@@ -19,7 +19,7 @@ impl Default for SessionDescriptor {
         Self {
             name: "Asher".to_string(),
             comment: "Asher Desktop Environment".to_string(),
-            exec: "asher-session --session --guard".to_string(),
+            exec: "asher-session --session".to_string(),
             try_exec: default_try_exec(),
             desktop_names: "Asher".to_string(),
             keywords: default_keywords(),

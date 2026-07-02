@@ -210,8 +210,7 @@ impl KestrelState {
     }
 
     pub fn show_window(&mut self, id: WindowId) -> Result<(), LayoutError> {
-        self.windows
-            .set_hidden(id, false, self.animations_enabled());
+        self.windows.set_hidden(id, false, true);
         let state = if self
             .windows
             .window(id)
@@ -233,7 +232,7 @@ impl KestrelState {
         keyboard: &KeyboardHandle<Self>,
         id: WindowId,
     ) -> Result<(), LayoutError> {
-        if !self.windows.set_hidden(id, true, self.animations_enabled()) {
+        if !self.windows.set_hidden(id, true, true) {
             return Err(LayoutError::UnknownWindow(id));
         }
 
@@ -270,20 +269,14 @@ impl KestrelState {
             .or_else(|| self.windows.window(id).map(|window| window.geometry()))
             .ok_or(LayoutError::UnknownWindow(id))?;
         self.windows.set_restore_geometry(id, Some(geometry));
-        self.apply_window_geometry(
-            id,
-            self.maximized_geometry(id)?,
-            true,
-            false,
-            self.animations_enabled(),
-        );
+        self.apply_window_geometry(id, self.maximized_geometry(id)?, true, false, true);
         Ok(())
     }
 
     pub fn unmaximize_window(&mut self, id: WindowId) -> Result<(), LayoutError> {
         if let Some(restore) = self.windows.restore_geometry(id) {
             self.windows.set_restore_geometry(id, None);
-            self.apply_window_geometry(id, restore, false, false, self.animations_enabled());
+            self.apply_window_geometry(id, restore, false, false, true);
         }
 
         Ok(())
@@ -312,13 +305,7 @@ impl KestrelState {
             });
         self.windows.set_fullscreen_restore(id, Some(restore));
         self.windows.set_fullscreen(id, true);
-        self.apply_window_geometry(
-            id,
-            self.fullscreen_geometry(),
-            false,
-            true,
-            self.animations_enabled(),
-        );
+        self.apply_window_geometry(id, self.fullscreen_geometry(), false, true, true);
         Ok(())
     }
 
@@ -336,22 +323,10 @@ impl KestrelState {
         self.windows.set_fullscreen_restore(id, None);
         match restore {
             Some(restore) if restore.state == WindowState::Maximized => {
-                self.apply_window_geometry(
-                    id,
-                    self.maximized_geometry(id)?,
-                    true,
-                    false,
-                    self.animations_enabled(),
-                );
+                self.apply_window_geometry(id, self.maximized_geometry(id)?, true, false, true);
             }
             Some(restore) => {
-                self.apply_window_geometry(
-                    id,
-                    restore.geometry,
-                    false,
-                    false,
-                    self.animations_enabled(),
-                );
+                self.apply_window_geometry(id, restore.geometry, false, false, true);
             }
             None => {
                 self.apply_window_geometry(
@@ -359,7 +334,7 @@ impl KestrelState {
                     self.next_initial_window_geometry(),
                     false,
                     false,
-                    self.animations_enabled(),
+                    true,
                 );
             }
         }

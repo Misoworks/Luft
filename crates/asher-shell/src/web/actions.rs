@@ -1,4 +1,4 @@
-use asher_ipc::{ProfileId, WindowId, WorkspaceId};
+use asher_ipc::{WindowId, WorkspaceId};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -21,9 +21,6 @@ pub enum WebShellAction {
         offset: i32,
     },
     WorkspaceNew,
-    WorkspaceSetProfile {
-        profile: String,
-    },
     WindowActivate {
         window: u64,
     },
@@ -78,7 +75,6 @@ pub enum WebShellAction {
     QuickSetBrightness {
         percent: u8,
     },
-    QuickToggleDebugOverlay,
     SessionCommand {
         command: SessionCommand,
     },
@@ -142,10 +138,6 @@ impl QuickSettingsPage {
 
 pub fn workspace_id(value: String) -> WorkspaceId {
     WorkspaceId(value)
-}
-
-pub fn profile_id(value: String) -> ProfileId {
-    ProfileId(value)
 }
 
 pub fn window_id(value: u64) -> WindowId {

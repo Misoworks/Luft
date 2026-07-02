@@ -52,10 +52,7 @@
     }
     if (!rootElement) return;
     rootElement.dataset.surface = next.surface ?? "panel";
-    rootElement.dataset.mode = next.activeMode;
-    rootElement.dataset.animations = next.appearance.animationsEnabled ? "true" : "false";
     rootElement.dataset.material = "glass";
-    rootElement.dataset.panelMagnification = next.appearance.panelMagnification ? "true" : "false";
     rootElement.style.setProperty("--panel", next.palette.panel);
     rootElement.style.setProperty("--panel-control", next.palette.panelControl);
     rootElement.style.setProperty("--panel-text", next.palette.panelText);
@@ -63,8 +60,6 @@
     rootElement.style.setProperty("--accent", next.palette.accent);
     rootElement.style.setProperty("--text-soft", next.palette.textSoft);
     rootElement.style.setProperty("--text-muted", next.palette.textMuted);
-    rootElement.style.setProperty("--panel-item-size", `${next.appearance.panelIconSize}px`);
-    rootElement.style.setProperty("--panel-icon-size", `${Math.max(24, next.appearance.panelIconSize - 8)}px`);
   }
 
   function runSurfaceAnimation(phase: "opening" | "closing") {
@@ -121,11 +116,6 @@
   }
 
   function keydown(event: KeyboardEvent) {
-    if (event.key === "F3") {
-      event.preventDefault();
-      sendAction({ type: "quick-toggle-debug-overlay" });
-      return;
-    }
     if (event.key === "Escape" && surface === "start-menu") {
       sendAction({ type: "close-start-menu" });
       return;

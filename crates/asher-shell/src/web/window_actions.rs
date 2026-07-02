@@ -1,11 +1,5 @@
-use super::{
-    WebShell,
-    actions::{profile_id, window_id},
-};
-use crate::ipc::{
-    activate_window, close_window, minimize_window, set_workspace_profile,
-    switch_relative_workspace,
-};
+use super::{WebShell, actions::window_id};
+use crate::ipc::{activate_window, close_window, minimize_window, switch_relative_workspace};
 
 impl WebShell {
     pub(super) fn new_workspace_from_start_menu(&mut self) {
@@ -14,19 +8,6 @@ impl WebShell {
         if self.model.active_workspace != previous {
             self.close_transient_popovers();
         }
-    }
-
-    pub(super) fn set_active_workspace_profile(&mut self, profile: String) {
-        let profile = profile_id(profile);
-        if profile == self.model.active_profile {
-            self.close_transient_popovers();
-            return;
-        }
-        self.apply_model_result(set_workspace_profile(
-            self.model.active_workspace.clone(),
-            profile,
-        ));
-        self.close_transient_popovers();
     }
 
     pub(super) fn activate_task_window(&mut self, window: u64) {

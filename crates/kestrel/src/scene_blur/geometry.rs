@@ -2,7 +2,6 @@ use crate::{
     layers::{BlurLayer, LayerMaterial, LayerRenderTarget},
     window_clip::ClipShape,
 };
-use asher_config::BlurQuality;
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Size};
 
 const WINDOW_BLUR_SAMPLE_PADDING: i32 = 0;
@@ -130,22 +129,16 @@ fn clipped_rect(
 pub(super) fn blur_texture_size(
     target: &LayerRenderTarget,
     size: Size<i32, Physical>,
-    quality: BlurQuality,
 ) -> Size<i32, Physical> {
-    let scale = blur_downscale(target, size.w, size.h, quality);
+    let scale = blur_downscale(target, size.w, size.h);
     Size::<i32, Physical>::from((
         div_ceil(size.w, scale).max(1),
         div_ceil(size.h, scale).max(1),
     ))
 }
 
-fn blur_downscale(
-    target: &LayerRenderTarget,
-    width: i32,
-    height: i32,
-    quality: BlurQuality,
-) -> i32 {
-    let base: i32 = if target.blur_layer != BlurLayer::Window {
+fn blur_downscale(target: &LayerRenderTarget, width: i32, height: i32) -> i32 {
+    if target.blur_layer != BlurLayer::Window {
         2
     } else {
         let area = width.saturating_mul(height);
@@ -156,12 +149,6 @@ fn blur_downscale(
         } else {
             7
         }
-    };
-
-    match quality {
-        BlurQuality::Quality => base.saturating_sub(2).max(2),
-        BlurQuality::Balanced => base,
-        BlurQuality::Performance => base.saturating_add(3),
     }
 }
 

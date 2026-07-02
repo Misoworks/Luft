@@ -183,9 +183,3 @@
 .panel-app .running-dot {
   bottom: 1px;
 }
-
-.shell-panel-bar .web-fps-meter {
-  left: 8px;
-  right: auto;
-  bottom: 3px;
-}

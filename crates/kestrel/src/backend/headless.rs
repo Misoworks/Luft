@@ -39,7 +39,6 @@ pub fn run(options: HeadlessOptions) -> Result<(), HeadlessError> {
     info!(
         wayland_display = %socket_name,
         ipc_socket = %ipc.path().display(),
-        blur_enabled = state.config.general.enable_blur,
         "headless compositor ready"
     );
 

@@ -1,4 +1,4 @@
-use asher_config::{BackendPreference, ConfigPaths, ConfigSource, load_config_or_default};
+use asher_config::{BackendPreference, ConfigPaths, ConfigSource, load_config};
 use asher_session::{SessionDescriptor, SessionEnvironment, validate_descriptor};
 use clap::Parser;
 use std::{
@@ -30,12 +30,6 @@ struct SessionArgs {
     desktop_entry: bool,
     #[arg(long)]
     dry_run: bool,
-    #[arg(long)]
-    guard: bool,
-    #[arg(long)]
-    fallback_session: Option<String>,
-    #[arg(long, default_value_t = 8)]
-    startup_timeout_seconds: u64,
 }
 
 fn main() -> ExitCode {
@@ -56,14 +50,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let (loaded, config_error) = load_config_or_default();
-    if let Some(error) = config_error {
-        warn!(%error, "failed to load user config; using built-in default config");
-    } else {
-        match &loaded.source {
-            ConfigSource::User(path) => info!(path = %path.display(), "loaded user config"),
-            ConfigSource::Defaults => warn!("using built-in default config"),
-        }
+    let loaded = load_config()?;
+    match &loaded.source {
+        ConfigSource::User(path) => info!(path = %path.display(), "loaded user config"),
+        ConfigSource::Defaults => warn!("using built-in default config"),
     }
 
     let backend = selected_backend(&args, loaded.config.compositor.backend);
@@ -81,46 +71,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    if args.guard {
-        return run_guarded(command, backend, &args);
-    }
-
     info!(kestrel = %kestrel.display(), backend = backend.name(), "starting Kestrel");
     let error = command.exec();
     Err(Box::new(error))
-}
-
-fn run_guarded(
-    mut command: Command,
-    backend: KestrelBackend,
-    args: &SessionArgs,
-) -> Result<(), Box<dyn std::error::Error>> {
-    info!(backend = backend.name(), "starting guarded Kestrel session");
-    let started = std::time::Instant::now();
-    let mut child = command.spawn()?;
-    let status = child.wait()?;
-    if status.success() {
-        return Ok(());
-    }
-
-    let startup_window = std::time::Duration::from_secs(args.startup_timeout_seconds);
-    if started.elapsed() > startup_window {
-        return Err(format!("Kestrel exited with {status}").into());
-    }
-
-    let Some(fallback) = fallback_session_command(args) else {
-        return Err(format!("Kestrel exited during startup with {status}").into());
-    };
-
-    warn!(%status, fallback = %fallback, "Kestrel exited during startup; launching fallback session");
-    let error = Command::new("sh").arg("-lc").arg(fallback).exec();
-    Err(Box::new(error))
-}
-
-fn fallback_session_command(args: &SessionArgs) -> Option<String> {
-    args.fallback_session
-        .clone()
-        .or_else(|| env::var("ASHER_FALLBACK_SESSION").ok())
 }
 
 fn print_desktop_entry() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,6 +1,5 @@
 use crate::{
     apps::AppEntry,
-    chrome::ShellChrome,
     control::ShellControlServer,
     ipc::ShellModel,
     panel::PanelApp,
@@ -11,7 +10,6 @@ use crate::{
 };
 mod action_dispatch;
 mod actions;
-mod appearance;
 mod command_actions;
 mod icons;
 mod init;
@@ -21,6 +19,7 @@ mod model;
 mod palette;
 mod panel_actions;
 mod popover_actions;
+mod running_order;
 mod settings_command;
 mod snapshot;
 mod startup_apps;
@@ -93,11 +92,11 @@ pub(super) struct WebShell {
     pub(super) palette: ShellPalette,
     pub(super) model: ShellModel,
     pub(super) status: SystemStatus,
-    pub(super) chrome: ShellChrome,
     pub(super) tray: TrayService,
     pub(super) notifications: NotificationService,
     pub(super) panel_apps: Vec<PanelApp>,
     pub(super) applications: Vec<AppEntry>,
+    pub(super) running_app_order: Vec<asher_ipc::WindowId>,
     pub(super) surfaces: WebSurfaces,
     actions_rx: Receiver<WebShellAction>,
     queued_actions: VecDeque<WebShellAction>,
@@ -146,7 +145,6 @@ impl WebShell {
         }
 
         if handled_action || self.start_menu_visible || self.quick_visible || self.date_visible {
-            self.sync_chrome();
             self.sync_surfaces();
         }
         self.surfaces.tick();
@@ -163,7 +161,6 @@ impl WebShell {
         self.launch_startup_apps();
         self.refresh_status();
         self.refresh_config();
-        self.sync_chrome();
         self.sync_surfaces();
     }
 

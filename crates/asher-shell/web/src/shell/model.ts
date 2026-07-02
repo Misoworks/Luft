@@ -11,14 +11,8 @@ export type ShellSnapshot = {
   time: string;
   date: string;
   activeWorkspace: string;
-  activeProfile: string;
-  activeMode: string;
-  blurEnabled: boolean;
-  debugOverlay: boolean;
   userProfileIconUri?: string;
   palette: ShellPalette;
-  appearance: ShellAppearance;
-  profiles: ProfileItem[];
   workspaces: WorkspaceItem[];
   windows: WindowItem[];
   panelApps: PanelApp[];
@@ -45,27 +39,9 @@ export type ShellPalette = {
   textMuted: string;
 };
 
-export type ShellAppearance = {
-  materialMode: string;
-  shellMode: string;
-  animationsEnabled: boolean;
-  panelIconSize: number;
-  panelMagnification: boolean;
-  panelLauncher: boolean;
-};
-
 export type WorkspaceItem = {
   id: string;
   name: string;
-  profile: string;
-  mode: string;
-  active: boolean;
-};
-
-export type ProfileItem = {
-  id: string;
-  name: string;
-  mode: string;
   active: boolean;
 };
 
@@ -142,7 +118,6 @@ export type ShellAction =
   | { type: "workspace-switch"; workspace: string }
   | { type: "workspace-relative"; offset: number }
   | { type: "workspace-new" }
-  | { type: "workspace-set-profile"; profile: string }
   | { type: "window-activate"; window: number }
   | { type: "window-close"; window: number }
   | { type: "window-minimize"; window: number }
@@ -161,7 +136,6 @@ export type ShellAction =
   | { type: "quick-set-volume"; percent: number }
   | { type: "quick-toggle-mute" }
   | { type: "quick-set-brightness"; percent: number }
-  | { type: "quick-toggle-debug-overlay" }
   | { type: "session-command"; command: "lock" | "suspend" | "reboot" | "power-off" }
   | { type: "reload-config" }
   | { type: "open-logs-folder" }
@@ -180,10 +154,6 @@ export const emptySnapshot = (): ShellSnapshot => {
       day: "numeric",
     }),
     activeWorkspace: "1",
-    activeProfile: "panel-default",
-    activeMode: "panel",
-    blurEnabled: true,
-    debugOverlay: false,
     palette: {
       panel: "rgba(22, 22, 20, 0.62)",
       panelControl: "rgba(255, 255, 255, 0.08)",
@@ -193,15 +163,6 @@ export const emptySnapshot = (): ShellSnapshot => {
       textSoft: "rgba(218, 216, 205, 0.91)",
       textMuted: "rgba(164, 162, 154, 0.87)",
     },
-    appearance: {
-      materialMode: "glass",
-      shellMode: "panel",
-      animationsEnabled: true,
-      panelIconSize: 40,
-      panelMagnification: true,
-      panelLauncher: true,
-    },
-    profiles: [],
     workspaces: [],
     windows: [],
     panelApps: [],

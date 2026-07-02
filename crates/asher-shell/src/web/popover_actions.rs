@@ -13,7 +13,6 @@ impl WebShell {
         self.quick_visible = false;
         self.date_visible = false;
         self.start_menu_visible = true;
-        self.sync_chrome();
         self.sync_surfaces();
         self.surfaces.quick.set_visible(false);
         self.surfaces.date.set_visible(false);
@@ -25,7 +24,6 @@ impl WebShell {
             return;
         }
         self.start_menu_visible = false;
-        self.sync_chrome();
         self.sync_surfaces();
         self.surfaces.start_menu.set_visible(false);
     }
@@ -43,7 +41,6 @@ impl WebShell {
         self.start_menu_visible = false;
         self.quick_visible = true;
         self.refresh_status_now();
-        self.sync_chrome();
         self.sync_surfaces();
         self.surfaces.quick.set_visible(true);
         self.surfaces.date.set_visible(false);
@@ -55,7 +52,6 @@ impl WebShell {
             return;
         }
         self.quick_visible = false;
-        self.sync_chrome();
         self.sync_surfaces();
         self.surfaces.quick.set_visible(false);
     }
@@ -72,7 +68,6 @@ impl WebShell {
         self.quick_visible = false;
         self.start_menu_visible = false;
         self.date_visible = true;
-        self.sync_chrome();
         self.sync_surfaces();
         self.surfaces.date.set_visible(true);
         self.surfaces.quick.set_visible(false);
@@ -84,7 +79,6 @@ impl WebShell {
             return;
         }
         self.date_visible = false;
-        self.sync_chrome();
         self.sync_surfaces();
         self.surfaces.date.set_visible(false);
     }
@@ -94,7 +88,6 @@ impl WebShell {
         self.date_visible = false;
         self.start_menu_visible = false;
         self.close_panel_menu();
-        self.sync_chrome();
         self.sync_surfaces();
         self.surfaces.quick.set_visible(false);
         self.surfaces.date.set_visible(false);

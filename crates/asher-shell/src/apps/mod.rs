@@ -379,8 +379,8 @@ fn apply_app_environment(command: &mut Command, xwayland_display: Option<&str>) 
     command.env("SDL_VIDEODRIVER", "wayland");
     command.env("CLUTTER_BACKEND", "wayland");
     command.env("MOZ_ENABLE_WAYLAND", "1");
-    command.env("ELECTRON_OZONE_PLATFORM_HINT", "wayland");
-    command.env("NIXOS_OZONE_WL", "1");
+    command.env("ELECTRON_OZONE_PLATFORM_HINT", "auto");
+    command.env_remove("NIXOS_OZONE_WL");
     for (name, value) in cursor_environment_entries() {
         command.env(name, value);
     }

@@ -2,7 +2,6 @@ use crate::{
     layers::{BlurLayer, LayerMaterial, LayerRenderTarget},
     window_clip::RoundedWindowElement,
 };
-use asher_config::BlurQuality;
 use smithay::{
     backend::{
         allocator::Fourcc,
@@ -47,10 +46,6 @@ pub struct SceneBlurCache {
 }
 
 impl SceneBlurCache {
-    pub fn clear(&mut self) {
-        self.entries.clear();
-    }
-
     pub fn retain_targets(&mut self, targets: &[LayerRenderTarget]) {
         self.animating = false;
         for entry in &mut self.entries {
@@ -163,7 +158,6 @@ impl SceneBlurCache {
             target,
             rect,
             damage,
-            quality,
         } = request;
         let now = Instant::now();
         let cached = self.entries.iter().position(|entry| entry.matches(target));
@@ -180,8 +174,8 @@ impl SceneBlurCache {
 
         let program = self.program(renderer)?;
         let sample_rect = padded_target_rect(output_size, target, rect);
-        let capture_size = blur_texture_size(target, sample_rect.size, quality);
-        let texture_size = blur_texture_size(target, rect.size, quality);
+        let capture_size = blur_texture_size(target, sample_rect.size);
+        let texture_size = blur_texture_size(target, rect.size);
         let visible_source = source_rect_for_visible_target(sample_rect, rect, capture_size);
         let (capture, scratch, blurred, output) = match cached {
             Some(index)
@@ -339,8 +333,6 @@ pub struct BlurCaptureRequest<'a> {
     pub target_transform: Transform,
     pub targets: &'a [LayerRenderTarget],
     pub damage: &'a [Rectangle<i32, Physical>],
-    pub enabled: bool,
-    pub quality: BlurQuality,
 }
 
 struct BlurTargetRequest<'a> {
@@ -350,7 +342,6 @@ struct BlurTargetRequest<'a> {
     target: &'a LayerRenderTarget,
     rect: Rectangle<i32, Physical>,
     damage: &'a [Rectangle<i32, Physical>],
-    quality: BlurQuality,
 }
 
 pub fn capture_blur_elements(
@@ -358,10 +349,6 @@ pub fn capture_blur_elements(
     renderer: &mut GlesRenderer,
     request: BlurCaptureRequest<'_>,
 ) -> Result<Vec<BlurElement>, GlesError> {
-    if !request.enabled {
-        return Ok(Vec::new());
-    }
-
     let mut elements = Vec::new();
     for target in request.targets {
         let Some(rect) = clipped_target_rect(request.output_size, target) else {
@@ -376,7 +363,6 @@ pub fn capture_blur_elements(
                 target,
                 rect,
                 damage: request.damage,
-                quality: request.quality,
             },
         )?;
         elements.push(render_element(renderer, rect, entry, opacity));

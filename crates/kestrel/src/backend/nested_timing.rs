@@ -49,13 +49,6 @@ pub(super) fn idle_wait() {
     thread::sleep(IDLE_WAIT);
 }
 
-pub(super) fn target_hz(refresh_millihertz: i32) -> u32 {
-    u32::try_from((refresh_millihertz + 500) / 1000)
-        .ok()
-        .filter(|refresh| *refresh > 0)
-        .unwrap_or(60)
-}
-
 pub(super) fn host_refresh_millihertz(window: &WinitWindow) -> Option<i32> {
     window
         .current_monitor()

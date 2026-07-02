@@ -226,7 +226,8 @@ impl WebSurface {
             .shell_surface_alpha(self.surface_alpha)
             .visible(self.visible)
             .active(self.visible && kind == WebShellSurface::StartMenu)
-            .active_frame_rate(shell_surface_frame_rate())
+            .active_frame_rate(shell_surface_frame_rate(kind))
+            .background_frame_rate(1)
             .blur_region(shell_blur_region(kind, width as i32, height as i32))
             .runtime(runtime_config())
             .security(WebViewSecurity::default())
@@ -325,7 +326,14 @@ pub(crate) struct WebSurfaceConfig<'a> {
     pub snapshot: &'a WebShellSnapshot,
 }
 
-fn shell_surface_frame_rate() -> u32 {
+fn shell_surface_frame_rate(kind: WebShellSurface) -> u32 {
+    match kind {
+        WebShellSurface::Panel => 30,
+        _ => output_frame_rate(),
+    }
+}
+
+fn output_frame_rate() -> u32 {
     env::var("ASHER_OUTPUT_REFRESH_MILLIHERTZ")
         .ok()
         .and_then(|value| value.parse::<u32>().ok())

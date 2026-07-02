@@ -29,7 +29,6 @@ pub struct SceneRenderRequest<'a> {
     pub target_transform: Transform,
     pub damage: &'a [Rectangle<i32, Physical>],
     pub blur_damage: &'a [Rectangle<i32, Physical>],
-    pub blur_enabled: bool,
     pub background: Option<MemoryElement>,
     pub background_layer: &'a [LayerSurfaceElement],
     pub bottom_layer: &'a [LayerSurfaceElement],
@@ -41,7 +40,6 @@ pub struct SceneRenderRequest<'a> {
     pub overlay_targets: &'a [LayerRenderTarget],
     pub overlay_layer: &'a [LayerSurfaceElement],
     pub loading: Option<MemoryElement>,
-    pub debug: Option<MemoryElement>,
 }
 
 fn draw_blur_elements(
@@ -66,11 +64,10 @@ pub fn render_scene(
     framebuffer: &mut GlesTarget<'_>,
     request: SceneRenderRequest<'_>,
 ) -> Result<(), GlesError> {
-    if !request.blur_enabled
-        || (request.window_targets.is_empty()
-            && request.top_targets.is_empty()
-            && request.overlay_targets.is_empty()
-            && !blur_cache.has_cached_elements())
+    if request.window_targets.is_empty()
+        && request.top_targets.is_empty()
+        && request.overlay_targets.is_empty()
+        && !blur_cache.has_cached_elements()
     {
         return render_flat_scene(renderer, framebuffer, request);
     }
@@ -108,7 +105,6 @@ fn render_flat_scene(
     draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
     draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
     draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
-    draw_optional_memory(&mut frame, request.debug.as_ref(), request.damage)?;
     let _ = frame.finish()?;
     Ok(())
 }
@@ -147,7 +143,6 @@ fn render_flat_scene_with_cached_layer_blur(
     draw_blur_elements(&mut frame, &overlay_blur, &overlay_blur_damage)?;
     draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
     draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
-    draw_optional_memory(&mut frame, request.debug.as_ref(), request.damage)?;
     let _ = frame.finish()?;
     Ok(())
 }
@@ -158,7 +153,6 @@ fn render_staged_scene(
     framebuffer: &mut GlesTarget<'_>,
     request: SceneRenderRequest<'_>,
 ) -> Result<(), GlesError> {
-    let blur_quality = request.state.config.effects.blur_quality;
     let capture_damage = capture_damage_for_blur_targets(blur_cache, &request);
     let pre_capture_damage =
         merged_render_damage(request.output_size, request.damage, &capture_damage);
@@ -213,8 +207,6 @@ fn render_staged_scene(
                 target_transform: request.target_transform,
                 targets: &targets,
                 damage: request.blur_damage,
-                enabled: request.blur_enabled,
-                quality: blur_quality,
             },
         )?;
         let mut frame =
@@ -244,8 +236,6 @@ fn render_staged_scene(
             target_transform: request.target_transform,
             targets: request.top_targets,
             damage: request.blur_damage,
-            enabled: request.blur_enabled,
-            quality: blur_quality,
         },
     )?;
     {
@@ -266,8 +256,6 @@ fn render_staged_scene(
             target_transform: request.target_transform,
             targets: request.overlay_targets,
             damage: request.blur_damage,
-            enabled: request.blur_enabled,
-            quality: blur_quality,
         },
     )?;
     let mut frame = renderer.render(framebuffer, request.output_size, request.target_transform)?;
@@ -275,7 +263,6 @@ fn render_staged_scene(
     draw_blur_elements(&mut frame, &overlay_blur, &blur_damage)?;
     draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
     draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
-    draw_optional_memory(&mut frame, request.debug.as_ref(), request.damage)?;
     let _ = frame.finish()?;
 
     Ok(())

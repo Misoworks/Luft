@@ -168,7 +168,7 @@ impl XdgShellHandler for KestrelState {
         _positioner: PositionerState,
         token: u32,
     ) {
-        surface.send_repositioned(token);
+        let _ = surface.send_repositioned(token);
         self.mark_scene_dirty();
     }
 

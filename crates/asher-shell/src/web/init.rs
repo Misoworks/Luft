@@ -16,13 +16,14 @@ impl WebShell {
         let palette = shell_palette(&config);
         let model = load_model()?;
         let status = SystemStatus::read();
-        let chrome = ShellChrome::for_mode(model.active_mode);
         let panel_apps = panel_apps(&config);
         let applications = launcher_apps(&config, &panel_apps);
+        let running_app_order = super::running_order::from_model(&model);
         let tray = TrayService::start();
         let notifications = NotificationService::start();
         let snapshot = WebShellSnapshot::from_shell(WebShellSnapshotInput {
             model: &model,
+            running_window_order: &running_app_order,
             status: &status,
             tray: tray.snapshot(),
             notifications: notifications.snapshot(),
@@ -31,13 +32,12 @@ impl WebShell {
             panel_menu_x: None,
             applications: &applications,
             palette,
-            config: &config,
             start_menu_open: false,
             quick_settings_open: false,
             date_center_open: false,
         });
         let mut surfaces = WebSurfaces::new(actions_tx, &snapshot)?;
-        surfaces.set_panel_visible(chrome.panel);
+        surfaces.set_panel_visible(true);
 
         Ok(Self {
             launcher_command: config.default_apps.launcher.clone(),
@@ -48,11 +48,11 @@ impl WebShell {
             palette,
             model,
             status,
-            chrome,
             tray,
             notifications,
             panel_apps,
             applications,
+            running_app_order,
             surfaces,
             actions_rx,
             queued_actions: Default::default(),

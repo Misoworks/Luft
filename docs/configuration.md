@@ -1,16 +1,6 @@
 # Configuration
 
-Asher loads `~/.config/asher/config.toml` when present and falls back to built-in defaults. At startup, Kestrel, `asher-session`, and `asher-shell` fall back to defaults if user config cannot be parsed or validated, so a broken config does not prevent the session from starting.
-
-## Appearance
-
-```toml
-[appearance]
-animations = true
-panel_icon_size = 40
-panel_magnification = false
-panel_launcher = true
-```
+Asher loads `~/.config/asher/config.toml` when present and uses built-in defaults when the file is absent. Invalid config stops startup so mistakes are visible immediately.
 
 ## Wallpaper
 

@@ -194,17 +194,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "asher-greeter"
-version = "0.1.0"
-dependencies = [
- "clap",
- "libc",
- "pam-client2",
- "thiserror 2.0.18",
- "users",
-]
-
-[[package]]
 name = "asher-ipc"
 version = "0.1.0"
 dependencies = [
@@ -431,9 +420,6 @@ name = "bitflags"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3"
-dependencies = [
- "serde_core",
-]
 
 [[package]]
 name = "block-buffer"
@@ -2350,27 +2336,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pam-client2"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "407daa00f98b05147dbbaa6d2f6bce574e76794fa4952a5b38764681a23dde5f"
-dependencies = [
- "bitflags 2.11.1",
- "libc",
- "pam-sys2",
- "rustversion",
-]
-
-[[package]]
-name = "pam-sys2"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63e07ea89c210813e1a48fc32cb358ba693aae8ca70163461e22d11f1884bf1d"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3547,15 +3512,6 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
-
-[[package]]
-name = "users"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24cc0f6d6f267b73e5a2cadf007ba8f9bc39c6a6f9666f8cf25ea809a153b032"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "utf8parse"

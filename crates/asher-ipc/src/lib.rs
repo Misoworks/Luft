@@ -8,11 +8,8 @@ use std::{
 mod layout;
 
 pub use layout::{
-    ActionResult, AppId, Arrangement, ChromeSpec, GroupId, GroupNode, LayoutContext, LayoutEngine,
-    LayoutError, LayoutNode, ModeContext, ModeId, PanelMode, ProfileId, Rect, ShellAction,
-    ShellMode, ShellProfile, SplitAxis, SplitNode, SplitNodeId, TabStack, TabStackId, WindowId,
-    WindowInfo, WindowState, Workspace, WorkspaceId, WorkspaceRule, mode_for_profile, shell_mode,
-    state_for_mode,
+    Arrangement, LayoutEngine, LayoutError, Rect, WindowId, WindowInfo, WindowState, Workspace,
+    WorkspaceId,
 };
 
 pub const SOCKET_ENV: &str = "ASHER_IPC_SOCKET";
@@ -97,12 +94,8 @@ fn json_error(error: serde_json::Error) -> io::Error {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum IpcRequest {
-    Status,
     ShellSnapshot,
     Reload,
-    ListProfiles,
-    ListWorkspaces,
-    ListWindows,
     ListOutputs,
     ActivateWindow {
         window: WindowId,
@@ -120,28 +113,17 @@ pub enum IpcRequest {
         window: WindowId,
         workspace: WorkspaceId,
     },
-    SetWorkspaceProfile {
-        workspace: WorkspaceId,
-        profile: ProfileId,
-    },
     SwitchWorkspace {
         workspace: WorkspaceId,
     },
     SwitchRelativeWorkspace {
         offset: i32,
     },
-    SetDebugOverlay {
-        enabled: bool,
-    },
-    SetBlur {
-        enabled: bool,
-    },
     SetOutputScale {
         output: Option<String>,
         scale: f64,
     },
     RestartShell,
-    FallbackToDefaultConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -165,20 +147,9 @@ pub enum DefaultAppKind {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum IpcResponse {
-    Status(StatusPayload),
     ShellSnapshot {
         status: StatusPayload,
         workspaces: Vec<WorkspaceSummary>,
-        profiles: Vec<ProfileSummary>,
-        windows: Vec<WindowSummary>,
-    },
-    Profiles {
-        profiles: Vec<ProfileSummary>,
-    },
-    Workspaces {
-        workspaces: Vec<WorkspaceSummary>,
-    },
-    Windows {
         windows: Vec<WindowSummary>,
     },
     Outputs {
@@ -197,11 +168,7 @@ pub struct StatusPayload {
     pub xwayland: XwaylandStatus,
     pub xwayland_display: Option<String>,
     pub active_workspace: WorkspaceId,
-    pub active_profile: ProfileId,
-    pub active_mode: ModeId,
     pub nested: bool,
-    pub blur_enabled: bool,
-    pub debug_overlay: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -237,18 +204,9 @@ pub enum XwaylandStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProfileSummary {
-    pub id: ProfileId,
-    pub name: String,
-    pub mode: ModeId,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceSummary {
     pub id: WorkspaceId,
     pub name: String,
-    pub profile: ProfileId,
-    pub mode: ModeId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

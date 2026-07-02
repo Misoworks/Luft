@@ -1,21 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
-    env, fs, io,
+    fs, io,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
 
-mod appearance;
 mod apps;
 mod cursor_theme;
 mod display;
 mod panel;
 mod paths;
-mod performance;
 mod session;
 
-pub use appearance::AppearanceConfig;
 pub use apps::DefaultAppsConfig;
 pub use cursor_theme::{
     DEFAULT_CURSOR_SIZE, DEFAULT_CURSOR_THEME_DIR, DEFAULT_CURSOR_THEME_NAME,
@@ -24,68 +21,30 @@ pub use cursor_theme::{
 pub use display::{DisplayConfig, OutputConfig};
 pub use panel::{PanelConfig, PinnedAppConfig};
 pub use paths::ConfigPaths;
-pub use performance::{PerformanceConfig, PerformanceMode};
 pub use session::SessionConfig;
-
-pub const IGNORE_USER_CONFIG_ENV: &str = "ASHER_IGNORE_USER_CONFIG";
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AsherConfig {
-    pub general: GeneralConfig,
     pub compositor: CompositorConfig,
     pub display: DisplayConfig,
     pub session: SessionConfig,
-    pub appearance: AppearanceConfig,
-    pub effects: EffectsConfig,
     pub workspaces: WorkspacesConfig,
-    pub performance: PerformanceConfig,
     pub panel: PanelConfig,
     pub default_apps: DefaultAppsConfig,
 }
 
 impl AsherConfig {
     pub fn validate(&self) -> Result<(), ConfigError> {
-        if self.general.default_profile.trim().is_empty() {
-            return Err(ConfigError::Validation(
-                "general.default_profile cannot be empty".to_string(),
-            ));
-        }
         for (id, workspace) in &self.workspaces.entries {
             if workspace.name.trim().is_empty() {
                 return Err(ConfigError::Validation(format!(
                     "workspace {id} has an empty name"
                 )));
             }
-            if workspace.profile.trim().is_empty() {
-                return Err(ConfigError::Validation(format!(
-                    "workspace {id} has an empty profile"
-                )));
-            }
         }
-        self.appearance.validate()?;
         self.display.validate()?;
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct GeneralConfig {
-    pub default_profile: String,
-    pub enable_effects: bool,
-    pub enable_blur: bool,
-    pub enable_animations: bool,
-}
-
-impl Default for GeneralConfig {
-    fn default() -> Self {
-        Self {
-            default_profile: "panel-default".to_string(),
-            enable_effects: true,
-            enable_blur: true,
-            enable_animations: true,
-        }
     }
 }
 
@@ -94,7 +53,6 @@ impl Default for GeneralConfig {
 pub struct CompositorConfig {
     pub backend: BackendPreference,
     pub xwayland: bool,
-    pub debug_overlay: bool,
     pub background_image: Option<PathBuf>,
 }
 
@@ -103,7 +61,6 @@ impl Default for CompositorConfig {
         Self {
             backend: BackendPreference::Auto,
             xwayland: true,
-            debug_overlay: false,
             background_image: None,
         }
     }
@@ -120,35 +77,8 @@ pub enum BackendPreference {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct EffectsConfig {
-    pub background_effect_protocol: bool,
-    pub blur: bool,
-    pub blur_quality: BlurQuality,
-}
-
-impl Default for EffectsConfig {
-    fn default() -> Self {
-        Self {
-            background_effect_protocol: true,
-            blur: true,
-            blur_quality: BlurQuality::Balanced,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum BlurQuality {
-    Quality,
-    Balanced,
-    Performance,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
 pub struct WorkspacesConfig {
     pub count: u32,
-    pub restore_sessions: bool,
     #[serde(flatten)]
     pub entries: BTreeMap<String, WorkspaceConfig>,
 }
@@ -157,7 +87,6 @@ impl Default for WorkspacesConfig {
     fn default() -> Self {
         Self {
             count: 1,
-            restore_sessions: true,
             entries: BTreeMap::new(),
         }
     }
@@ -166,15 +95,11 @@ impl Default for WorkspacesConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceConfig {
     pub name: String,
-    pub profile: String,
 }
 
 impl WorkspaceConfig {
-    pub fn new(name: impl Into<String>, profile: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            profile: profile.into(),
-        }
+    pub fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
     }
 }
 
@@ -191,31 +116,8 @@ pub enum ConfigSource {
 }
 
 pub fn load_config() -> Result<LoadedConfig, ConfigError> {
-    if ignore_user_config() {
-        return Ok(LoadedConfig {
-            config: AsherConfig::default(),
-            source: ConfigSource::Defaults,
-        });
-    }
-
     let paths = ConfigPaths::discover()?;
     load_config_from_path(&paths.config_file)
-}
-
-pub fn load_config_or_default() -> (LoadedConfig, Option<ConfigError>) {
-    match load_config() {
-        Ok(loaded) => (loaded, None),
-        Err(error) => {
-            let config = AsherConfig::default();
-            (
-                LoadedConfig {
-                    config,
-                    source: ConfigSource::Defaults,
-                },
-                Some(error),
-            )
-        }
-    }
 }
 
 pub fn save_config(config: &AsherConfig) -> Result<PathBuf, ConfigError> {
@@ -266,13 +168,6 @@ pub(crate) fn ensure_parent_dir(path: &Path) -> Result<(), ConfigError> {
     fs::create_dir_all(parent).map_err(|source| ConfigError::Write {
         path: parent.to_path_buf(),
         source,
-    })
-}
-
-fn ignore_user_config() -> bool {
-    env::var_os(IGNORE_USER_CONFIG_ENV).is_some_and(|value| {
-        let value = value.to_string_lossy();
-        !matches!(value.as_ref(), "" | "0" | "false" | "False" | "FALSE")
     })
 }
 

@@ -45,6 +45,8 @@ cargo build "${build_args[@]}" \
   -p asher-session \
   --features kestrel/session-backend
 
+"$target_dir/asher-shell" --refresh-fenestra-host
+
 "${SUDO[@]}" install -Dm755 "$target_dir/kestrel" "$BIN_DIR/kestrel"
 "${SUDO[@]}" install -Dm755 "$target_dir/asher-shell" "$BIN_DIR/asher-shell"
 "${SUDO[@]}" install -Dm755 "$target_dir/asher-session" "$BIN_DIR/asher-session"
@@ -55,7 +57,7 @@ cat >"$desktop_entry" <<EOF
 [Desktop Entry]
 Name=Asher
 Comment=Asher Desktop Environment
-Exec=$BIN_DIR/asher-session --session --guard
+Exec=$BIN_DIR/asher-session --session
 TryExec=$BIN_DIR/asher-session
 Type=Application
 DesktopNames=Asher

@@ -138,10 +138,6 @@ function normalizeSnapshot(snapshot?: ShellSnapshot): ShellSnapshot {
     status: {
       ...snapshot?.status,
     },
-    appearance: {
-      ...emptySnapshot().appearance,
-      ...snapshot?.appearance,
-    },
   };
 }
 

@@ -1,4 +1,4 @@
-import type { ApplicationItem, ProfileItem, ShellAction, ShellSnapshot, WindowItem, WorkspaceItem } from "../shell/model";
+import type { ApplicationItem, ShellAction, ShellSnapshot, WindowItem, WorkspaceItem } from "../shell/model";
 
 type StartMenuCommand = {
   title: string;
@@ -32,13 +32,6 @@ export type StartMenuSearchResult =
       title: string;
       detail: string;
       workspace: WorkspaceItem;
-    }
-  | {
-      kind: "profile";
-      key: string;
-      title: string;
-      detail: string;
-      profile: ProfileItem;
     }
   | {
       kind: "action";
@@ -100,28 +93,17 @@ export function startMenuSearchResults(snapshot: ShellSnapshot, query: string) {
     }));
 
   const workspaces = snapshot.workspaces
-    .filter((workspace) => searchable([workspace.name, workspace.profile, workspace.mode, workspace.id], needle))
+    .filter((workspace) => searchable([workspace.name, workspace.id], needle))
     .slice(0, 4)
     .map<StartMenuSearchResult>((workspace) => ({
       kind: "workspace",
       key: `workspace:${workspace.id}`,
       title: workspace.name,
-      detail: `${workspace.profile} / ${workspace.mode}`,
+      detail: `Workspace ${workspace.id}`,
       workspace,
     }));
 
-  const profiles = snapshot.profiles
-    .filter((profile) => searchable([profile.name, profile.id, profile.mode], needle))
-    .slice(0, 5)
-    .map<StartMenuSearchResult>((profile) => ({
-      kind: "profile",
-      key: `profile:${profile.id}`,
-      title: profile.name,
-      detail: profile.active ? `${profile.id} / active on this workspace` : `${profile.id} / ${profile.mode}`,
-      profile,
-    }));
-
-  return [...actions, ...apps, ...windows, ...workspaces, ...profiles];
+  return [...actions, ...apps, ...windows, ...workspaces];
 }
 
 export function selectedStartMenuResult(results: StartMenuSearchResult[], selection: number) {
@@ -271,14 +253,6 @@ function startMenuCommands(snapshot: ShellSnapshot): StartMenuCommand[] {
       action: { type: "notification-do-not-disturb", enabled: !snapshot.doNotDisturb },
     },
     {
-      title: snapshot.debugOverlay ? "Hide Debug Overlay" : "Show Debug Overlay",
-      detail: "Toggle compositor diagnostics",
-      icon: "gauge",
-      label: "Debug",
-      keywords: ["debug", "fps", "performance", "diagnostics"],
-      action: { type: "quick-toggle-debug-overlay" },
-    },
-    {
       title: "Reload Config",
       detail: "Reload Asher configuration",
       icon: "refresh",
@@ -291,7 +265,7 @@ function startMenuCommands(snapshot: ShellSnapshot): StartMenuCommand[] {
       detail: "Open Asher log files",
       icon: "files",
       label: "Logs",
-      keywords: ["logs", "journal", "debug", "diagnostics", "folder"],
+      keywords: ["logs", "journal", "folder"],
       action: { type: "open-logs-folder" },
     },
   ];

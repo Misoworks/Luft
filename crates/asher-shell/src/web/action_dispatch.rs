@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     apps::spawn_command,
-    ipc::{move_window_to_workspace, set_debug_overlay, switch_workspace},
+    ipc::{move_window_to_workspace, switch_workspace},
     services::system_status::{set_audio_volume, set_brightness, toggle_audio_mute},
 };
 use tracing::{debug, warn};
@@ -29,9 +29,6 @@ impl WebShell {
                 self.apply_model_result(crate::ipc::switch_relative_workspace(offset))
             }
             WebShellAction::WorkspaceNew => self.new_workspace_from_start_menu(),
-            WebShellAction::WorkspaceSetProfile { profile } => {
-                self.set_active_workspace_profile(profile)
-            }
             WebShellAction::WindowActivate { window } => self.activate_task_window(window),
             WebShellAction::WindowClose { window } => self.close_task_window(window),
             WebShellAction::WindowMinimize { window } => self.minimize_task_window(window),
@@ -73,9 +70,6 @@ impl WebShell {
                     warn!(%error, "failed to set brightness");
                 }
                 self.refresh_status_now();
-            }
-            WebShellAction::QuickToggleDebugOverlay => {
-                self.apply_model_result(set_debug_overlay(!self.model.debug_overlay))
             }
             WebShellAction::SessionCommand { command } => self.run_session_command(command),
             WebShellAction::ReloadConfig => self.reload_config_from_command(),

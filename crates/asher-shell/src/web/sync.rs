@@ -1,7 +1,6 @@
 use super::{CONFIG_REFRESH, MODEL_REFRESH, STATUS_REFRESH, WebShell};
 use crate::{
     apps::{launcher_apps, panel_apps},
-    chrome::ShellChrome,
     ipc::{ShellModel, load_model, reload_config},
     services::system_status::SystemStatus,
     theme::shell_palette,
@@ -13,7 +12,7 @@ use tracing::{debug, warn};
 impl WebShell {
     pub(super) fn apply_model_result(&mut self, result: Result<ShellModel, Box<dyn Error>>) {
         match result {
-            Ok(model) => self.model = model,
+            Ok(model) => self.apply_model(model),
             Err(error) => warn!(%error, "failed to apply shell action"),
         }
     }
@@ -24,9 +23,14 @@ impl WebShell {
         }
         self.last_model_refresh = Instant::now();
         match load_model() {
-            Ok(model) => self.model = model,
+            Ok(model) => self.apply_model(model),
             Err(error) => debug!(%error, "failed to refresh shell model"),
         }
+    }
+
+    fn apply_model(&mut self, model: ShellModel) {
+        self.model = model;
+        super::running_order::sync(&mut self.running_app_order, &self.model);
     }
 
     pub(super) fn refresh_status(&mut self) {
@@ -76,20 +80,6 @@ impl WebShell {
         self.applications = launcher_apps(&config, &self.panel_apps);
         self.launcher_command = config.default_apps.launcher.clone();
         self.config = config;
-        self.sync_chrome();
-    }
-
-    pub(super) fn sync_chrome(&mut self) {
-        let chrome = ShellChrome::for_mode(self.model.active_mode);
-        let changed = chrome != self.chrome;
-        self.chrome = chrome;
-        self.surfaces.set_panel_visible(chrome.panel);
-        if changed && !chrome.panel {
-            self.quick_visible = false;
-            self.date_visible = false;
-            self.surfaces.quick.set_visible(false);
-            self.surfaces.date.set_visible(false);
-        }
     }
 
     pub(super) fn sync_surfaces(&mut self) {
@@ -97,6 +87,7 @@ impl WebShell {
         let snapshot =
             super::model::WebShellSnapshot::from_shell(super::snapshot::WebShellSnapshotInput {
                 model: &self.model,
+                running_window_order: &self.running_app_order,
                 status: &self.status,
                 tray: self.tray.snapshot(),
                 notifications: self.notifications.snapshot(),
@@ -105,7 +96,6 @@ impl WebShell {
                 panel_menu_x: self.panel_menu_x,
                 applications: &self.applications,
                 palette: self.palette,
-                config: &self.config,
                 start_menu_open: self.start_menu_visible,
                 quick_settings_open: self.quick_visible,
                 date_center_open: self.date_visible,

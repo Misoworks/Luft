@@ -10,7 +10,6 @@ crates/asher-shell      Panel shell service and Fenestra web chrome
 crates/asher-session    Display-manager/session launcher
 crates/asher-config     Shared config model and XDG path handling
 crates/asher-ipc        Typed compositor IPC payloads
-crates/asher-greeter    Session discovery and PAM launch helper
 ```
 
 ## Build

@@ -1,13 +1,6 @@
-[general]
-default_profile = "panel-default"
-enable_effects = true
-enable_blur = true
-enable_animations = true
-
 [compositor]
 backend = "auto"
 xwayland = true
-debug_overlay = false
 
 [display]
 default_scale = 1.0
@@ -19,20 +12,8 @@ reboot_command = "systemctl reboot"
 poweroff_command = "systemctl poweroff"
 startup_apps = []
 
-[appearance]
-animations = true
-panel_icon_size = 40
-panel_magnification = false
-panel_launcher = true
-
-[effects]
-background_effect_protocol = true
-blur = true
-blur_quality = "balanced"
-
 [workspaces]
 count = 1
-restore_sessions = true
 
 [default_apps]
 terminal = "ghostty"

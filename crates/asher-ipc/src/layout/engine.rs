@@ -1,8 +1,4 @@
-use super::mode::{mode_for_profile, shell_mode, state_for_mode, window_geometry_map};
-use crate::{
-    LayoutContext, ModeContext, ProfileId, ShellAction, WindowId, WindowInfo, WindowState,
-    Workspace, WorkspaceId,
-};
+use crate::{Arrangement, Rect, WindowId, WindowInfo, WindowState, Workspace, WorkspaceId};
 use std::collections::BTreeMap;
 use thiserror::Error;
 
@@ -12,7 +8,7 @@ pub struct LayoutEngine {
     windows: BTreeMap<WindowId, WindowInfo>,
     active_workspace: WorkspaceId,
     next_window_id: u64,
-    bounds: crate::Rect,
+    bounds: Rect,
 }
 
 impl LayoutEngine {
@@ -34,13 +30,13 @@ impl LayoutEngine {
             windows: BTreeMap::new(),
             active_workspace,
             next_window_id: 1,
-            bounds: crate::Rect::new(0, 0, 1280, 800),
+            bounds: Rect::new(0, 0, 1280, 800),
         })
     }
 
     pub fn with_default_workspaces() -> Self {
         Self::new(
-            vec![Workspace::empty("1", "Workspace 1", "panel-default")],
+            vec![Workspace::empty("1", "Workspace 1")],
             WorkspaceId("1".to_string()),
         )
         .expect("default layout has a valid active workspace")
@@ -50,28 +46,16 @@ impl LayoutEngine {
         &self.active_workspace
     }
 
-    pub fn active_mode(&self) -> crate::ModeId {
-        self.workspaces
-            .get(&self.active_workspace)
-            .map(|workspace| mode_for_profile(&workspace.profile_id))
-            .unwrap_or(crate::ModeId::Panel)
-    }
-
     pub fn workspaces(&self) -> impl Iterator<Item = &Workspace> {
         self.ordered_workspace_ids()
             .into_iter()
             .filter_map(|id| self.workspaces.get(&id))
     }
 
-    pub fn ensure_workspace(
-        &mut self,
-        id: WorkspaceId,
-        name: String,
-        profile: ProfileId,
-    ) -> &Workspace {
+    pub fn ensure_workspace(&mut self, id: WorkspaceId, name: String) -> &Workspace {
         self.workspaces
             .entry(id.clone())
-            .or_insert_with(|| Workspace::empty(id.0.clone(), name, profile.0.clone()))
+            .or_insert_with(|| Workspace::empty(id.0.clone(), name))
     }
 
     pub fn relative_workspace(&mut self, offset: i32) -> Option<WorkspaceId> {
@@ -92,12 +76,7 @@ impl LayoutEngine {
         }
 
         let id = self.next_numeric_workspace_id();
-        let profile = self
-            .workspaces
-            .get(&self.active_workspace)
-            .map(|workspace| workspace.profile_id.clone())
-            .unwrap_or_else(|| ProfileId("panel-default".to_string()));
-        self.ensure_workspace(id.clone(), format!("Workspace {}", id.0), profile);
+        self.ensure_workspace(id.clone(), format!("Workspace {}", id.0));
         Some(id)
     }
 
@@ -105,11 +84,7 @@ impl LayoutEngine {
         self.windows.get(&id)
     }
 
-    pub fn set_window_geometry(
-        &mut self,
-        id: WindowId,
-        geometry: crate::Rect,
-    ) -> Result<(), LayoutError> {
+    pub fn set_window_geometry(&mut self, id: WindowId, geometry: Rect) -> Result<(), LayoutError> {
         let window = self
             .windows
             .get_mut(&id)
@@ -131,7 +106,7 @@ impl LayoutEngine {
         Ok(())
     }
 
-    pub fn set_bounds(&mut self, bounds: crate::Rect) {
+    pub fn set_bounds(&mut self, bounds: Rect) {
         self.bounds = bounds;
     }
 
@@ -146,14 +121,13 @@ impl LayoutEngine {
             self.next_window_id = self.next_window_id.max(info.id.0 + 1);
         }
 
-        let mode = self.mode_for_workspace(&info.workspace)?;
-        info.state = state_for_mode(mode);
+        info.state = WindowState::Floating;
         let id = info.id;
         let workspace = self
             .workspaces
             .get_mut(&info.workspace)
             .ok_or_else(|| LayoutError::UnknownWorkspace(info.workspace.clone()))?;
-        shell_mode(mode).on_window_opened(id, workspace, &mut ModeContext::default());
+        add_window_to_workspace(workspace, id);
         self.windows.insert(id, info);
         self.normalize_dynamic_workspaces();
         Ok(id)
@@ -162,15 +136,7 @@ impl LayoutEngine {
     pub fn unregister_window(&mut self, id: WindowId) -> Option<WindowInfo> {
         let window = self.windows.remove(&id)?;
         if let Some(workspace) = self.workspaces.get_mut(&window.workspace) {
-            let mode = mode_for_profile(&workspace.profile_id);
-            let _ = shell_mode(mode).handle_action(
-                ShellAction::MoveWindowToWorkspace {
-                    window: id,
-                    workspace: window.workspace.clone(),
-                },
-                workspace,
-                &mut ModeContext::default(),
-            );
+            remove_window_from_workspace(workspace, id);
         }
         self.normalize_dynamic_workspaces();
         Some(window)
@@ -182,25 +148,6 @@ impl LayoutEngine {
         }
 
         self.active_workspace = workspace.clone();
-        Ok(())
-    }
-
-    pub fn set_workspace_profile(
-        &mut self,
-        workspace: &WorkspaceId,
-        profile: ProfileId,
-    ) -> Result<(), LayoutError> {
-        let mode = mode_for_profile(&profile);
-        let workspace = self
-            .workspaces
-            .get_mut(workspace)
-            .ok_or_else(|| LayoutError::UnknownWorkspace(workspace.clone()))?;
-        workspace.profile_id = profile;
-        for window in &workspace.floating_windows {
-            if let Some(info) = self.windows.get_mut(window) {
-                info.state = state_for_mode(mode);
-            }
-        }
         Ok(())
     }
 
@@ -221,46 +168,30 @@ impl LayoutEngine {
             .clone();
 
         if let Some(workspace) = self.workspaces.get_mut(&current_workspace) {
-            let mode = mode_for_profile(&workspace.profile_id);
-            let _ = shell_mode(mode).handle_action(
-                ShellAction::MoveWindowToWorkspace {
-                    window,
-                    workspace: workspace_id.clone(),
-                },
-                workspace,
-                &mut ModeContext::default(),
-            );
+            remove_window_from_workspace(workspace, window);
         }
 
         let target = self
             .workspaces
             .get_mut(workspace_id)
             .ok_or_else(|| LayoutError::UnknownWorkspace(workspace_id.clone()))?;
-        let mode = mode_for_profile(&target.profile_id);
-        shell_mode(mode).on_window_opened(window, target, &mut ModeContext::default());
+        add_window_to_workspace(target, window);
 
         if let Some(info) = self.windows.get_mut(&window) {
             info.workspace = workspace_id.clone();
-            info.state = state_for_mode(mode);
+            info.state = WindowState::Floating;
         }
 
         self.normalize_dynamic_workspaces();
         Ok(())
     }
 
-    pub fn arrange_active(&self) -> Result<crate::Arrangement, LayoutError> {
+    pub fn arrange_active(&self) -> Result<Arrangement, LayoutError> {
         let workspace = self
             .workspaces
             .get(&self.active_workspace)
             .ok_or_else(|| LayoutError::UnknownWorkspace(self.active_workspace.clone()))?;
-        let geometries = window_geometry_map(&self.windows);
-        let context = LayoutContext {
-            bounds: self.bounds,
-            windows: &self.windows,
-            window_geometries: &geometries,
-        };
-        let mode = mode_for_profile(&workspace.profile_id);
-        Ok(shell_mode(mode).arrange(workspace, &context))
+        Ok(arrange_workspace(workspace, self.bounds, &self.windows))
     }
 
     fn allocate_window_id(&mut self) -> WindowId {
@@ -287,12 +218,7 @@ impl LayoutEngine {
         }
 
         let id = self.next_numeric_workspace_id();
-        let profile = self
-            .workspaces
-            .get(&last)
-            .map(|workspace| workspace.profile_id.clone())
-            .unwrap_or_else(|| ProfileId("panel-default".to_string()));
-        self.ensure_workspace(id.clone(), format!("Workspace {}", id.0), profile);
+        self.ensure_workspace(id.clone(), format!("Workspace {}", id.0));
     }
 
     fn prune_extra_trailing_empty_workspaces(&mut self) {
@@ -347,14 +273,39 @@ impl LayoutEngine {
             .saturating_add(1);
         WorkspaceId(next.to_string())
     }
+}
 
-    fn mode_for_workspace(&self, workspace: &WorkspaceId) -> Result<crate::ModeId, LayoutError> {
-        let workspace = self
-            .workspaces
-            .get(workspace)
-            .ok_or_else(|| LayoutError::UnknownWorkspace(workspace.clone()))?;
-        Ok(mode_for_profile(&workspace.profile_id))
+fn add_window_to_workspace(workspace: &mut Workspace, window: WindowId) {
+    if !workspace.floating_windows.contains(&window) {
+        workspace.floating_windows.push(window);
     }
+}
+
+fn remove_window_from_workspace(workspace: &mut Workspace, window: WindowId) {
+    workspace.floating_windows.retain(|id| *id != window);
+}
+
+fn arrange_workspace(
+    workspace: &Workspace,
+    bounds: Rect,
+    windows: &BTreeMap<WindowId, WindowInfo>,
+) -> Arrangement {
+    let mut arrangement = Arrangement::empty();
+    for (index, window) in workspace.floating_windows.iter().enumerate() {
+        let Some(info) = windows.get(window) else {
+            continue;
+        };
+        if info.state == WindowState::Hidden {
+            continue;
+        }
+        let geometry = if info.geometry.width > 0 && info.geometry.height > 0 {
+            info.geometry
+        } else {
+            Rect::cascade(bounds, index, 900, 560)
+        };
+        arrangement.windows.insert(*window, geometry);
+    }
+    arrangement
 }
 
 fn compare_workspace_ids(left: &WorkspaceId, right: &WorkspaceId) -> std::cmp::Ordering {

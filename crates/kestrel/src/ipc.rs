@@ -1,15 +1,12 @@
 use crate::{
-    ipc_summary::{
-        known_profiles, output_summaries, profile_summaries, status_payload, window_summaries,
-        workspace_summaries,
-    },
+    ipc_summary::{output_summaries, status_payload, window_summaries, workspace_summaries},
     state::KestrelState,
 };
 use asher_config::load_config;
 use asher_ipc::{
     IpcRequest, IpcResponse, ensure_socket_parent, read_request, socket_path, write_response,
 };
-use asher_ipc::{ProfileId, WindowId, WorkspaceId};
+use asher_ipc::{WindowId, WorkspaceId};
 use smithay::input::keyboard::KeyboardHandle;
 use std::{
     fs, io,
@@ -103,20 +100,9 @@ fn handle_request(
     request: IpcRequest,
 ) -> IpcResult {
     match request {
-        IpcRequest::Status => IpcResult::read_only(IpcResponse::Status(status_payload(state))),
         IpcRequest::ShellSnapshot => IpcResult::read_only(IpcResponse::ShellSnapshot {
             status: status_payload(state),
             workspaces: workspace_summaries(state),
-            profiles: profile_summaries(state),
-            windows: window_summaries(state),
-        }),
-        IpcRequest::ListWorkspaces => IpcResult::read_only(IpcResponse::Workspaces {
-            workspaces: workspace_summaries(state),
-        }),
-        IpcRequest::ListProfiles => IpcResult::read_only(IpcResponse::Profiles {
-            profiles: profile_summaries(state),
-        }),
-        IpcRequest::ListWindows => IpcResult::read_only(IpcResponse::Windows {
             windows: window_summaries(state),
         }),
         IpcRequest::ListOutputs => IpcResult::read_only(IpcResponse::Outputs {
@@ -142,30 +128,8 @@ fn handle_request(
             switch_relative_workspace(state, keyboard, offset)
         }
         IpcRequest::Reload => reload_config(state),
-        IpcRequest::SetDebugOverlay { enabled } => {
-            let mutated = state.config.compositor.debug_overlay != enabled;
-            state.config.compositor.debug_overlay = enabled;
-            debug!(enabled, "ipc set debug overlay");
-            IpcResult::accepted(mutated)
-        }
-        IpcRequest::SetBlur { enabled } => {
-            let mutated = state.config.general.enable_blur != enabled
-                || state.config.effects.blur != enabled
-                || (enabled && !state.config.general.enable_effects);
-            if enabled {
-                state.config.general.enable_effects = true;
-            }
-            state.config.general.enable_blur = enabled;
-            state.config.effects.blur = enabled;
-            debug!(enabled, "ipc set blur");
-            IpcResult::accepted(mutated)
-        }
         IpcRequest::SetOutputScale { output, scale } => set_output_scale(state, output, scale),
         IpcRequest::RestartShell => restart_shell(state),
-        IpcRequest::FallbackToDefaultConfig => fallback_to_default_config(state),
-        IpcRequest::SetWorkspaceProfile { workspace, profile } => {
-            IpcResult::mutating(set_workspace_profile(state, workspace, profile))
-        }
     }
 }
 
@@ -283,7 +247,7 @@ fn reload_config(state: &mut KestrelState) -> IpcResult {
         Ok(loaded) => {
             let mutated = state.config != loaded.config;
             if mutated {
-                state.replace_config(loaded.config, None);
+                state.replace_config(loaded.config);
             }
             debug!("ipc reloaded configuration");
             IpcResult::accepted(mutated)
@@ -331,39 +295,6 @@ fn switch_relative_workspace(
     }
 }
 
-fn set_workspace_profile(
-    state: &mut KestrelState,
-    workspace: WorkspaceId,
-    profile: ProfileId,
-) -> IpcResponse {
-    if profile.0.trim().is_empty() {
-        return IpcResponse::Error {
-            message: "workspace profile cannot be empty".to_string(),
-        };
-    }
-    if !known_profiles(state).iter().any(|known| known == &profile) {
-        return IpcResponse::Error {
-            message: format!("unknown profile {}", profile.0),
-        };
-    }
-
-    match state
-        .layout
-        .set_workspace_profile(&workspace, profile.clone())
-    {
-        Ok(()) => {
-            if &workspace == state.layout.active_workspace() {
-                state.apply_active_arrangement();
-            }
-            debug!(workspace = %workspace.0, profile = %profile.0, "ipc set workspace profile");
-            IpcResponse::Accepted
-        }
-        Err(error) => IpcResponse::Error {
-            message: error.to_string(),
-        },
-    }
-}
-
 fn restart_shell(state: &mut KestrelState) -> IpcResult {
     if state.shell_control_path.is_none() {
         return IpcResult::read_only(IpcResponse::Error {
@@ -372,12 +303,6 @@ fn restart_shell(state: &mut KestrelState) -> IpcResult {
     }
     state.request_shell_restart();
     debug!("ipc requested shell restart");
-    IpcResult::accepted(true)
-}
-
-fn fallback_to_default_config(state: &mut KestrelState) -> IpcResult {
-    state.fallback_to_default_config();
-    debug!("ipc requested built-in default config fallback");
     IpcResult::accepted(true)
 }
 

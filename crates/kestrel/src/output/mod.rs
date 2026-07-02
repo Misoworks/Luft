@@ -97,24 +97,6 @@ pub fn create_output(display: &DisplayHandle, descriptor: &OutputDescriptor) -> 
     output
 }
 
-#[cfg(feature = "session-backend")]
-#[allow(dead_code)]
-pub fn configure_output(
-    output: &Output,
-    size: Size<i32, Physical>,
-    refresh_millihertz: i32,
-    scale: f64,
-) {
-    configure_output_at(
-        output,
-        size,
-        refresh_millihertz,
-        scale,
-        (0, 0).into(),
-        Transform::Normal,
-    );
-}
-
 pub fn configure_output_at(
     output: &Output,
     size: Size<i32, Physical>,

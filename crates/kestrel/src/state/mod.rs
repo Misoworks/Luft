@@ -68,7 +68,7 @@ pub struct KestrelState {
     pub super_used: bool,
     pub shell_control_path: Option<PathBuf>,
     pub shell_status: ShellStatus,
-    shell_restart_requested: Option<ShellRestartRequest>,
+    shell_restart_requested: bool,
     pub xwayland_status: XwaylandStatus,
     pub xwayland_display: Option<String>,
     pub titlebar_cache: RefCell<TitlebarCache>,
@@ -139,7 +139,7 @@ impl KestrelState {
             super_used: false,
             shell_control_path: None,
             shell_status: ShellStatus::NotStarted,
-            shell_restart_requested: None,
+            shell_restart_requested: false,
             xwayland_status: XwaylandStatus::Disabled,
             xwayland_display: None,
             titlebar_cache: RefCell::new(TitlebarCache::default()),
@@ -207,7 +207,7 @@ impl KestrelState {
                     surface.clone(),
                     geometry,
                     requested_server_decoration,
-                    self.animations_enabled(),
+                    true,
                 );
                 self.enter_output(surface.wl_surface());
                 self.mark_scene_dirty();
@@ -323,7 +323,7 @@ impl KestrelState {
         if self.windows.window(id).is_none() {
             return Err(LayoutError::UnknownWindow(id));
         }
-        if let Some(surface) = self.windows.start_close(id, self.animations_enabled()) {
+        if let Some(surface) = self.windows.start_close(id, true) {
             surface.send_close();
         }
         self.mark_scene_dirty();
@@ -431,12 +431,9 @@ impl KestrelState {
         self.layout.switch_workspace(workspace)?;
         self.apply_active_arrangement();
         if from != *workspace {
-            self.workspace_transition = if self.animations_enabled() {
-                self.workspace_transition_direction(&from, workspace)
-                    .map(|direction| WorkspaceTransition::new(from, workspace.clone(), direction))
-            } else {
-                None
-            };
+            self.workspace_transition = self
+                .workspace_transition_direction(&from, workspace)
+                .map(|direction| WorkspaceTransition::new(from, workspace.clone(), direction));
             self.mark_scene_dirty();
         }
         Ok(())
@@ -495,10 +492,6 @@ impl KestrelState {
         } else {
             Some(-1)
         }
-    }
-
-    pub(crate) fn animations_enabled(&self) -> bool {
-        self.config.general.enable_animations && self.config.performance.animations
     }
 
     pub fn map_layer_surface(&mut self, surface: LayerSurface, namespace: String) {
@@ -562,10 +555,4 @@ pub struct ClientGrabSerial {
 pub struct PendingWindowDrag {
     pub surface: ToplevelSurface,
     pub pointer_start: Point<f64, Logical>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShellRestartRequest {
-    Normal,
-    DefaultConfig,
 }

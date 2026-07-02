@@ -1,4 +1,4 @@
-use asher_config::{AsherConfig, IGNORE_USER_CONFIG_ENV, cursor_environment_entries};
+use asher_config::{AsherConfig, cursor_environment_entries};
 use asher_ipc::{SHELL_SOCKET_ENV, SOCKET_ENV, ShellStatus};
 use std::{
     env,
@@ -23,7 +23,6 @@ pub struct ShellProcess {
     shell_socket: PathBuf,
     output_refresh_millihertz: i32,
     next_spawn_after: Option<Instant>,
-    default_config: bool,
 }
 
 impl ShellProcess {
@@ -49,7 +48,6 @@ impl ShellProcess {
             shell_socket: shell_socket.to_path_buf(),
             output_refresh_millihertz,
             next_spawn_after: None,
-            default_config: false,
         };
         shell.spawn();
         shell
@@ -89,12 +87,6 @@ impl ShellProcess {
     }
 
     pub fn restart(&mut self) {
-        self.default_config = false;
-        self.restart_now();
-    }
-
-    pub fn restart_with_default_config(&mut self) {
-        self.default_config = true;
         self.restart_now();
     }
 
@@ -144,11 +136,6 @@ impl ShellProcess {
             .env(SHELL_SOCKET_ENV, &self.shell_socket);
         for (name, value) in cursor_environment_entries() {
             command.env(name, value);
-        }
-        if self.default_config {
-            command.env(IGNORE_USER_CONFIG_ENV, "1");
-        } else {
-            command.env_remove(IGNORE_USER_CONFIG_ENV);
         }
         if let Some(display) = &self.x11_display {
             command.env("DISPLAY", display);

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import DebugMeter from "./DebugMeter.svelte";
   import ControlSlider from "./ControlSlider.svelte";
   import Icon from "./Icon.svelte";
   import { sendAction } from "../shell/bridge";
@@ -353,7 +352,4 @@
       <ControlSlider label="Brightness" icon="sun" value={brightness} index={3} onChange={setBrightness} />
     {/if}
   </div>
-  {#if snapshot.debugOverlay}
-    <DebugMeter surface="QS" />
-  {/if}
 </section>

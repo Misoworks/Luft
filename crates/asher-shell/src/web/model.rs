@@ -1,4 +1,4 @@
-use super::{appearance::WebAppearance, icons::icon_data_uri, palette::WebPalette};
+use super::{icons::icon_data_uri, palette::WebPalette};
 use crate::services::{
     notifications::{NotificationItem, NotificationUrgency},
     system_status::{AudioInfo, BatteryInfo, BrightnessInfo, NetworkInfo, SystemStatus},
@@ -14,14 +14,8 @@ pub struct WebShellSnapshot {
     pub time: String,
     pub date: String,
     pub active_workspace: String,
-    pub active_profile: String,
-    pub active_mode: String,
-    pub blur_enabled: bool,
-    pub debug_overlay: bool,
     pub user_profile_icon_uri: Option<String>,
     pub palette: WebPalette,
-    pub appearance: WebAppearance,
-    pub profiles: Vec<WebProfile>,
     pub workspaces: Vec<WebWorkspace>,
     pub windows: Vec<WebWindow>,
     pub panel_apps: Vec<WebPanelApp>,
@@ -54,17 +48,6 @@ pub enum WebShellSurface {
 pub struct WebWorkspace {
     pub id: String,
     pub name: String,
-    pub profile: String,
-    pub mode: String,
-    pub active: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WebProfile {
-    pub id: String,
-    pub name: String,
-    pub mode: String,
     pub active: bool,
 }
 

@@ -1,9 +1,8 @@
 use super::{
-    appearance::WebAppearance,
     icons::icon_data_uri,
     model::{
-        WebApplication, WebPanelApp, WebProfile, WebShellSnapshot, WebTrayItem, WebTrayStatus,
-        WebWindow, WebWorkspace,
+        WebApplication, WebPanelApp, WebShellSnapshot, WebTrayItem, WebTrayStatus, WebWindow,
+        WebWorkspace,
     },
     palette::WebPalette,
 };
@@ -16,7 +15,6 @@ use crate::{
     },
     theme::ShellPalette,
 };
-use asher_config::AsherConfig;
 use std::{
     env,
     path::{Path, PathBuf},
@@ -25,6 +23,7 @@ use time::{OffsetDateTime, macros::format_description};
 
 pub struct WebShellSnapshotInput<'a> {
     pub model: &'a ShellModel,
+    pub running_window_order: &'a [asher_ipc::WindowId],
     pub status: &'a SystemStatus,
     pub tray: &'a TraySnapshot,
     pub notifications: &'a NotificationSnapshot,
@@ -33,7 +32,6 @@ pub struct WebShellSnapshotInput<'a> {
     pub panel_menu_x: Option<i32>,
     pub applications: &'a [AppEntry],
     pub palette: ShellPalette,
-    pub config: &'a AsherConfig,
     pub start_menu_open: bool,
     pub quick_settings_open: bool,
     pub date_center_open: bool,
@@ -43,6 +41,7 @@ impl WebShellSnapshot {
     pub fn from_shell(input: WebShellSnapshotInput<'_>) -> Self {
         let WebShellSnapshotInput {
             model,
+            running_window_order,
             status,
             tray,
             notifications,
@@ -51,7 +50,6 @@ impl WebShellSnapshot {
             panel_menu_x,
             applications,
             palette,
-            config,
             start_menu_open,
             quick_settings_open,
             date_center_open,
@@ -74,45 +72,17 @@ impl WebShellSnapshot {
             })
             .collect();
 
-        for window in &model.windows {
-            if !window_has_identity(window) {
-                continue;
+        for window_id in running_window_order {
+            if let Some(window) = model.windows.iter().find(|window| window.id == *window_id) {
+                append_running_window_app(&mut web_panel_apps, window, panel_apps, applications);
             }
-            if panel_apps
-                .iter()
-                .any(|app| panel_app_matches_window(app, window))
-            {
-                continue;
-            }
-            let matched_app = application_for_window(window, applications);
-            let app_id_icon_uri = window
-                .app_id
-                .as_deref()
-                .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
-                .as_deref()
-                .and_then(icon_data_uri);
-            let label = window
-                .title
-                .clone()
-                .or_else(|| matched_app.map(|app| app.name.clone()))
-                .or_else(|| window.app_id.clone())
-                .unwrap_or_else(|| "Window".to_string());
-            let icon_uri = matched_app
-                .and_then(|app| app.icon_path.as_deref())
-                .and_then(icon_data_uri)
-                .or(app_id_icon_uri);
-            if matched_app.is_none() && icon_uri.is_none() {
-                continue;
-            }
-            web_panel_apps.push(WebPanelApp {
-                label,
-                command: format!("window:{}", window.id.0),
-                icon_uri,
-                running: true,
-                active: window.is_active,
-                pinned: false,
-                window_id: Some(window.id.0),
-            });
+        }
+        for window in model
+            .windows
+            .iter()
+            .filter(|window| !running_window_order.contains(&window.id))
+        {
+            append_running_window_app(&mut web_panel_apps, window, panel_apps, applications);
         }
 
         Self {
@@ -126,31 +96,14 @@ impl WebShellSnapshot {
                 ))
                 .unwrap_or_else(|_| "Today".to_string()),
             active_workspace: model.active_workspace.0.clone(),
-            active_profile: model.active_profile.0.clone(),
-            active_mode: mode_name(model.active_mode),
-            blur_enabled: model.blur_enabled,
-            debug_overlay: model.debug_overlay,
             user_profile_icon_uri: user_profile_icon_uri(),
             palette: WebPalette::from(palette),
-            appearance: WebAppearance::from_config(config),
-            profiles: model
-                .profiles
-                .iter()
-                .map(|profile| WebProfile {
-                    id: profile.id.0.clone(),
-                    name: profile.name.clone(),
-                    mode: mode_name(profile.mode),
-                    active: profile.id == model.active_profile,
-                })
-                .collect(),
             workspaces: model
                 .workspaces
                 .iter()
                 .map(|workspace| WebWorkspace {
                     id: workspace.id.0.clone(),
                     name: workspace.name.clone(),
-                    profile: workspace.profile.0.clone(),
-                    mode: mode_name(workspace.mode),
                     active: workspace.id == model.active_workspace,
                 })
                 .collect(),
@@ -196,6 +149,53 @@ impl WebShellSnapshot {
     }
 }
 
+fn append_running_window_app(
+    panel_apps: &mut Vec<WebPanelApp>,
+    window: &asher_ipc::WindowSummary,
+    pinned_apps: &[PanelApp],
+    applications: &[AppEntry],
+) {
+    if !window_has_identity(window) {
+        return;
+    }
+    if pinned_apps
+        .iter()
+        .any(|app| panel_app_matches_window(app, window))
+    {
+        return;
+    }
+    let matched_app = application_for_window(window, applications);
+    let app_id_icon_uri = window
+        .app_id
+        .as_deref()
+        .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
+        .as_deref()
+        .and_then(icon_data_uri);
+    let icon_uri = matched_app
+        .and_then(|app| app.icon_path.as_deref())
+        .and_then(icon_data_uri)
+        .or(app_id_icon_uri);
+    if matched_app.is_none() && icon_uri.is_none() {
+        return;
+    }
+    let label = window
+        .title
+        .clone()
+        .or_else(|| matched_app.map(|app| app.name.clone()))
+        .or_else(|| window.app_id.clone())
+        .unwrap_or_else(|| "Window".to_string());
+
+    panel_apps.push(WebPanelApp {
+        label,
+        command: format!("window:{}", window.id.0),
+        icon_uri,
+        running: true,
+        active: window.is_active,
+        pinned: false,
+        window_id: Some(window.id.0),
+    });
+}
+
 fn user_profile_icon_uri() -> Option<String> {
     let user = env::var("USER").ok()?;
     let home = env::var_os("HOME").map(PathBuf::from);
@@ -209,13 +209,6 @@ fn user_profile_icon_uri() -> Option<String> {
     .into_iter()
     .flatten()
     .find_map(|path| icon_data_uri(path.as_path()))
-}
-
-fn mode_name(mode: asher_ipc::ModeId) -> String {
-    match mode {
-        asher_ipc::ModeId::Panel => "panel",
-    }
-    .to_string()
 }
 
 fn commands_equal(left: &str, right: &str) -> bool {

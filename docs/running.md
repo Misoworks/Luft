@@ -29,7 +29,7 @@ WAYLAND_DISPLAY=asher-headless wayland-info
 
 ## Session Launcher
 
-`asher-session` is the display-manager entry point from `data/sessions/asher.desktop`. The installed entry launches `asher-session --session --guard`, sets Asher desktop environment variables, and starts Kestrel as a real Wayland session.
+`asher-session` is the display-manager entry point from `data/sessions/asher.desktop`. The installed entry launches `asher-session --session`, sets Asher desktop environment variables, and starts Kestrel as a real Wayland session.
 
 ## Install A Login Session
 
@@ -39,7 +39,7 @@ Run the installer from the repository root:
 ./install.sh
 ```
 
-It builds the shell web assets with Bun, builds the session binaries with the DRM/KMS backend enabled, installs them to `/usr/local/bin`, writes the Wayland session entry, and installs Asher's portal preference file.
+It builds the shell web assets with Bun, builds the session binaries with the DRM/KMS backend enabled, refreshes the Fenestra CEF host, installs the binaries to `/usr/local/bin`, writes the Wayland session entry, and installs Asher's portal preference file.
 
 Override install paths or build a debug profile when needed:
 
@@ -57,15 +57,3 @@ cargo run -p asher-session -- --nested --socket asher-dev
 cargo run -p asher-session -- --desktop-entry
 cargo run -p asher-session -- --session --dry-run
 ```
-
-The guarded session returns to the display manager after an early Kestrel crash. Set `ASHER_FALLBACK_SESSION` or pass `--fallback-session` to launch another desktop after startup failure.
-
-## Greeter Helper
-
-```sh
-cargo run -p asher-greeter -- list
-cargo run -p asher-greeter -- launch asher --dry-run
-cargo run -p asher-greeter -- auth-launch kristof asher --password-stdin --dry-run
-```
-
-`asher-greeter` discovers installed `.desktop` sessions. `auth-launch` authenticates through PAM, opens a session, drops to the selected user, starts the selected desktop entry, waits for it to exit, and closes the PAM session.

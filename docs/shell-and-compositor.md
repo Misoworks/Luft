@@ -6,7 +6,7 @@ Kestrel accepts xdg-shell toplevel clients, advertises `wl_output`, supports `wl
 
 It also supports normal clipboard focus, primary selection, xdg activation, xdg toplevel icons, named cursor-shape requests, viewporter, fractional-scale preferences, presentation-time feedback, text-input v3 focus tracking, and `ext-background-effect-v1`.
 
-Layer-shell surfaces are arranged in this order: background, bottom, app windows, top, overlay. Kestrel reports shell process state, XWayland status, active workspace/profile, and live effect state through IPC. It shows a wallpaper-backed loading overlay until the panel layer is ready, cleans stale shell-control sockets, and stops child processes on compositor exit.
+Layer-shell surfaces are arranged in this order: background, bottom, app windows, top, overlay. Kestrel reports shell process state, XWayland status, and active workspace through IPC. It shows a wallpaper-backed loading overlay until the panel layer is ready, cleans stale shell-control sockets, and stops child processes on compositor exit.
 
 ## DRM/KMS Backend
 
@@ -26,7 +26,7 @@ Hidden shell popovers and the Start menu are launched lazily and evicted after a
 
 The built-in default starts with a bottom full-width panel. Kestrel keeps one trailing empty dynamic workspace once windows exist and does not keep creating empty workspaces when scrolling past it.
 
-The Start menu searches discovered desktop apps, workspace profiles, and shell commands for launcher, quick settings, notifications, settings pages, do-not-disturb, session commands, diagnostics, config reload, and logs. The clock opens notification and calendar center.
+The Start menu searches discovered desktop apps, workspaces, and shell commands for launcher, quick settings, notifications, settings pages, do-not-disturb, session commands, config reload, and logs. The clock opens notification and calendar center.
 
 The panel status area opens quick settings and renders network, audio, power, volume, brightness, do-not-disturb, launcher, Start menu, notifications, settings, and session controls when backing services are available. Unavailable hardware controls are hidden instead of shown as disabled placeholders.
 
@@ -34,7 +34,7 @@ StatusNotifier/AppIndicator tray items registered on the session bus are hosted 
 
 The shell owns `org.freedesktop.Notifications`, supports body text, static icons, action buttons, replacement IDs, timeouts, close requests, toast default actions, do-not-disturb suppression for non-critical popups, and `NotificationClosed`/`ActionInvoked` signals.
 
-Kestrel provides live blur for panel popovers when blur is enabled. The full-width panel uses normal translucent material to keep frame cost low.
+Kestrel provides live blur for panel popovers. The full-width panel uses normal translucent material to keep frame cost low.
 
 Wayland apps that draw their own header bars keep them by default. Kestrel draws traffic-light frames only for clients that request server-side decorations. Window titlebars can be dragged, resized from edges/corners with matching cursor feedback, closed, minimized, and maximized.
 

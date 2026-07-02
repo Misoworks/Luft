@@ -1,5 +1,4 @@
 <script lang="ts">
-  import DebugMeter from "./DebugMeter.svelte";
   import Icon from "./Icon.svelte";
   import { sendAction } from "../shell/bridge";
   import { filteredApplications, startMenuSearchResults, selectedStartMenuResult, type StartMenuSearchResult } from "../lib/start_menu_state";
@@ -211,10 +210,6 @@
       sendAction({ type: "window-activate", window: result.window.id });
       return;
     }
-    if (result.kind === "profile") {
-      sendAction({ type: "workspace-set-profile", profile: result.profile.id });
-      return;
-    }
     if (result.kind === "action") {
       sendAction(result.action);
       return;
@@ -272,8 +267,6 @@
               <Icon name="browser" />
             {:else if result.kind === "workspace"}
               <Icon name="app" />
-            {:else if result.kind === "profile"}
-              <Icon name="settings" />
             {:else if result.kind === "action"}
               <Icon name={result.icon} />
             {:else}
@@ -357,7 +350,4 @@
     </nav>
   {/if}
 
-  {#if snapshot.debugOverlay}
-    <DebugMeter surface="START MENU" />
-  {/if}
 </section>

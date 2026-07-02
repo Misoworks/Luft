@@ -5,7 +5,6 @@ mod client;
 mod compositor_damage;
 mod cursor;
 mod damage;
-mod debug_overlay;
 mod frame_clock;
 mod input;
 mod ipc;
@@ -23,7 +22,6 @@ mod session_services;
 mod shell;
 mod state;
 mod state_focus;
-mod submitted_damage;
 mod titlebar;
 mod window;
 mod window_animation;
@@ -32,7 +30,7 @@ mod window_geometry;
 mod workspace_transition;
 mod xwayland;
 
-use asher_config::{ConfigPaths, load_config_or_default};
+use asher_config::{ConfigPaths, ConfigSource, load_config};
 use backend::RuntimeBackend;
 use clap::Parser;
 use std::{fs, fs::OpenOptions, io};
@@ -56,17 +54,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let args = KestrelArgs::parse();
     let backend = selected_backend(&args);
-    let (loaded_config, config_error) = load_config_or_default();
-
-    if let Some(error) = config_error {
-        warn!(%error, "failed to load user config; using built-in default config");
-    } else {
-        match &loaded_config.source {
-            asher_config::ConfigSource::User(path) => {
-                info!(path = %path.display(), "loaded user config")
-            }
-            asher_config::ConfigSource::Defaults => warn!("using built-in default config"),
+    let loaded_config = load_config()?;
+    match &loaded_config.source {
+        ConfigSource::User(path) => {
+            info!(path = %path.display(), "loaded user config")
         }
+        ConfigSource::Defaults => warn!("using built-in default config"),
     }
 
     backend::run(backend, loaded_config.config, args.socket)?;

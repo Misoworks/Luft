@@ -1,5 +1,4 @@
 mod apps;
-mod chrome;
 mod color;
 mod control;
 mod ipc;
@@ -8,16 +7,18 @@ mod services;
 mod theme;
 mod web;
 
-use asher_config::{ConfigPaths, load_config_or_default};
+use asher_config::{ConfigPaths, load_config};
 use clap::Parser;
 use std::{env, fs, fs::OpenOptions, io};
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Debug, Parser)]
 #[command(name = "asher-shell", about = "Asher shell process")]
 struct ShellArgs {
     #[arg(long)]
     once: bool,
+    #[arg(long, hide = true)]
+    refresh_fenestra_host: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -30,20 +31,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging();
 
     let args = ShellArgs::parse();
-    let (loaded, config_error) = load_config_or_default();
-    if let Some(error) = config_error {
-        warn!(%error, "failed to load user config; using built-in default config");
+    if args.refresh_fenestra_host {
+        return refresh_fenestra_host();
     }
-    info!(
-        default_profile = %loaded.config.general.default_profile,
-        "asher shell configuration loaded"
-    );
+
+    let loaded = load_config()?;
+    info!("asher shell configuration loaded");
 
     if args.once {
         return Ok(());
     }
 
     web::run(loaded.config)
+}
+
+fn refresh_fenestra_host() -> Result<(), Box<dyn std::error::Error>> {
+    let config = fenestra_cef::RuntimeConfig::default();
+    let runtime = match fenestra_cef::resolve_runtime(&config) {
+        Ok(runtime) => runtime,
+        Err(_) if config.allow_user_install => {
+            fenestra_cef::install_user_runtime_with_progress(&config, |progress| {
+                if let Some(fraction) = progress.fraction {
+                    eprintln!(
+                        "Fenestra runtime: {} ({:.0}%)",
+                        progress.message,
+                        fraction * 100.0
+                    );
+                } else {
+                    eprintln!("Fenestra runtime: {}", progress.message);
+                }
+            })?
+        }
+        Err(error) => return Err(Box::new(error)),
+    };
+
+    let runtime_dir = runtime.location.path();
+    let source_stamp = runtime_dir
+        .join(".fenestra-host-build")
+        .join("fenestra-host-source.fnv");
+    let _ = fs::remove_file(source_stamp);
+    let host = fenestra_cef::ensure_cef_host(runtime_dir)?;
+    println!("Refreshed Fenestra CEF host: {}", host.display());
+    Ok(())
 }
 
 fn disable_accessibility_bridge() {

@@ -1,26 +1,15 @@
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
 mod engine;
-mod mode;
 
 pub use engine::{LayoutEngine, LayoutError};
-pub use mode::{
-    ActionResult, LayoutContext, ModeContext, PanelMode, ShellAction, ShellMode, ShellProfile,
-    mode_for_profile, shell_mode, state_for_mode,
-};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct WindowId(pub u64);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct WorkspaceId(pub String);
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ProfileId(pub String);
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct AppId(pub String);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rect {
@@ -58,7 +47,6 @@ impl Rect {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum WindowState {
-    Normal,
     Floating,
     Tiled,
     Fullscreen,
@@ -82,95 +70,16 @@ pub struct WindowInfo {
 pub struct Workspace {
     pub id: WorkspaceId,
     pub name: String,
-    pub profile_id: ProfileId,
-    pub root: LayoutNode,
     pub floating_windows: Vec<WindowId>,
-    pub pinned_apps: Vec<AppId>,
-    pub rules: Vec<WorkspaceRule>,
 }
 
 impl Workspace {
-    pub fn empty(
-        id: impl Into<String>,
-        name: impl Into<String>,
-        profile_id: impl Into<String>,
-    ) -> Self {
+    pub fn empty(id: impl Into<String>, name: impl Into<String>) -> Self {
         Self {
             id: WorkspaceId(id.into()),
             name: name.into(),
-            profile_id: ProfileId(profile_id.into()),
-            root: LayoutNode::Empty,
             floating_windows: Vec::new(),
-            pinned_apps: Vec::new(),
-            rules: Vec::new(),
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
-pub enum LayoutNode {
-    Empty,
-    Window { window: WindowId },
-    TabStack(TabStack),
-    Split(SplitNode),
-    Group(GroupNode),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TabStack {
-    pub id: TabStackId,
-    pub tabs: Vec<WindowId>,
-    pub active: Option<WindowId>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct TabStackId(pub u64);
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SplitNode {
-    pub id: SplitNodeId,
-    pub axis: SplitAxis,
-    pub ratio: f32,
-    pub first: Box<LayoutNode>,
-    pub second: Box<LayoutNode>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct SplitNodeId(pub u64);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum SplitAxis {
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct GroupNode {
-    pub id: GroupId,
-    pub name: String,
-    pub root: Box<LayoutNode>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct GroupId(pub u64);
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct WorkspaceRule {
-    pub app_id: Option<String>,
-    pub title_contains: Option<String>,
-    pub placement: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ChromeSpec {
-    pub panel: bool,
-}
-
-impl ChromeSpec {
-    pub const fn panel_default() -> Self {
-        Self { panel: true }
     }
 }
 
@@ -182,17 +91,11 @@ impl WindowInfo {
             title: None,
             pid: None,
             is_xwayland: false,
-            state: WindowState::Normal,
+            state: WindowState::Floating,
             geometry,
             workspace,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum ModeId {
-    Panel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

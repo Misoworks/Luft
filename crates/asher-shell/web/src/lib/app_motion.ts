@@ -1,18 +1,10 @@
 import type { TransitionConfig } from "svelte/transition";
 import { cubicOut } from "svelte/easing";
 
-export function animationsEnabled() {
-  return document.querySelector<HTMLElement>("#app")?.dataset.animations === "true";
-}
-
 export function appFly(
   node: Element,
   params: { y: number; duration: number; easing: (value: number) => number; opacity?: number },
 ): TransitionConfig {
-  if (!animationsEnabled()) {
-    return { duration: 0 };
-  }
-
   const y = params.y;
   const opacity = params.opacity ?? 0;
   return {

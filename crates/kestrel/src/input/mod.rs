@@ -53,12 +53,7 @@ pub fn handle_input_event<B>(
                     }
                 },
             );
-            if key_state == KeyState::Pressed
-                || matches!(
-                    shortcut,
-                    ShortcutAction::SuperRelease | ShortcutAction::Consume
-                )
-            {
+            if key_state == KeyState::Pressed || matches!(shortcut, ShortcutAction::SuperRelease) {
                 handle_shortcut(state, keyboard, shortcut);
             }
         }
@@ -301,17 +296,14 @@ fn resize_cursor(edge: ResizeEdge) -> CursorIcon {
 #[derive(Debug)]
 enum ShortcutAction {
     Forward,
-    Consume,
     SwitchWorkspace(WorkspaceId),
     SwitchRelativeWorkspace(i32),
     MoveWindowToWorkspace(WorkspaceId),
     CloseActiveWindow,
     CycleWindow { previous: bool },
-    ToggleDebugOverlay,
     OpenDefaultApp(asher_ipc::DefaultAppKind),
     OpenLauncher,
     RestartShell,
-    FallbackToDefaultConfig,
     SuperPress,
     SuperRelease,
 }
@@ -339,13 +331,6 @@ fn shortcut_for_key(
         };
     }
 
-    if !modifiers.logo && !modifiers.ctrl && !modifiers.alt && raw == 0xffc0 {
-        if state != KeyState::Pressed {
-            return ShortcutAction::Consume;
-        }
-        return ShortcutAction::ToggleDebugOverlay;
-    }
-
     if modifiers.alt && !modifiers.logo && !modifiers.ctrl && matches!(raw, 0xff09 | 0xfe20) {
         return ShortcutAction::CycleWindow {
             previous: modifiers.shift,
@@ -369,7 +354,6 @@ fn shortcut_for_key(
         0xff0d => ShortcutAction::OpenDefaultApp(asher_ipc::DefaultAppKind::Terminal),
         0x65 | 0x45 => ShortcutAction::OpenDefaultApp(asher_ipc::DefaultAppKind::FileManager),
         0x72 | 0x52 if modifiers.shift => ShortcutAction::RestartShell,
-        0xff08 if modifiers.shift => ShortcutAction::FallbackToDefaultConfig,
         0x71 | 0x51 => ShortcutAction::CloseActiveWindow,
         0xff09 | 0xfe20 => ShortcutAction::CycleWindow {
             previous: modifiers.shift,
@@ -387,7 +371,6 @@ fn handle_shortcut(
 ) {
     match shortcut {
         ShortcutAction::Forward => {}
-        ShortcutAction::Consume => {}
         ShortcutAction::SwitchWorkspace(workspace) => {
             state.super_used = true;
             let _ = state.switch_workspace(keyboard, &workspace);
@@ -410,10 +393,6 @@ fn handle_shortcut(
             state.super_used = true;
             let _ = state.cycle_active_window(keyboard, previous);
         }
-        ShortcutAction::ToggleDebugOverlay => {
-            state.config.compositor.debug_overlay = !state.config.compositor.debug_overlay;
-            state.mark_scene_dirty();
-        }
         ShortcutAction::OpenLauncher => {
             state.super_used = true;
             state.send_shell_launcher_open();
@@ -425,10 +404,6 @@ fn handle_shortcut(
         ShortcutAction::RestartShell => {
             state.super_used = true;
             state.request_shell_restart();
-        }
-        ShortcutAction::FallbackToDefaultConfig => {
-            state.super_used = true;
-            state.fallback_to_default_config();
         }
         ShortcutAction::SuperPress => {
             state.super_active = true;

@@ -35,15 +35,6 @@ pub struct DamagePlan {
 }
 
 impl DamageTracker {
-    #[allow(dead_code)]
-    pub fn new(output_size: Size<i32, Physical>, transform: Transform) -> Self {
-        Self {
-            output_size,
-            transform,
-            tracker: output_tracker(output_size, transform),
-        }
-    }
-
     pub fn from_output(output: &smithay::output::Output) -> Self {
         let output_size = output
             .current_mode()
@@ -181,12 +172,8 @@ pub(crate) fn damage_elements<'a>(
     top_layer: &'a [LayerSurfaceElement],
     overlay_layer: &'a [LayerSurfaceElement],
     loading: Option<&'a MemoryElement>,
-    debug: Option<&'a MemoryElement>,
 ) -> Vec<DamageElement<'a>> {
     let mut elements = Vec::new();
-    if let Some(debug) = debug {
-        elements.push(DamageElement::Memory(debug));
-    }
     if let Some(loading) = loading {
         elements.push(DamageElement::Memory(loading));
     }
@@ -216,13 +203,6 @@ pub(crate) fn blur_damage_elements<'a>(
         elements.push(DamageElement::Memory(background));
     }
     elements
-}
-
-pub fn damage_area(rectangles: &[Rectangle<i32, Physical>]) -> i32 {
-    rectangles
-        .iter()
-        .map(|rect| rect.size.w.saturating_mul(rect.size.h))
-        .fold(0, i32::saturating_add)
 }
 
 pub(crate) fn expand_damage_for_blur_targets(

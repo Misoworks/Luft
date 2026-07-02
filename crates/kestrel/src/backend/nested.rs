@@ -1,13 +1,10 @@
-use super::nested_timing::{
-    host_refresh_millihertz, idle_wait, pace_frame, refresh_interval, target_hz,
-};
+use super::nested_timing::{host_refresh_millihertz, idle_wait, pace_frame, refresh_interval};
 use crate::{
     background::Background,
     background_effect,
     client::ClientState,
     compositor_damage::{CompositorDamageContext, CompositorDamagePlan, plan_compositor_damage},
     damage::{DamageTracker, LayerGeometryTracker},
-    debug_overlay::{DebugOverlayCache, DebugOverlayStats, render_debug_overlay},
     frame_clock::{FrameClock, send_surface_frame_tree},
     input::handle_input_event,
     ipc::IpcServer,
@@ -20,7 +17,6 @@ use crate::{
     session_services,
     shell::ShellProcess,
     state::KestrelState,
-    submitted_damage::SubmittedDamageHistory,
     window_clip::window_elements,
     xwayland::XwaylandSatellite,
 };
@@ -89,17 +85,10 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
     let mut last_refresh_check = Instant::now() - REFRESH_CHECK_INTERVAL;
     let mut damage_tracker = DamageTracker::from_output(state.output());
     let mut blur_damage_tracker = DamageTracker::from_output(state.output());
-    let mut submitted_damage = SubmittedDamageHistory::default();
     let mut layer_geometry = LayerGeometryTracker::default();
     let mut clients = Vec::new();
     let session_started = Instant::now();
-    let mut previous_frame_ms = 0.0f32;
-    let mut previous_damage_area = 0i32;
-    let mut fps = 0u32;
-    let mut fps_frames = 0u32;
-    let mut fps_started = Instant::now();
     let mut blur_cache = SceneBlurCache::default();
-    let mut debug_overlay_cache = DebugOverlayCache::default();
     let mut shell_layers_seen_ready = false;
 
     println!("Kestrel nested compositor is running");
@@ -121,7 +110,6 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
     state.shell_status = shell.status();
     info!(
         wayland_display = %socket_name,
-        blur_enabled = state.config.general.enable_blur,
         ipc_socket = %ipc.path().display(),
         refresh_millihertz = output.refresh_millihertz,
         "nested compositor ready"
@@ -135,7 +123,6 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                 state.set_output_size(output.size);
                 damage_tracker = DamageTracker::from_output(state.output());
                 blur_damage_tracker = DamageTracker::from_output(state.output());
-                submitted_damage.clear();
                 force_full_damage = true;
             }
             WinitEvent::Input(event) => {
@@ -154,7 +141,6 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             state.set_output_size(output.size);
             damage_tracker = DamageTracker::from_output(state.output());
             blur_damage_tracker = DamageTracker::from_output(state.output());
-            submitted_damage.clear();
             force_full_damage = true;
         }
         let refresh_check_interval = if host_refresh_known {
@@ -196,12 +182,10 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             );
             state.mark_scene_dirty();
         }
-        match state.take_shell_restart_requested() {
-            Some(crate::state::ShellRestartRequest::Normal) => shell.restart(),
-            Some(crate::state::ShellRestartRequest::DefaultConfig) => {
-                shell.restart_with_default_config()
-            }
-            None => shell.reap(&mut state.config),
+        if state.take_shell_restart_requested() {
+            shell.restart();
+        } else {
+            shell.reap(&mut state.config);
         }
         let shell_status = shell.status();
         if state.shell_status != shell_status {
@@ -237,11 +221,8 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
         }
         let workspace_transition_active = state.workspace_transition().is_some();
         let scene_dirty = state.take_scene_dirty();
-        let debug_needs_render =
-            state.config.compositor.debug_overlay && debug_overlay_cache.needs_refresh();
         let layer_geometry_changed = layer_geometry
             .geometry_changed(output.size, &layers::layer_surface_rects(state.output()));
-        let blur_animating = blur_cache.is_animating();
         let content_render_needed = force_full_damage
             || scene_dirty
             || layer_geometry_changed
@@ -249,11 +230,8 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             || finished_window_closes
             || state.animations_active()
             || workspace_transition_active
-            || blur_animating
             || show_loading;
-        let render_needed = content_render_needed || debug_needs_render;
-        if !render_needed {
-            previous_damage_area = 0;
+        if !content_render_needed {
             idle_wait();
             continue;
         }
@@ -290,20 +268,15 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                 ));
             }
             let background_element = background.render_element(renderer, output.size)?;
-            let blur_enabled = state.config.general.enable_blur && state.config.effects.blur;
             let background_layer =
                 render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Background));
             let bottom_layer =
                 render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Bottom));
             let window_effect_targets = background_effect::window_blur_targets(&state);
-            if blur_enabled {
-                let mut blur_targets = window_effect_targets.clone();
-                blur_targets.extend(top_targets.iter().cloned());
-                blur_targets.extend(overlay_targets.iter().cloned());
-                blur_cache.retain_targets(&blur_targets);
-            } else {
-                blur_cache.clear();
-            }
+            let mut blur_targets = window_effect_targets.clone();
+            blur_targets.extend(top_targets.iter().cloned());
+            blur_targets.extend(overlay_targets.iter().cloned());
+            blur_cache.retain_targets(&blur_targets);
             let blur_animating = blur_cache.is_animating();
             let windows = window_elements(renderer, &state);
             let window_chrome = window_chrome_elements(renderer, &state)?;
@@ -317,11 +290,6 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             } else {
                 render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Overlay))
             };
-            let blur_passes = if blur_enabled {
-                window_effect_targets.len() + top_targets.len() + overlay_targets.len()
-            } else {
-                0
-            };
             let loading_overlay = if show_loading {
                 Some(render_loading_overlay(
                     renderer,
@@ -331,40 +299,9 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             } else {
                 None
             };
-            let debug_overlay = if state.config.compositor.debug_overlay {
-                let workspace = state.layout.active_workspace().0.as_str();
-                let profile = state
-                    .layout
-                    .workspaces()
-                    .find(|workspace| &workspace.id == state.layout.active_workspace())
-                    .map(|workspace| workspace.profile_id.0.as_str())
-                    .unwrap_or("-");
-                let xwayland = state.xwayland_display.as_deref().unwrap_or("-");
-                Some(render_debug_overlay(
-                    &mut debug_overlay_cache,
-                    renderer,
-                    &DebugOverlayStats {
-                        backend: "nested",
-                        frame_ms: previous_frame_ms,
-                        fps,
-                        idle: !content_render_needed,
-                        target_hz: target_hz(output.refresh_millihertz),
-                        damage_area: previous_damage_area,
-                        surfaces: state.windows.surfaces().len() + state.layer_surfaces().len(),
-                        blur_passes,
-                        workspace,
-                        profile,
-                        xwayland,
-                    },
-                )?)
-            } else {
-                debug_overlay_cache.clear();
-                None
-            };
             let CompositorDamagePlan {
                 damage,
                 blur_damage,
-                damage_area: planned_damage_area,
                 ..
             } = plan_compositor_damage(
                 CompositorDamageContext {
@@ -372,11 +309,9 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                     output: state.output(),
                     buffer_age,
                     force_full_damage: force_full_damage
-                        || blur_animating
                         || show_loading
                         || workspace_transition_active
                         || layer_geometry_changed,
-                    blur_enabled,
                     blur_animating,
                     window_effect_targets: &window_effect_targets,
                     top_targets: &top_targets,
@@ -389,14 +324,11 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                     top_layer: &top_layer,
                     overlay_layer: &overlay_layer,
                     loading: loading_overlay.as_ref(),
-                    debug: debug_overlay.as_ref(),
                 },
                 &mut damage_tracker,
                 &mut blur_damage_tracker,
                 &mut layer_geometry,
-                &submitted_damage,
             );
-            previous_damage_area = planned_damage_area;
             if !damage.is_empty() {
                 submit_damage = damage.clone();
                 render_scene(
@@ -409,7 +341,6 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                         target_transform: state.output_transform(),
                         damage: &damage,
                         blur_damage: &blur_damage,
-                        blur_enabled,
                         background: background_element,
                         background_layer: &background_layer,
                         bottom_layer: &bottom_layer,
@@ -421,7 +352,6 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                         overlay_targets: &overlay_targets,
                         overlay_layer: &overlay_layer,
                         loading: loading_overlay,
-                        debug: debug_overlay,
                     },
                 )?;
                 rendered = true;
@@ -440,19 +370,9 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             }
 
             backend.submit(Some(&submit_damage))?;
-            submitted_damage.record(output.size, &submit_damage);
-            fps_frames += 1;
-            previous_frame_ms = frame_started.elapsed().as_secs_f32() * 1000.0;
             pace_frame(frame_started, frame_interval);
         } else {
-            previous_frame_ms = 0.0;
             idle_wait();
-        }
-
-        if fps_started.elapsed() >= Duration::from_secs(1) {
-            fps = fps_frames;
-            fps_frames = 0;
-            fps_started = Instant::now();
         }
     }
 }

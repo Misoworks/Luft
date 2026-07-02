@@ -5,8 +5,6 @@ use std::{env, path::PathBuf};
 pub struct ConfigPaths {
     pub config_home: PathBuf,
     pub config_file: PathBuf,
-    pub profiles_dir: PathBuf,
-    pub materials_dir: PathBuf,
     pub state_home: PathBuf,
     pub cache_home: PathBuf,
 }
@@ -22,8 +20,6 @@ impl ConfigPaths {
 
         Ok(Self {
             config_file: config_home.join("config.toml"),
-            profiles_dir: config_home.join("profiles"),
-            materials_dir: config_home.join("materials"),
             config_home,
             state_home,
             cache_home,
@@ -32,10 +28,6 @@ impl ConfigPaths {
 
     pub fn logs_dir(&self) -> PathBuf {
         self.state_home.join("logs")
-    }
-
-    pub fn backups_dir(&self) -> PathBuf {
-        self.config_home.join("backups")
     }
 
     pub fn log_file(&self, component: &str) -> PathBuf {

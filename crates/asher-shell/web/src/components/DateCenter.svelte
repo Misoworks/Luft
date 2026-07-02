@@ -1,5 +1,4 @@
 <script lang="ts">
-  import DebugMeter from "./DebugMeter.svelte";
   import Icon from "./Icon.svelte";
   import { sendAction } from "../shell/bridge";
   import { calendarCells, sameDay } from "../lib/calendar";
@@ -328,7 +327,4 @@
     {/key}
   </aside>
 
-  {#if snapshot.debugOverlay}
-    <DebugMeter surface="DATE" />
-  {/if}
 </section>

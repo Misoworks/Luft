@@ -118,10 +118,7 @@ fn fullscreen_element(
     state: &KestrelState,
     renderer: &mut GlesRenderer,
 ) -> Option<WaylandSurfaceRenderElement<GlesRenderer>> {
-    if state.config.compositor.debug_overlay
-        || state.animations_active()
-        || state.workspace_transition().is_some()
-    {
+    if state.animations_active() || state.workspace_transition().is_some() {
         return None;
     }
 

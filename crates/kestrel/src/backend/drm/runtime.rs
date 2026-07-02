@@ -4,15 +4,9 @@ use super::{
     frame::{FrameResult, SessionFrameRenderer, render_secondary_output},
 };
 use crate::{
-    client::ClientState,
-    frame_clock::send_surface_frame_tree,
-    input::handle_input_event,
-    ipc::IpcServer,
-    output::DEFAULT_REFRESH_MILLIHERTZ,
-    session_services,
-    shell::ShellProcess,
-    state::{KestrelState, ShellRestartRequest},
-    xwayland::XwaylandSatellite,
+    client::ClientState, frame_clock::send_surface_frame_tree, input::handle_input_event,
+    ipc::IpcServer, output::DEFAULT_REFRESH_MILLIHERTZ, session_services, shell::ShellProcess,
+    state::KestrelState, xwayland::XwaylandSatellite,
 };
 use ::input::{
     Device as LibinputDevice, DeviceCapability as LibinputDeviceCapability, Led as LibinputLed,
@@ -127,7 +121,6 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
     info!(
         wayland_display = %socket_name,
         ipc_socket = %ipc.path().display(),
-        blur_enabled = state.config.general.enable_blur,
         refresh_millihertz = state.output_refresh_millihertz(),
         outputs = device.descriptors().len(),
         "DRM session compositor ready"
@@ -202,10 +195,10 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
 
         xwayland.reap(&socket_name);
         update_xwayland_state(&mut state, &xwayland, &socket_name);
-        match state.take_shell_restart_requested() {
-            Some(ShellRestartRequest::Normal) => shell.restart(),
-            Some(ShellRestartRequest::DefaultConfig) => shell.restart_with_default_config(),
-            None => shell.reap(&mut state.config),
+        if state.take_shell_restart_requested() {
+            shell.restart();
+        } else {
+            shell.reap(&mut state.config);
         }
         let shell_status = shell.status();
         if state.shell_status != shell_status {
