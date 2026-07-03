@@ -11,11 +11,11 @@ mod scanout;
 #[cfg(feature = "session-backend")]
 mod scheduler;
 
-use asher_config::AsherConfig;
+use luft_config::LuftConfig;
 use thiserror::Error;
 
 pub struct DrmOptions {
-    pub config: AsherConfig,
+    pub config: LuftConfig,
     pub socket_name: Option<String>,
 }
 

@@ -5,7 +5,7 @@ use crate::{
     state::KestrelState,
     window_geometry::{move_geometry, resize_geometry},
 };
-use asher_ipc::{LayoutError, Rect, WindowId, WindowState};
+use luft_ipc::{LayoutError, Rect, WindowId, WindowState};
 use smithay::{
     input::keyboard::KeyboardHandle,
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,

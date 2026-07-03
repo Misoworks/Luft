@@ -53,7 +53,7 @@ pub fn surfaces(output: &Output) -> Vec<WlSurface> {
 
 pub fn has_panel_surface(output: &Output) -> bool {
     layer_map_for_output(output).layers().any(|layer| {
-        layer.namespace() == "asher-panel"
+        layer.namespace() == "luft-panel"
             && !bbox_from_surface_tree(layer.wl_surface(), (0, 0)).is_empty()
     })
 }
@@ -95,7 +95,7 @@ pub fn has_layer_above_windows(output: &Output, point: Point<f64, Logical>) -> b
         .any(|layer| pointer_focus_on_layer(output, point, layer).is_some())
 }
 
-const SHELL_CHROME_NAMESPACES: &[&str] = &["asher-panel"];
+const SHELL_CHROME_NAMESPACES: &[&str] = &["luft-panel"];
 
 pub fn layer_surface_rects(output: &Output) -> Vec<(WlSurface, Rectangle<i32, Physical>)> {
     let layer_map = layer_map_for_output(output);
@@ -126,10 +126,7 @@ pub fn should_close_transient_popover(output: &Output, point: Point<f64, Logical
         for surface in layer_map.layers_on(layer) {
             if !matches!(
                 surface.namespace(),
-                "asher-quick-settings"
-                    | "asher-date-center"
-                    | "asher-start-menu"
-                    | "asher-panel-menu"
+                "luft-quick-settings" | "luft-date-center" | "luft-start-menu" | "luft-panel-menu"
             ) {
                 continue;
             }
@@ -244,13 +241,13 @@ impl BlurLayer {
 
 pub(crate) fn material_for(namespace: &str) -> Option<LayerMaterial> {
     match namespace {
-        "asher-panel" => Some(LayerMaterial::Rect),
-        "asher-panel-menu" => Some(LayerMaterial::RoundRect { radius: 16 }),
-        "asher-date-center" => Some(LayerMaterial::RoundRect { radius: 26 }),
-        "asher-launcher" => Some(LayerMaterial::RoundRect { radius: 22 }),
-        "asher-quick-settings" => Some(LayerMaterial::RoundRect { radius: 26 }),
-        "asher-start-menu" => Some(LayerMaterial::RoundRect { radius: 24 }),
-        "asher-notifications" => Some(LayerMaterial::RoundRect { radius: 26 }),
+        "luft-panel" => Some(LayerMaterial::Rect),
+        "luft-panel-menu" => Some(LayerMaterial::RoundRect { radius: 16 }),
+        "luft-date-center" => Some(LayerMaterial::RoundRect { radius: 26 }),
+        "luft-launcher" => Some(LayerMaterial::RoundRect { radius: 22 }),
+        "luft-quick-settings" => Some(LayerMaterial::RoundRect { radius: 26 }),
+        "luft-start-menu" => Some(LayerMaterial::RoundRect { radius: 24 }),
+        "luft-notifications" => Some(LayerMaterial::RoundRect { radius: 26 }),
         _ => None,
     }
 }
@@ -260,7 +257,7 @@ fn material_geometry(
     location: Point<i32, Logical>,
     size: smithay::utils::Size<i32, Logical>,
 ) -> (Point<i32, Logical>, smithay::utils::Size<i32, Logical>) {
-    if namespace == "asher-panel" && size.h > PANEL_BLUR_HEIGHT {
+    if namespace == "luft-panel" && size.h > PANEL_BLUR_HEIGHT {
         let vertical_inset = (size.h - PANEL_BLUR_HEIGHT).max(0);
         return (
             (location.x, location.y + vertical_inset).into(),
@@ -268,7 +265,7 @@ fn material_geometry(
         );
     }
 
-    if namespace == "asher-quick-settings" || namespace == "asher-date-center" {
+    if namespace == "luft-quick-settings" || namespace == "luft-date-center" {
         return (location, size);
     }
 

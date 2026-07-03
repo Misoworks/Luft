@@ -273,8 +273,8 @@ impl KestrelState {
             }
         };
 
-        if reserved_by_asher(keysym, modifiers) {
-            return BindReply::denied(DenyReason::NotPermitted, "reserved by Asher");
+        if reserved_by_luft(keysym, modifiers) {
+            return BindReply::denied(DenyReason::NotPermitted, "reserved by Luft");
         }
 
         self.protocol_state
@@ -320,7 +320,7 @@ fn validate_binding(keysym: u32, modifiers: HotkeyModifiers) -> Result<(), BindR
     Ok(())
 }
 
-fn reserved_by_asher(keysym: u32, modifiers: HotkeyModifiers) -> bool {
+fn reserved_by_luft(keysym: u32, modifiers: HotkeyModifiers) -> bool {
     let shift = modifiers.contains(HotkeyModifiers::Shift);
     let ctrl = modifiers.contains(HotkeyModifiers::Ctrl);
     let alt = modifiers.contains(HotkeyModifiers::Alt);

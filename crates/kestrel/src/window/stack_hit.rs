@@ -5,7 +5,7 @@ use super::{
         titlebar_control_at,
     },
 };
-use asher_ipc::WorkspaceId;
+use luft_ipc::WorkspaceId;
 use smithay::{
     desktop::{PopupKind, PopupManager, WindowSurfaceType, utils::under_from_surface_tree},
     reexports::wayland_server::protocol::wl_surface::WlSurface,

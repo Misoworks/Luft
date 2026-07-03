@@ -1,33 +1,30 @@
 use super::KestrelState;
 use crate::layout_config::layout_from_config;
-use asher_ipc::{Rect, WindowId, WindowInfo, WindowState, WorkspaceId};
+use luft_ipc::{Rect, WindowId, WindowInfo, WindowState, WorkspaceId};
 use tracing::warn;
 
 impl KestrelState {
     pub fn send_shell_start_menu_toggle(&self) {
         self.send_shell_control(
-            asher_ipc::ShellControlRequest::ToggleStartMenu,
+            luft_ipc::ShellControlRequest::ToggleStartMenu,
             "start menu toggle",
         );
     }
 
     pub fn send_shell_launcher_open(&self) {
-        self.send_shell_control(
-            asher_ipc::ShellControlRequest::OpenLauncher,
-            "launcher open",
-        );
+        self.send_shell_control(luft_ipc::ShellControlRequest::OpenLauncher, "launcher open");
     }
 
-    pub fn send_shell_default_app_launch(&self, app: asher_ipc::DefaultAppKind) {
+    pub fn send_shell_default_app_launch(&self, app: luft_ipc::DefaultAppKind) {
         self.send_shell_control(
-            asher_ipc::ShellControlRequest::LaunchDefaultApp { app },
+            luft_ipc::ShellControlRequest::LaunchDefaultApp { app },
             "default app launch",
         );
     }
 
     pub fn close_shell_transient_popovers(&self) {
         self.send_shell_control(
-            asher_ipc::ShellControlRequest::CloseTransientPopovers,
+            luft_ipc::ShellControlRequest::CloseTransientPopovers,
             "close transient popovers",
         );
     }
@@ -40,7 +37,7 @@ impl KestrelState {
         std::mem::take(&mut self.shell_restart_requested)
     }
 
-    pub fn replace_config(&mut self, config: asher_config::AsherConfig) {
+    pub fn replace_config(&mut self, config: luft_config::LuftConfig) {
         let mut layout = layout_from_config(&config);
         layout.set_bounds(Rect::new(0, 0, self.output_size().w, self.output_size().h));
 
@@ -100,12 +97,12 @@ impl KestrelState {
         let _ = self.windows.set_workspace(id, workspace);
     }
 
-    fn send_shell_control(&self, request: asher_ipc::ShellControlRequest, action: &str) {
+    fn send_shell_control(&self, request: luft_ipc::ShellControlRequest, action: &str) {
         let Some(path) = &self.shell_control_path else {
             return;
         };
 
-        if let Err(error) = asher_ipc::send_shell_control_to(path, &request) {
+        if let Err(error) = luft_ipc::send_shell_control_to(path, &request) {
             warn!(%error, path = %path.display(), action, "failed to send shell control request");
         }
     }

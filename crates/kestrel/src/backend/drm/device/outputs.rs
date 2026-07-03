@@ -1,6 +1,6 @@
 use super::DrmError;
 use crate::output::OutputDescriptor;
-use asher_config::{DisplayConfig, OutputConfig};
+use luft_config::{DisplayConfig, OutputConfig};
 use smithay::{
     backend::drm::DrmDevice,
     reexports::drm::control::{Device as ControlDevice, Mode, ResourceHandles, connector, crtc},

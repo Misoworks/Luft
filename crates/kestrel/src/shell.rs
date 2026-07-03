@@ -1,5 +1,5 @@
-use asher_config::{AsherConfig, cursor_environment_entries};
-use asher_ipc::{SHELL_SOCKET_ENV, SOCKET_ENV, ShellStatus};
+use luft_config::{LuftConfig, cursor_environment_entries};
+use luft_ipc::{SHELL_SOCKET_ENV, SOCKET_ENV, ShellStatus};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -9,11 +9,11 @@ use std::{
 use tracing::{debug, warn};
 
 const NORMAL_RESTART_DELAY: Duration = Duration::from_millis(500);
-const PRIVATE_DBUS_ENV: &str = "ASHER_PRIVATE_DBUS";
-const USE_HOST_DBUS_ENV: &str = "ASHER_USE_HOST_DBUS";
-const OUTPUT_REFRESH_ENV: &str = "ASHER_OUTPUT_REFRESH_MILLIHERTZ";
-const OUTPUT_WIDTH_ENV: &str = "ASHER_OUTPUT_WIDTH";
-const OUTPUT_HEIGHT_ENV: &str = "ASHER_OUTPUT_HEIGHT";
+const PRIVATE_DBUS_ENV: &str = "LUFT_PRIVATE_DBUS";
+const USE_HOST_DBUS_ENV: &str = "LUFT_USE_HOST_DBUS";
+const OUTPUT_REFRESH_ENV: &str = "LUFT_OUTPUT_REFRESH_MILLIHERTZ";
+const OUTPUT_WIDTH_ENV: &str = "LUFT_OUTPUT_WIDTH";
+const OUTPUT_HEIGHT_ENV: &str = "LUFT_OUTPUT_HEIGHT";
 
 #[derive(Debug)]
 pub struct ShellProcess {
@@ -41,7 +41,7 @@ impl ShellProcess {
     ) -> Self {
         let binary = shell_binary();
         if binary.is_none() {
-            warn!("asher-shell binary was not found beside kestrel");
+            warn!("luft-shell binary was not found beside kestrel");
         };
         remove_stale_shell_socket(shell_socket);
 
@@ -73,7 +73,7 @@ impl ShellProcess {
         }
     }
 
-    pub fn reap(&mut self, config: &mut AsherConfig) {
+    pub fn reap(&mut self, config: &mut LuftConfig) {
         let Some(child) = &mut self.child else {
             self.spawn_if_due();
             return;
@@ -81,7 +81,7 @@ impl ShellProcess {
 
         match child.try_wait() {
             Ok(Some(status)) => {
-                warn!(%status, "asher shell exited");
+                warn!(%status, "luft shell exited");
                 self.child = None;
                 let _ = config;
                 self.next_spawn_after = Some(Instant::now() + NORMAL_RESTART_DELAY);
@@ -89,7 +89,7 @@ impl ShellProcess {
             }
             Ok(None) => {}
             Err(error) => {
-                warn!(%error, "failed to inspect asher shell process");
+                warn!(%error, "failed to inspect luft shell process");
             }
         }
     }
@@ -146,7 +146,7 @@ impl ShellProcess {
             .env_remove("DISPLAY")
             .env("GDK_BACKEND", "wayland")
             .env("WAYLAND_DISPLAY", &self.wayland_display)
-            .env("ASHER_WAYLAND_DISPLAY", &self.wayland_display)
+            .env("LUFT_WAYLAND_DISPLAY", &self.wayland_display)
             .env("NO_AT_BRIDGE", "1")
             .env("GTK_A11Y", "none")
             .env("GTK_MODULES", "")
@@ -169,11 +169,11 @@ impl ShellProcess {
 
         match child {
             Ok(child) => {
-                debug!(pid = child.id(), path = %binary.display(), "started asher shell");
+                debug!(pid = child.id(), path = %binary.display(), "started luft shell");
                 self.child = Some(child);
             }
             Err(error) => {
-                warn!(%error, path = %binary.display(), "failed to start asher shell");
+                warn!(%error, path = %binary.display(), "failed to start luft shell");
                 self.child = None;
                 self.next_spawn_after = Some(Instant::now() + NORMAL_RESTART_DELAY);
             }
@@ -198,7 +198,7 @@ impl Drop for ShellProcess {
 
 fn shell_binary() -> Option<std::path::PathBuf> {
     let mut path = std::env::current_exe().ok()?;
-    path.set_file_name("asher-shell");
+    path.set_file_name("luft-shell");
     path.exists().then_some(path)
 }
 

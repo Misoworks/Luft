@@ -185,53 +185,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "asher-config"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror 2.0.18",
- "toml",
-]
-
-[[package]]
-name = "asher-ipc"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "asher-session"
-version = "0.1.0"
-dependencies = [
- "asher-config",
- "clap",
- "serde",
- "thiserror 2.0.18",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "asher-shell"
-version = "0.1.0"
-dependencies = [
- "asher-config",
- "asher-ipc",
- "clap",
- "fenestra-cef",
- "image",
- "serde",
- "serde_json",
- "time",
- "tracing",
- "tracing-subscriber",
- "zbus",
-]
-
-[[package]]
 name = "ashpd"
 version = "0.13.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1602,13 +1555,13 @@ dependencies = [
 name = "kestrel"
 version = "0.1.0"
 dependencies = [
- "asher-config",
- "asher-ipc",
  "bitflags 2.11.1",
  "calloop 0.14.4",
  "clap",
  "image",
  "input",
+ "luft-config",
+ "luft-ipc",
  "smithay",
  "thiserror 2.0.18",
  "tracing",
@@ -1807,6 +1760,53 @@ name = "lru"
 version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
+
+[[package]]
+name = "luft-config"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.18",
+ "toml",
+]
+
+[[package]]
+name = "luft-ipc"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "luft-session"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "luft-config",
+ "serde",
+ "thiserror 2.0.18",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "luft-shell"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "fenestra-cef",
+ "image",
+ "luft-config",
+ "luft-ipc",
+ "serde",
+ "serde_json",
+ "time",
+ "tracing",
+ "tracing-subscriber",
+ "zbus",
+]
 
 [[package]]
 name = "matchers"

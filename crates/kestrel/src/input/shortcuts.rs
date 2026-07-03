@@ -1,5 +1,5 @@
 use crate::state::KestrelState;
-use asher_ipc::WorkspaceId;
+use luft_ipc::WorkspaceId;
 use smithay::{
     backend::input::KeyState,
     input::keyboard::{KeyboardHandle, Keysym, ModifiersState},
@@ -13,7 +13,7 @@ pub(super) enum ShortcutAction {
     MoveWindowToWorkspace(WorkspaceId),
     CloseActiveWindow,
     CycleWindow { previous: bool },
-    OpenDefaultApp(asher_ipc::DefaultAppKind),
+    OpenDefaultApp(luft_ipc::DefaultAppKind),
     OpenLauncher,
     RestartShell,
     SuperPress,
@@ -63,8 +63,8 @@ pub(super) fn shortcut_for_key(
 
     match raw {
         0x20 => ShortcutAction::OpenLauncher,
-        0xff0d => ShortcutAction::OpenDefaultApp(asher_ipc::DefaultAppKind::Terminal),
-        0x65 | 0x45 => ShortcutAction::OpenDefaultApp(asher_ipc::DefaultAppKind::FileManager),
+        0xff0d => ShortcutAction::OpenDefaultApp(luft_ipc::DefaultAppKind::Terminal),
+        0x65 | 0x45 => ShortcutAction::OpenDefaultApp(luft_ipc::DefaultAppKind::FileManager),
         0x72 | 0x52 if modifiers.shift => ShortcutAction::RestartShell,
         0x71 | 0x51 => ShortcutAction::CloseActiveWindow,
         0xff09 | 0xfe20 => ShortcutAction::CycleWindow {

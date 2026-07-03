@@ -20,8 +20,8 @@ use crate::{
     window_clip::window_elements,
     xwayland::XwaylandSatellite,
 };
-use asher_config::AsherConfig;
-use asher_ipc::{ShellStatus, shell_socket_path};
+use luft_config::LuftConfig;
+use luft_ipc::{ShellStatus, shell_socket_path};
 use smithay::{
     backend::{
         renderer::gles::GlesRenderer,
@@ -48,7 +48,7 @@ const PENDING_REFRESH_CHECK_INTERVAL: Duration = Duration::from_millis(50);
 const PROCESS_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 
 pub struct NestedOptions {
-    pub config: AsherConfig,
+    pub config: LuftConfig,
     pub socket_name: Option<String>,
 }
 
@@ -393,7 +393,7 @@ fn loading_phase(elapsed: Duration) -> f32 {
 fn bind_socket(socket_name: Option<&str>) -> Result<ListeningSocket, NestedError> {
     match socket_name {
         Some(name) => Ok(ListeningSocket::bind(name)?),
-        None => Ok(ListeningSocket::bind_auto("asher", 1..33)?),
+        None => Ok(ListeningSocket::bind_auto("luft", 1..33)?),
     }
 }
 

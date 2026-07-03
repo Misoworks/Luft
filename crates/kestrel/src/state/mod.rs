@@ -6,9 +6,9 @@ use crate::{
     window::{WindowGrab, WindowStack},
     workspace_transition::WorkspaceTransition,
 };
-use asher_config::AsherConfig;
-use asher_ipc::{LayoutEngine, LayoutError, Rect, WindowId, WindowInfo, WorkspaceId};
-use asher_ipc::{ShellStatus, XwaylandStatus};
+use luft_config::LuftConfig;
+use luft_ipc::{LayoutEngine, LayoutError, Rect, WindowId, WindowInfo, WorkspaceId};
+use luft_ipc::{ShellStatus, XwaylandStatus};
 use smithay::{
     backend::allocator::format::FormatSet,
     desktop::PopupManager,
@@ -64,7 +64,7 @@ pub struct KestrelState {
     pub drag: Option<WindowGrab>,
     pub pending_window_drag: Option<PendingWindowDrag>,
     pub pending_client_grab: Option<ClientGrabSerial>,
-    pub config: AsherConfig,
+    pub config: LuftConfig,
     pub cursor_image: CursorImageStatus,
     pub cursor_dirty: bool,
     pub frame_cursor_active: bool,
@@ -86,13 +86,13 @@ pub struct KestrelState {
 }
 
 impl KestrelState {
-    pub fn new(display: &DisplayHandle, config: AsherConfig) -> Self {
+    pub fn new(display: &DisplayHandle, config: LuftConfig) -> Self {
         Self::new_for_output(display, config, NestedOutput::default().descriptor())
     }
 
     pub fn new_for_output(
         display: &DisplayHandle,
-        config: AsherConfig,
+        config: LuftConfig,
         output_descriptor: OutputDescriptor,
     ) -> Self {
         Self::new_for_outputs(display, config, vec![output_descriptor])
@@ -100,7 +100,7 @@ impl KestrelState {
 
     pub fn new_for_outputs(
         display: &DisplayHandle,
-        config: AsherConfig,
+        config: LuftConfig,
         output_descriptors: Vec<OutputDescriptor>,
     ) -> Self {
         let compositor_state = CompositorState::new_v6::<Self>(display);
@@ -111,7 +111,7 @@ impl KestrelState {
         let data_device_state = DataDeviceState::new::<Self>(display);
         let primary_selection_state = PrimarySelectionState::new::<Self>(display);
         let mut seat_state = SeatState::new();
-        let seat = seat_state.new_wl_seat(display, "asher-seat");
+        let seat = seat_state.new_wl_seat(display, "luft-seat");
         let outputs = OutputGraph::new(display, &config.display, output_descriptors);
         let mut layout = layout_from_config(&config);
         let output_size = outputs.primary_size();
@@ -171,7 +171,7 @@ impl KestrelState {
         let geometry = parent
             .map(|id| self.next_transient_window_geometry_for_size(id, (900, 560).into()))
             .unwrap_or_else(|| self.next_initial_window_geometry());
-        let info = WindowInfo::new(asher_ipc::WindowId(0), workspace.clone(), geometry);
+        let info = WindowInfo::new(luft_ipc::WindowId(0), workspace.clone(), geometry);
 
         match self.layout.register_window(info) {
             Ok(id) => {
@@ -285,7 +285,9 @@ impl KestrelState {
         if managed.hidden {
             self.show_window(id)?;
         }
-        self.switch_layout_workspace(&managed.workspace)?;
+        if &managed.workspace != self.layout.active_workspace() {
+            self.switch_layout_workspace(&managed.workspace)?;
+        }
         let surface = self
             .windows
             .raise_by_id(id)

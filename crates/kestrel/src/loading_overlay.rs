@@ -14,7 +14,7 @@ use smithay::{
 };
 
 use crate::layers;
-use asher_ipc::ShellStatus;
+use luft_ipc::ShellStatus;
 
 const WIDTH: i32 = 96;
 const HEIGHT: i32 = 96;

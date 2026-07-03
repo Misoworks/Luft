@@ -1,7 +1,7 @@
 use self::outputs::{ConnectedOutput, descriptors};
 use super::{DrmError, cursor::HardwareCursor, scanout::DirectScanout};
 use crate::output::OutputDescriptor;
-use asher_config::DisplayConfig;
+use luft_config::DisplayConfig;
 use smithay::{
     backend::{
         allocator::{

@@ -1,0 +1,18 @@
+[package]
+name = "luft-shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+fenestra-cef = { path = "../../../fenestra/crates/fenestra-cef" }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+serde.workspace = true
+serde_json.workspace = true
+luft-config.workspace = true
+luft-ipc = { version = "0.1.0", path = "../luft-ipc" }
+time = { version = "0.3.47", features = ["formatting", "local-offset", "macros"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zbus = { version = "5.15.0", features = ["blocking-api"] }

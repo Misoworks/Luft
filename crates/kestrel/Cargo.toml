@@ -11,8 +11,8 @@ clap.workspace = true
 image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
 input = { workspace = true, optional = true }
 smithay.workspace = true
-asher-config.workspace = true
-asher-ipc = { version = "0.1.0", path = "../asher-ipc" }
+luft-config.workspace = true
+luft-ipc = { version = "0.1.0", path = "../luft-ipc" }
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

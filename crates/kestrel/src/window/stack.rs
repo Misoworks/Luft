@@ -3,7 +3,7 @@ use super::{
     surface_has_client_frame_extents,
 };
 use crate::window_animation::WindowAnimation;
-use asher_ipc::{Rect, WindowId, WorkspaceId};
+use luft_ipc::{Rect, WindowId, WorkspaceId};
 use smithay::{
     desktop::PopupManager,
     reexports::wayland_server::protocol::wl_surface::WlSurface,

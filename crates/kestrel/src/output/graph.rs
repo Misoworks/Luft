@@ -1,6 +1,6 @@
 use super::{OutputDescriptor, configure_output_at, create_output};
-use asher_config::DisplayConfig;
-use asher_ipc::OutputSummary;
+use luft_config::DisplayConfig;
+use luft_ipc::OutputSummary;
 use smithay::{
     output::Output,
     reexports::wayland_server::DisplayHandle,

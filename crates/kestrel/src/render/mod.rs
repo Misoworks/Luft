@@ -5,7 +5,7 @@ use crate::{
     window::{ManagedWindow, TITLEBAR_HEIGHT},
     window_clip::{ClipShape, RoundedWindowElement, WINDOW_RADIUS},
 };
-use asher_ipc::WorkspaceId;
+use luft_ipc::WorkspaceId;
 use smithay::{
     backend::renderer::{
         element::{
@@ -146,37 +146,33 @@ fn append_layer_elements(
     for target in layers::render_surfaces(state.output(), layer) {
         let location = Point::<i32, Physical>::from((target.location.x, target.location.y));
         let clip = Rectangle::<i32, Physical>::new(location, (target.size.w, target.size.h).into());
-        elements.extend(
-            render_elements_from_surface_tree(
-                renderer,
-                &target.surface,
-                (target.location.x, target.location.y),
-                1.0,
-                1.0,
-                Kind::Unspecified,
+        let surface_elements = render_elements_from_surface_tree(
+            renderer,
+            &target.surface,
+            (target.location.x, target.location.y),
+            1.0,
+            1.0,
+            Kind::Unspecified,
+        )
+        .into_iter()
+        .map(|element| {
+            RoundedWindowElement::new_with_shape(
+                element,
+                clip,
+                layer_material_shape(target.material, target.size),
             )
-            .into_iter()
-            .map(|element| {
-                RoundedWindowElement::new_with_shape(
-                    element,
-                    clip,
-                    layer_material_shape(target.material, target.size),
-                )
-            }),
-        );
+        });
+        let popup_elements =
+            PopupManager::popups_for_surface(&target.surface).flat_map(|(popup, popup_offset)| {
+                let offset = popup_offset - popup.geometry().loc;
+                let popup_location = Point::<i32, Physical>::from((
+                    target.location.x + offset.x,
+                    target.location.y + offset.y,
+                ));
+                let popup_size = popup.geometry().size;
+                let popup_clip =
+                    Rectangle::<i32, Physical>::new(popup_location, popup_size.to_physical(1));
 
-        for (popup, popup_offset) in PopupManager::popups_for_surface(&target.surface) {
-            let offset = popup_offset - popup.geometry().loc;
-            let popup_location = Point::<i32, Physical>::from((
-                target.location.x + offset.x,
-                target.location.y + offset.y,
-            ));
-            let popup_size = popup.geometry().size;
-            let popup_clip = Rectangle::<i32, Physical>::new(
-                popup_location,
-                (popup_size.w, popup_size.h).into(),
-            );
-            elements.extend(
                 render_elements_from_surface_tree(
                     renderer,
                     popup.wl_surface(),
@@ -186,9 +182,11 @@ fn append_layer_elements(
                     Kind::Unspecified,
                 )
                 .into_iter()
-                .map(|element| RoundedWindowElement::new(element, popup_clip, 0)),
-            );
-        }
+                .map(move |element| RoundedWindowElement::new(element, popup_clip, 0))
+            });
+
+        elements.extend(popup_elements);
+        elements.extend(surface_elements);
     }
 }
 

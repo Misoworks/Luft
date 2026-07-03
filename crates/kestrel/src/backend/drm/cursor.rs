@@ -1,6 +1,6 @@
 use super::DrmError;
 use crate::state::KestrelState;
-use asher_config::DEFAULT_CURSOR_THEME_DIR;
+use luft_config::DEFAULT_CURSOR_THEME_DIR;
 use smithay::{
     backend::drm::{DrmDevice, DrmDeviceFd},
     input::pointer::CursorImageStatus,
@@ -257,7 +257,7 @@ fn cursor_pixels_from_image(
 }
 
 fn cursor_theme_bytes(name: &str) -> Option<(Vec<u8>, String)> {
-    let theme_dir = env::var_os("ASHER_CURSOR_THEME_DIR")
+    let theme_dir = env::var_os("LUFT_CURSOR_THEME_DIR")
         .map(PathBuf::from)
         .or_else(default_cursor_theme_dir)?;
     let path = theme_dir.join("cursors").join(name);

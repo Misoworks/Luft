@@ -3,7 +3,7 @@ pub mod headless;
 pub mod nested;
 mod nested_timing;
 
-use asher_config::AsherConfig;
+use luft_config::LuftConfig;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,7 +15,7 @@ pub enum RuntimeBackend {
 
 pub fn run(
     backend: RuntimeBackend,
-    config: AsherConfig,
+    config: LuftConfig,
     socket_name: Option<String>,
 ) -> Result<(), BackendError> {
     match backend {

@@ -74,7 +74,7 @@ pub fn window_elements_for_window(
 fn append_workspace_elements(
     renderer: &mut GlesRenderer,
     state: &KestrelState,
-    workspace: &asher_ipc::WorkspaceId,
+    workspace: &luft_ipc::WorkspaceId,
     offset_x: i32,
     elements: &mut Vec<RoundedWindowElement<WaylandSurfaceRenderElement<GlesRenderer>>>,
 ) {

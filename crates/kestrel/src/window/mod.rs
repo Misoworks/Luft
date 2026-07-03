@@ -4,8 +4,8 @@ mod hit;
 mod ops;
 mod stack;
 mod stack_hit;
-use asher_ipc::{Rect, WindowId, WindowState, WorkspaceId};
 pub use hit::{ResizeEdge, WindowFrameControl, WindowFrameHit};
+use luft_ipc::{Rect, WindowId, WindowState, WorkspaceId};
 pub use ops::WindowGrab;
 use smithay::{
     desktop::utils::bbox_from_surface_tree,

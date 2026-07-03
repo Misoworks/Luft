@@ -1,4 +1,4 @@
-use asher_config::cursor_environment_entries;
+use luft_config::cursor_environment_entries;
 use std::{
     env,
     path::PathBuf,
@@ -6,8 +6,8 @@ use std::{
 };
 use tracing::{debug, info, warn};
 
-const PRIVATE_DBUS_ENV: &str = "ASHER_PRIVATE_DBUS";
-const DISABLE_SERVICES_ENV: &str = "ASHER_NO_SESSION_SERVICES";
+const PRIVATE_DBUS_ENV: &str = "LUFT_PRIVATE_DBUS";
+const DISABLE_SERVICES_ENV: &str = "LUFT_NO_SESSION_SERVICES";
 
 pub fn start(wayland_display: &str, x11_display: Option<&str>) {
     if !owns_private_session_bus() {
@@ -38,9 +38,9 @@ pub fn sync_activation_environment(wayland_display: &str, x11_display: Option<&s
 
     let mut entries = vec![
         format!("WAYLAND_DISPLAY={wayland_display}"),
-        "XDG_CURRENT_DESKTOP=Asher".to_string(),
-        "XDG_SESSION_DESKTOP=asher".to_string(),
-        "DESKTOP_SESSION=asher".to_string(),
+        "XDG_CURRENT_DESKTOP=Luft".to_string(),
+        "XDG_SESSION_DESKTOP=luft".to_string(),
+        "DESKTOP_SESSION=luft".to_string(),
         "XDG_SESSION_TYPE=wayland".to_string(),
     ];
     entries.extend(cursor_environment_entries().map(|(name, value)| format!("{name}={value}")));

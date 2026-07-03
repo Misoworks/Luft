@@ -1,4 +1,4 @@
-use asher_ipc::XwaylandStatus;
+use luft_ipc::XwaylandStatus;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -126,9 +126,9 @@ impl XwaylandSatellite {
             .arg(&x11_display)
             .env_remove("DISPLAY")
             .env("WAYLAND_DISPLAY", wayland_display)
-            .env("XDG_CURRENT_DESKTOP", "Asher")
-            .env("XDG_SESSION_DESKTOP", "asher")
-            .env("DESKTOP_SESSION", "asher")
+            .env("XDG_CURRENT_DESKTOP", "Luft")
+            .env("XDG_SESSION_DESKTOP", "luft")
+            .env("DESKTOP_SESSION", "luft")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())

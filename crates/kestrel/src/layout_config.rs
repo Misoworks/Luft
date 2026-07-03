@@ -1,7 +1,7 @@
-use asher_config::AsherConfig;
-use asher_ipc::{LayoutEngine, Workspace, WorkspaceId};
+use luft_config::LuftConfig;
+use luft_ipc::{LayoutEngine, Workspace, WorkspaceId};
 
-pub fn layout_from_config(config: &AsherConfig) -> LayoutEngine {
+pub fn layout_from_config(config: &LuftConfig) -> LayoutEngine {
     let mut workspaces = configured_workspaces(config);
     if workspaces.is_empty() {
         let count = config.workspaces.count.max(1);
@@ -19,7 +19,7 @@ pub fn layout_from_config(config: &AsherConfig) -> LayoutEngine {
         .unwrap_or_else(|_| LayoutEngine::with_default_workspaces())
 }
 
-fn configured_workspaces(config: &AsherConfig) -> Vec<Workspace> {
+fn configured_workspaces(config: &LuftConfig) -> Vec<Workspace> {
     config
         .workspaces
         .entries
@@ -31,11 +31,11 @@ fn configured_workspaces(config: &AsherConfig) -> Vec<Workspace> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use asher_config::WorkspaceConfig;
+    use luft_config::WorkspaceConfig;
 
     #[test]
     fn default_config_materializes_runtime_workspace() {
-        let config = AsherConfig::default();
+        let config = LuftConfig::default();
 
         let engine = layout_from_config(&config);
         let workspaces = engine.workspaces().collect::<Vec<_>>();
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn configured_workspace_entries_are_preserved() {
-        let mut config = AsherConfig::default();
+        let mut config = LuftConfig::default();
         config
             .workspaces
             .entries

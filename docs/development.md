@@ -2,9 +2,9 @@
 
 ## Dependencies
 
-The workspace uses Rust and Bun. The shell UI is built with the shared Fenestra CEF runtime and embeds a generated single-file web bundle into `asher-shell`.
+The workspace uses Rust and Bun. The shell UI is built with the shared Fenestra CEF runtime and embeds a generated single-file web bundle into `luft-shell`.
 
-For X11 application support, install `xwayland-satellite` and `Xwayland`. Asher starts the satellite process automatically when `compositor.xwayland = true`.
+For X11 application support, install `xwayland-satellite` and `Xwayland`. Luft starts the satellite process automatically when `compositor.xwayland = true`.
 
 The DRM/KMS backend requires libseat and graphics/input development packages. On Fedora, install `libseat-devel`, `systemd-devel`, `mesa-libgbm-devel`, `mesa-libEGL-devel`, `mesa-libGLES-devel`, `libxkbcommon-devel`, `libudev-devel`, `libinput-devel`, `xwayland-satellite`, `xorg-x11-server-Xwayland`, `xdg-desktop-portal`, `xdg-desktop-portal-gtk`, `xdg-desktop-portal-gnome`, `gnome-keyring`, and a PolicyKit agent such as `lxpolkit` or `xfce-polkit`. On Arch-based systems, install `seatd`. On Debian/Ubuntu-style systems, install `libseat-dev`.
 
@@ -15,12 +15,12 @@ For a complete login session, install `dbus-run-session`, `dbus-update-activatio
 Build the shell web bundle after UI changes:
 
 ```sh
-cd crates/asher-shell/web
+cd crates/luft-shell/web
 bun install
 bun run build
 ```
 
-The generated bundle is embedded by `asher-shell`.
+The generated bundle is embedded by `luft-shell`.
 
 ## Validation
 

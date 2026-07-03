@@ -2,11 +2,11 @@ use crate::{
     ipc_summary::{output_summaries, status_payload, window_summaries, workspace_summaries},
     state::KestrelState,
 };
-use asher_config::load_config;
-use asher_ipc::{
+use luft_config::load_config;
+use luft_ipc::{
     IpcRequest, IpcResponse, ensure_socket_parent, read_request, socket_path, write_response,
 };
-use asher_ipc::{WindowId, WorkspaceId};
+use luft_ipc::{WindowId, WorkspaceId};
 use smithay::input::keyboard::KeyboardHandle;
 use std::{
     fs, io,
@@ -170,7 +170,7 @@ fn activate_window(
             debug!(window = window.0, "ipc activated window");
             IpcResponse::Accepted
         }
-        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(luft_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },
@@ -188,7 +188,7 @@ fn close_window(
             debug!(window = window.0, "ipc requested window close");
             IpcResponse::Accepted
         }
-        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(luft_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },
@@ -205,7 +205,7 @@ fn minimize_window(
             debug!(window = window.0, "ipc minimized window");
             IpcResponse::Accepted
         }
-        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(luft_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },
@@ -218,7 +218,7 @@ fn toggle_maximize_window(state: &mut KestrelState, window: WindowId) -> IpcResp
             debug!(window = window.0, "ipc toggled window maximize");
             IpcResponse::Accepted
         }
-        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(luft_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },
@@ -235,7 +235,7 @@ fn move_window_to_workspace(
             debug!(window = window.0, workspace = %workspace.0, "ipc moved window to workspace");
             IpcResponse::Accepted
         }
-        Err(asher_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
+        Err(luft_ipc::LayoutError::UnknownWindow(_)) => unknown_window(window),
         Err(error) => IpcResponse::Error {
             message: error.to_string(),
         },

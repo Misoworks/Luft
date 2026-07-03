@@ -1,4 +1,4 @@
-use asher_ipc::Rect;
+use luft_ipc::Rect;
 use smithay::utils::{Physical, Size};
 use std::time::{Duration, Instant};
 

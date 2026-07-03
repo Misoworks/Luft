@@ -1,6 +1,6 @@
 # Configuration
 
-Asher loads `~/.config/asher/config.toml` when present and uses built-in defaults when the file is absent. Invalid config stops startup so mistakes are visible immediately.
+Luft loads `~/.config/luft/config.toml` when present and uses built-in defaults when the file is absent. Invalid config stops startup so mistakes are visible immediately.
 
 ## Wallpaper
 
@@ -23,7 +23,7 @@ default_scale = 1.0
 scale = 1.25
 ```
 
-Asher picks the largest available mode at the highest refresh rate by default. Pin a mode when needed:
+Luft picks the largest available mode at the highest refresh rate by default. Pin a mode when needed:
 
 ```toml
 [display."DP-1"]
@@ -34,7 +34,7 @@ refresh_millihertz = 165000
 
 ## Startup Apps
 
-Asher launches user desktop entries from `~/.config/autostart` once when the shell starts. Add explicit commands when you want startup apps that are not represented by desktop files:
+Luft launches user desktop entries from `~/.config/autostart` once when the shell starts. Add explicit commands when you want startup apps that are not represented by desktop files:
 
 ```toml
 [session]

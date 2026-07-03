@@ -1,10 +1,10 @@
 [workspace]
 members = [
     "crates/kestrel",
-    "crates/asher-config",
-    "crates/asher-ipc",
-    "crates/asher-session",
-    "crates/asher-shell",
+    "crates/luft-config",
+    "crates/luft-ipc",
+    "crates/luft-session",
+    "crates/luft-shell",
 ]
 resolver = "3"
 
@@ -29,14 +29,14 @@ wayland-backend = "0.3.15"
 wayland-scanner = "0.31.10"
 wayland-server = "0.31.13"
 
-asher-config = { path = "crates/asher-config" }
-asher-ipc = { path = "crates/asher-ipc" }
-asher-session = { path = "crates/asher-session" }
+luft-config = { path = "crates/luft-config" }
+luft-ipc = { path = "crates/luft-ipc" }
+luft-session = { path = "crates/luft-session" }
 
 [profile.dev.package."kestrel"]
 opt-level = 2
 
-[profile.dev.package."asher-shell"]
+[profile.dev.package."luft-shell"]
 opt-level = 2
 
 [profile.dev.package."smithay"]

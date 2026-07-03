@@ -4,7 +4,7 @@ use crate::{
     ipc::IpcServer,
     state::KestrelState,
 };
-use asher_config::AsherConfig;
+use luft_config::LuftConfig;
 use smithay::reexports::wayland_server::{Display, ListeningSocket};
 use std::{sync::Arc, thread, time::Duration};
 use thiserror::Error;
@@ -13,7 +13,7 @@ use tracing::{debug, info};
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 
 pub struct HeadlessOptions {
-    pub config: AsherConfig,
+    pub config: LuftConfig,
     pub socket_name: Option<String>,
 }
 
@@ -72,7 +72,7 @@ pub fn run(options: HeadlessOptions) -> Result<(), HeadlessError> {
 fn bind_socket(socket_name: Option<&str>) -> Result<ListeningSocket, HeadlessError> {
     match socket_name {
         Some(name) => Ok(ListeningSocket::bind(name)?),
-        None => Ok(ListeningSocket::bind_auto("asher-headless", 1..33)?),
+        None => Ok(ListeningSocket::bind_auto("luft-headless", 1..33)?),
     }
 }
 

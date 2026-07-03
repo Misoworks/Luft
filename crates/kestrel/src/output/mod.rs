@@ -42,8 +42,8 @@ impl Default for NestedOutput {
 impl NestedOutput {
     pub fn descriptor(self) -> OutputDescriptor {
         OutputDescriptor {
-            name: "asher-nested-1".to_string(),
-            make: "Asher".to_string(),
+            name: "luft-nested-1".to_string(),
+            make: "Luft".to_string(),
             model: "Nested".to_string(),
             physical_size: (340, 210).into(),
             subpixel: Subpixel::Unknown,

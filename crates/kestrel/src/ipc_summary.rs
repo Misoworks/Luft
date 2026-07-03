@@ -1,5 +1,5 @@
 use crate::state::KestrelState;
-use asher_ipc::{OutputSummary, StatusPayload, WindowState, WindowSummary, WorkspaceSummary};
+use luft_ipc::{OutputSummary, StatusPayload, WindowState, WindowSummary, WorkspaceSummary};
 use smithay::wayland::{
     compositor,
     shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData},

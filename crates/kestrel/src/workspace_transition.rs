@@ -1,4 +1,4 @@
-use asher_ipc::WorkspaceId;
+use luft_ipc::WorkspaceId;
 use std::time::{Duration, Instant};
 
 const WORKSPACE_TRANSITION_DURATION: Duration = Duration::from_millis(220);

@@ -2,7 +2,7 @@
 
 ## Kestrel
 
-Kestrel accepts xdg-shell toplevel clients, advertises `wl_output`, supports `wlr-layer-shell`, starts and restarts `asher-shell`, starts `xwayland-satellite` for X11 apps when configured and installed, forwards keyboard and pointer input, supports workspace slide transitions, and respects xdg-decoration client-side and server-side mode requests.
+Kestrel accepts xdg-shell toplevel clients, advertises `wl_output`, supports `wlr-layer-shell`, starts and restarts `luft-shell`, starts `xwayland-satellite` for X11 apps when configured and installed, forwards keyboard and pointer input, supports workspace slide transitions, and respects xdg-decoration client-side and server-side mode requests.
 
 It also supports normal clipboard focus, primary selection, xdg activation, xdg toplevel icons, named cursor-shape requests, viewporter, fractional-scale preferences, presentation-time feedback, text-input v3 focus tracking, and `ext-background-effect-v1`.
 
@@ -14,7 +14,7 @@ The session backend opens the active seat through libseat, selects the primary D
 
 Fullscreen Wayland clients can be scanned out directly on the primary plane when there are no visible shell/effect layers and KMS accepts the client framebuffer. Otherwise Kestrel falls back to normal composition.
 
-Install `data/xdg-desktop-portal/asher-portals.conf` to `/usr/share/xdg-desktop-portal/asher-portals.conf` or `/etc/xdg/xdg-desktop-portal/asher-portals.conf` so the portal broker chooses Asher's GTK/GNOME backend preferences.
+Install `data/xdg-desktop-portal/luft-portals.conf` to `/usr/share/xdg-desktop-portal/luft-portals.conf` or `/etc/xdg/xdg-desktop-portal/luft-portals.conf` so the portal broker chooses Luft's GTK/GNOME backend preferences.
 
 Viewport-aware scene rendering on non-primary outputs and cursor/overlay plane assignment are the remaining KMS work.
 
@@ -22,7 +22,7 @@ Viewport-aware scene rendering on non-primary outputs and cursor/overlay plane a
 
 The shell uses a Fenestra web UI for the full-width panel, Start menu, quick settings, notification/date center, notification toast, and panel app context menu. Rust owns Wayland IPC, workspace/window actions, tray hosting, notifications, app launching, session commands, config reloads, and surface lifetime. The web layer renders chrome and sends typed actions back to Rust.
 
-Hidden shell popovers and the Start menu are launched lazily and evicted after a short idle period to keep resident memory down. Set `ASHER_SHELL_PREWARM=1` while developing when first-open latency matters more than startup memory.
+Hidden shell popovers and the Start menu are launched lazily and evicted after a short idle period to keep resident memory down. Set `LUFT_SHELL_PREWARM=1` while developing when first-open latency matters more than startup memory.
 
 The built-in default starts with a bottom full-width panel. Kestrel keeps one trailing empty dynamic workspace once windows exist and does not keep creating empty workspaces when scrolling past it.
 

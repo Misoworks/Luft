@@ -1,6 +1,6 @@
 use super::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
 use crate::state::KestrelState;
-use asher_ipc::{Rect, WindowId};
+use luft_ipc::{Rect, WindowId};
 use smithay::utils::{Logical, Size};
 
 impl KestrelState {

@@ -12,11 +12,11 @@ use crate::{
 use ::input::{
     Device as LibinputDevice, DeviceCapability as LibinputDeviceCapability, Led as LibinputLed,
 };
-use asher_ipc::{ShellStatus, shell_socket_path};
 use calloop::{
     EventLoop,
     signals::{Signal, Signals},
 };
+use luft_ipc::{ShellStatus, shell_socket_path};
 use smithay::{
     backend::{
         drm::{DrmEvent, DrmEventMetadata},
@@ -490,7 +490,7 @@ fn update_xwayland_state(
 fn bind_socket(socket_name: Option<&str>) -> Result<ListeningSocket, DrmError> {
     match socket_name {
         Some(name) => ListeningSocket::bind(name),
-        None => ListeningSocket::bind_auto("asher", 1..33),
+        None => ListeningSocket::bind_auto("luft", 1..33),
     }
     .map_err(|error| DrmError::Unsupported(format!("failed to bind Wayland socket: {error}")))
 }

@@ -31,14 +31,14 @@ mod window_geometry;
 mod workspace_transition;
 mod xwayland;
 
-use asher_config::{ConfigPaths, ConfigSource, load_config};
 use backend::RuntimeBackend;
 use clap::Parser;
+use luft_config::{ConfigPaths, ConfigSource, load_config};
 use std::{fs, fs::OpenOptions, io};
 use tracing::{info, warn};
 
 #[derive(Debug, Parser)]
-#[command(name = "kestrel", about = "Kestrel Wayland compositor for Asher")]
+#[command(name = "kestrel", about = "Kestrel Wayland compositor for Luft")]
 struct KestrelArgs {
     #[arg(long, conflicts_with_all = ["headless", "session"])]
     nested: bool,
