@@ -1,6 +1,7 @@
 use smithay::{
     desktop::{
-        LayerSurface, WindowSurfaceType, layer_map_for_output, utils::bbox_from_surface_tree,
+        LayerSurface, PopupManager, WindowSurfaceType, layer_map_for_output,
+        utils::{bbox_from_surface_tree, under_from_surface_tree},
     },
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
@@ -311,6 +312,10 @@ fn pointer_focus_on_layer(
         }
 
         let geometry = layer_map.layer_geometry(layer_surface)?;
+        if let Some(focus) = popup_pointer_focus(layer_surface.wl_surface(), geometry.loc, point) {
+            return Some(focus);
+        }
+
         let point_in_layer: Point<f64, Logical> = (
             point.x - f64::from(geometry.loc.x),
             point.y - f64::from(geometry.loc.y),
@@ -325,6 +330,31 @@ fn pointer_focus_on_layer(
         return Some(LayerPointerFocus {
             surface,
             location: (geometry.loc + surface_location).to_f64(),
+        });
+    }
+
+    None
+}
+
+fn popup_pointer_focus(
+    parent: &WlSurface,
+    parent_location: Point<i32, Logical>,
+    point: Point<f64, Logical>,
+) -> Option<LayerPointerFocus> {
+    for (popup, popup_offset) in PopupManager::popups_for_surface(parent) {
+        let popup_location = parent_location + popup_offset - popup.geometry().loc;
+        let Some((surface, location)) = under_from_surface_tree(
+            popup.wl_surface(),
+            point,
+            popup_location,
+            WindowSurfaceType::ALL,
+        ) else {
+            continue;
+        };
+
+        return Some(LayerPointerFocus {
+            surface,
+            location: location.to_f64(),
         });
     }
 

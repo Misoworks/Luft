@@ -49,7 +49,6 @@ pub fn panel_apps(config: &LuftConfig) -> Vec<PanelApp> {
                 "com.mitchellh.ghostty",
                 "ghostty",
                 "utilities-terminal",
-                "org.gnome.Terminal",
                 "org.wezfurlong.wezterm",
                 "Alacritty",
                 "kitty",
@@ -63,9 +62,7 @@ pub fn panel_apps(config: &LuftConfig) -> Vec<PanelApp> {
             &[
                 &config.default_apps.file_manager,
                 "system-file-manager",
-                "org.gnome.Nautilus",
                 "org.kde.dolphin",
-                "nautilus",
                 "dolphin",
                 "Thunar",
             ],
@@ -99,6 +96,7 @@ pub fn launcher_apps(config: &LuftConfig, fallback: &[PanelApp]) -> Vec<AppEntry
     fallback
         .iter()
         .map(|app| AppEntry {
+            desktop_id: None,
             name: app.label.clone(),
             command: normalize_launch_command(&app.command),
             comment: None,
@@ -245,8 +243,7 @@ fn shell_quote_word(word: &str) -> String {
 }
 
 fn command_for_launch(command: &str) -> Command {
-    if let Some(mut argv) = shell_words(command) {
-        prepare_graphical_argv(&mut argv);
+    if let Some(argv) = shell_words(command) {
         let mut child = Command::new(&argv[0]);
         child.args(&argv[1..]);
         silence_stdio(&mut child);
@@ -304,72 +301,6 @@ fn shell_words(command: &str) -> Option<Vec<String>> {
     (!words.is_empty()).then_some(words)
 }
 
-fn prepare_graphical_argv(argv: &mut Vec<String>) {
-    if !is_chromium_family_launch(argv) {
-        return;
-    }
-
-    push_unique_switch(argv, "--ozone-platform-hint=auto");
-    push_unique_switch(argv, "--disable-vulkan");
-    push_unique_switch(argv, "--use-angle=gl");
-    push_unique_switch(
-        argv,
-        "--disable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE",
-    );
-}
-
-fn push_unique_switch(argv: &mut Vec<String>, switch: &str) {
-    let name = switch.split_once('=').map_or(switch, |(name, _)| name);
-    if argv
-        .iter()
-        .any(|arg| arg == name || arg.starts_with(&format!("{name}=")))
-    {
-        return;
-    }
-    argv.push(switch.to_string());
-}
-
-fn is_chromium_family_launch(argv: &[String]) -> bool {
-    chromium_launch_names(argv).any(|name| {
-        name.contains("chrome")
-            || name.contains("chromium")
-            || name.contains("brave")
-            || name.contains("edge")
-            || name.contains("electron")
-            || name.contains("codex")
-            || name.contains("cursor")
-            || name.contains("curseforge")
-            || name.contains("equibop")
-            || name.contains("discord")
-    })
-}
-
-fn chromium_launch_names(argv: &[String]) -> impl Iterator<Item = String> + '_ {
-    argv.iter()
-        .skip(launch_arg_start(argv))
-        .filter(|arg| !arg.starts_with('-') && !arg.contains('='))
-        .map(|arg| arg.rsplit('/').next().unwrap_or(arg).to_lowercase())
-}
-
-fn launch_arg_start(argv: &[String]) -> usize {
-    let mut index = 0;
-    if argv.first().is_some_and(|arg| arg == "env") {
-        index = 1;
-        while let Some(arg) = argv.get(index) {
-            if arg.starts_with('-') {
-                index += 1;
-                continue;
-            }
-            if arg.contains('=') {
-                index += 1;
-                continue;
-            }
-            break;
-        }
-    }
-    index
-}
-
 fn apply_app_environment(command: &mut Command, xwayland_display: Option<&str>) {
     command.env_remove("DISPLAY");
     command.env("XDG_CURRENT_DESKTOP", "Luft");
@@ -381,13 +312,6 @@ fn apply_app_environment(command: &mut Command, xwayland_display: Option<&str>) 
     command.env("GTK_MODULES", "");
     command.env("UBUNTU_MENUPROXY", "0");
     command.env("GTK_OVERLAY_SCROLLING", "0");
-    command.env("GDK_BACKEND", "wayland,x11");
-    command.env("QT_QPA_PLATFORM", "wayland;xcb");
-    command.env("SDL_VIDEODRIVER", "wayland");
-    command.env("CLUTTER_BACKEND", "wayland");
-    command.env("MOZ_ENABLE_WAYLAND", "1");
-    command.env("ELECTRON_OZONE_PLATFORM_HINT", "auto");
-    command.env_remove("NIXOS_OZONE_WL");
     for (name, value) in cursor_environment_entries() {
         command.env(name, value);
     }
@@ -455,7 +379,7 @@ fn luft_wayland_display() -> Option<std::ffi::OsString> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_launch_command, prepare_graphical_argv};
+    use super::normalize_launch_command;
 
     #[test]
     fn launch_command_decodes_percent_encoded_paths() {
@@ -484,13 +408,5 @@ mod tests {
             normalize_launch_command("/usr/bin/flatpak run app.id @@u /tmp/file @@"),
             "/usr/bin/flatpak run app.id",
         );
-    }
-
-    #[test]
-    fn launch_command_adds_gpu_safe_chromium_flags() {
-        let mut argv = vec!["google-chrome-stable".to_string()];
-        prepare_graphical_argv(&mut argv);
-        assert!(argv.iter().any(|arg| arg == "--ozone-platform-hint=auto"));
-        assert!(argv.iter().any(|arg| arg == "--disable-vulkan"));
     }
 }

@@ -2,10 +2,10 @@ use crate::{client::ClientState, render::handle_commit, state::KestrelState};
 use smithay::{
     backend::allocator::Buffer,
     delegate_alpha_modifier, delegate_compositor, delegate_cursor_shape, delegate_data_device,
-    delegate_dmabuf, delegate_fractional_scale, delegate_idle_inhibit,
-    delegate_keyboard_shortcuts_inhibit, delegate_layer_shell, delegate_output,
-    delegate_pointer_constraints, delegate_pointer_gestures, delegate_presentation,
-    delegate_primary_selection, delegate_relative_pointer, delegate_seat, delegate_shm,
+    delegate_dmabuf, delegate_ext_data_control, delegate_foreign_toplevel_list,
+    delegate_fractional_scale, delegate_keyboard_shortcuts_inhibit, delegate_layer_shell,
+    delegate_output, delegate_pointer_gestures, delegate_presentation, delegate_primary_selection,
+    delegate_relative_pointer, delegate_seat, delegate_shm, delegate_single_pixel_buffer,
     delegate_text_input_manager, delegate_viewporter, delegate_xdg_activation,
     delegate_xdg_decoration, delegate_xdg_foreign, delegate_xdg_shell, delegate_xdg_toplevel_icon,
     desktop::PopupKind,
@@ -23,19 +23,19 @@ use smithay::{
         buffer::BufferHandler,
         compositor::{CompositorClientState, CompositorHandler, CompositorState},
         dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
-        idle_inhibit::IdleInhibitHandler,
+        foreign_toplevel_list::{ForeignToplevelListHandler, ForeignToplevelListState},
         keyboard_shortcuts_inhibit::{
             KeyboardShortcutsInhibitHandler, KeyboardShortcutsInhibitState,
             KeyboardShortcutsInhibitor,
         },
         output::OutputHandler,
-        pointer_constraints::{PointerConstraintsHandler, with_pointer_constraint},
         selection::{
             SelectionHandler,
             data_device::{
                 ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
                 set_data_device_focus,
             },
+            ext_data_control::{DataControlHandler, DataControlState},
             primary_selection::{
                 PrimarySelectionHandler, PrimarySelectionState, set_primary_focus,
             },
@@ -131,10 +131,10 @@ impl XdgForeignHandler for KestrelState {
     }
 }
 
-impl IdleInhibitHandler for KestrelState {
-    fn inhibit(&mut self, _surface: WlSurface) {}
-
-    fn uninhibit(&mut self, _surface: WlSurface) {}
+impl ForeignToplevelListHandler for KestrelState {
+    fn foreign_toplevel_list_state(&mut self) -> &mut ForeignToplevelListState {
+        &mut self.protocol_state.foreign_toplevel_list
+    }
 }
 
 impl KeyboardShortcutsInhibitHandler for KestrelState {
@@ -144,28 +144,6 @@ impl KeyboardShortcutsInhibitHandler for KestrelState {
 
     fn new_inhibitor(&mut self, inhibitor: KeyboardShortcutsInhibitor) {
         inhibitor.activate();
-    }
-}
-
-impl PointerConstraintsHandler for KestrelState {
-    fn new_constraint(
-        &mut self,
-        surface: &WlSurface,
-        pointer: &smithay::input::pointer::PointerHandle<Self>,
-    ) {
-        with_pointer_constraint(surface, pointer, |constraint| {
-            if let Some(constraint) = constraint {
-                constraint.activate();
-            }
-        });
-    }
-
-    fn cursor_position_hint(
-        &mut self,
-        _surface: &WlSurface,
-        _pointer: &smithay::input::pointer::PointerHandle<Self>,
-        _location: smithay::utils::Point<f64, smithay::utils::Logical>,
-    ) {
     }
 }
 
@@ -225,6 +203,12 @@ impl PrimarySelectionHandler for KestrelState {
     }
 }
 
+impl DataControlHandler for KestrelState {
+    fn data_control_state(&self) -> &DataControlState {
+        &self.data_control_state
+    }
+}
+
 impl ClientDndGrabHandler for KestrelState {}
 
 impl ServerDndGrabHandler for KestrelState {
@@ -255,6 +239,7 @@ impl CompositorHandler for KestrelState {
         let popup_mapped = !popup_needs_render && self.popup_manager.find_popup(surface).is_some();
         let initial_size_adopted = self.adopt_initial_toplevel_size(surface);
         let decoration_changed = self.reconcile_decoration_after_commit(surface);
+        let foreign_toplevel_changed = self.sync_foreign_toplevel(surface);
         if needs_render || popup_mapped {
             self.mark_scene_dirty();
         }
@@ -262,6 +247,9 @@ impl CompositorHandler for KestrelState {
             self.mark_scene_dirty();
         }
         if decoration_changed {
+            self.mark_scene_dirty();
+        }
+        if foreign_toplevel_changed {
             self.mark_scene_dirty();
         }
         if let Some(layer_surface) = self.layer_surface_for_commit(surface) {
@@ -312,9 +300,8 @@ impl TabletSeatHandler for KestrelState {}
 delegate_xdg_shell!(KestrelState);
 delegate_xdg_decoration!(KestrelState);
 delegate_xdg_foreign!(KestrelState);
-delegate_idle_inhibit!(KestrelState);
+delegate_foreign_toplevel_list!(KestrelState);
 delegate_keyboard_shortcuts_inhibit!(KestrelState);
-delegate_pointer_constraints!(KestrelState);
 delegate_relative_pointer!(KestrelState);
 delegate_pointer_gestures!(KestrelState);
 delegate_xdg_activation!(KestrelState);
@@ -332,7 +319,9 @@ delegate_shm!(KestrelState);
 delegate_seat!(KestrelState);
 delegate_data_device!(KestrelState);
 delegate_primary_selection!(KestrelState);
+delegate_ext_data_control!(KestrelState);
 delegate_alpha_modifier!(KestrelState);
+delegate_single_pixel_buffer!(KestrelState);
 #[cfg(feature = "session-backend")]
 delegate_drm_syncobj!(KestrelState);
 

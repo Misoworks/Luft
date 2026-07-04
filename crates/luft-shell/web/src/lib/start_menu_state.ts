@@ -137,7 +137,7 @@ function startMenuCommands(snapshot: ShellSnapshot): StartMenuCommand[] {
       detail: "Launch the configured file manager",
       icon: "files",
       label: "App",
-      keywords: ["files", "folder", "nautilus", "file manager", "default app"],
+      keywords: ["files", "folder", "file manager", "default app"],
       action: { type: "launch-default-app", app: "file-manager" },
     },
     {

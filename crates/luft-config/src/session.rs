@@ -29,7 +29,6 @@ impl Default for SessionConfig {
 fn default_lock_command() -> String {
     [
         "if command -v luft-lock >/dev/null 2>&1; then exec luft-lock",
-        "elif command -v gtklock >/dev/null 2>&1; then exec gtklock",
         "elif command -v swaylock >/dev/null 2>&1; then exec swaylock",
         "elif command -v waylock >/dev/null 2>&1; then exec waylock",
         "else exec loginctl lock-session; fi",

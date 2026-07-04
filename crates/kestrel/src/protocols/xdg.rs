@@ -399,7 +399,7 @@ fn popup_surface_origin(
 ) -> Option<Point<i32, Logical>> {
     PopupManager::popups_for_surface(root)
         .find(|(popup, _)| popup.wl_surface() == surface)
-        .map(|(popup, offset)| root_origin + offset - popup.geometry().loc)
+        .map(|(_, offset)| root_origin + offset)
 }
 
 fn output_constraint(

@@ -9,12 +9,12 @@ use smithay::{
     utils::{Clock, Monotonic},
     wayland::{
         alpha_modifier::AlphaModifierState, cursor_shape::CursorShapeManagerState,
-        dmabuf::DmabufState, fractional_scale::FractionalScaleManagerState,
-        idle_inhibit::IdleInhibitManagerState,
+        dmabuf::DmabufState, foreign_toplevel_list::ForeignToplevelListState,
+        fractional_scale::FractionalScaleManagerState,
         keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState, output::OutputManagerState,
-        pointer_constraints::PointerConstraintsState, pointer_gestures::PointerGesturesState,
-        presentation::PresentationState, relative_pointer::RelativePointerManagerState,
-        shell::xdg::decoration::XdgDecorationState, text_input::TextInputManagerState,
+        pointer_gestures::PointerGesturesState, presentation::PresentationState,
+        relative_pointer::RelativePointerManagerState, shell::xdg::decoration::XdgDecorationState,
+        single_pixel_buffer::SinglePixelBufferState, text_input::TextInputManagerState,
         viewporter::ViewporterState, xdg_activation::XdgActivationState,
         xdg_foreign::XdgForeignState, xdg_toplevel_icon::XdgToplevelIconManager,
     },
@@ -23,6 +23,7 @@ use smithay::{
 pub struct ProtocolState {
     pub xdg_activation: XdgActivationState,
     pub xdg_foreign: XdgForeignState,
+    pub foreign_toplevel_list: ForeignToplevelListState,
     pub keyboard_shortcuts_inhibit: KeyboardShortcutsInhibitState,
     pub dmabuf: DmabufState,
     #[cfg(feature = "session-backend")]
@@ -37,13 +38,12 @@ pub struct ProtocolState {
     _text_input: TextInputManagerState,
     _presentation: PresentationState,
     _output: OutputManagerState,
+    _single_pixel_buffer: SinglePixelBufferState,
     _background_effect: BackgroundEffectGlobal,
     pub vicinae_hotkey: VicinaeHotkeyState,
     _alpha_modifier: AlphaModifierState,
     _relative_pointer: RelativePointerManagerState,
     _pointer_gestures: PointerGesturesState,
-    _pointer_constraints: PointerConstraintsState,
-    _idle_inhibit: IdleInhibitManagerState,
 }
 
 impl ProtocolState {
@@ -56,6 +56,7 @@ impl ProtocolState {
         Self {
             xdg_activation: XdgActivationState::new::<KestrelState>(display),
             xdg_foreign: XdgForeignState::new::<KestrelState>(display),
+            foreign_toplevel_list: ForeignToplevelListState::new::<KestrelState>(display),
             keyboard_shortcuts_inhibit: KeyboardShortcutsInhibitState::new::<KestrelState>(display),
             dmabuf: DmabufState::new(),
             #[cfg(feature = "session-backend")]
@@ -73,13 +74,12 @@ impl ProtocolState {
                 Clock::<Monotonic>::new().id() as u32,
             ),
             _output: OutputManagerState::new_with_xdg_output::<KestrelState>(display),
+            _single_pixel_buffer: SinglePixelBufferState::new::<KestrelState>(display),
             _background_effect: BackgroundEffectGlobal::new(display),
             vicinae_hotkey: VicinaeHotkeyState::new(display),
             _alpha_modifier: AlphaModifierState::new::<KestrelState>(display),
             _relative_pointer: RelativePointerManagerState::new::<KestrelState>(display),
             _pointer_gestures: PointerGesturesState::new::<KestrelState>(display),
-            _pointer_constraints: PointerConstraintsState::new::<KestrelState>(display),
-            _idle_inhibit: IdleInhibitManagerState::new::<KestrelState>(display),
         }
     }
 }

@@ -49,8 +49,27 @@ pub fn panel_app_matches_window(app: &PanelApp, window: &WindowSummary) -> bool 
 }
 
 fn identifier_matches(value: &str, command: &str, label: &str) -> bool {
-    let value = value.to_lowercase();
-    (!command.is_empty() && value.contains(command)) || (!label.is_empty() && value.contains(label))
+    let value = normalized_identifier(value);
+    if value.is_empty() {
+        return false;
+    }
+    [command, label]
+        .into_iter()
+        .map(normalized_identifier)
+        .filter(|candidate| !candidate.is_empty())
+        .any(|candidate| {
+            value == candidate
+                || (candidate.len() >= 4 && value.contains(&candidate))
+                || (value.len() >= 4 && candidate.contains(&value))
+        })
+}
+
+fn normalized_identifier(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 fn command_name(command: &str) -> Option<&str> {

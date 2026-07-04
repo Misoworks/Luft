@@ -21,6 +21,7 @@ struct ApplicationCache {
 
 #[derive(Debug, Clone)]
 pub struct AppEntry {
+    pub desktop_id: Option<String>,
     pub name: String,
     pub command: String,
     pub comment: Option<String>,
@@ -178,6 +179,7 @@ fn parse_desktop_entry(
         .filter(|value| !value.is_empty());
 
     Some(AppEntry {
+        desktop_id: desktop_id(path),
         name,
         command,
         comment: values.get("Comment").cloned(),
@@ -185,6 +187,14 @@ fn parse_desktop_entry(
         icon_path,
         startup_wm_class,
     })
+}
+
+fn desktop_id(path: &Path) -> Option<String> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(ToString::to_string)
 }
 
 fn entry_visible_in_context(
@@ -198,9 +208,6 @@ fn entry_visible_in_context(
     match context {
         DesktopEntryContext::Applications => !truthy(values.get("NoDisplay")),
         DesktopEntryContext::Autostart => {
-            if falsey(values.get("X-GNOME-Autostart-enabled")) {
-                return false;
-            }
             if values
                 .get("OnlyShowIn")
                 .is_some_and(|value| !desktop_list_contains(value, "Luft"))
@@ -220,10 +227,6 @@ fn entry_visible_in_context(
 
 fn truthy(value: Option<&String>) -> bool {
     value.is_some_and(|value| value.eq_ignore_ascii_case("true"))
-}
-
-fn falsey(value: Option<&String>) -> bool {
-    value.is_some_and(|value| value.eq_ignore_ascii_case("false"))
 }
 
 fn desktop_list_contains(value: &str, desktop: &str) -> bool {

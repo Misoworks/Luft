@@ -15,12 +15,14 @@ impl WebShell {
             self.activate_task_window(window);
             return;
         }
-        let Some(app) = self
-            .panel_apps
-            .iter()
-            .find(|app| app.command == command)
-            .cloned()
-        else {
+        if let Some(group) = window_group_id(&command) {
+            if let Some(window) = self.next_group_window(group) {
+                self.activate_task_window(window.0);
+            }
+            return;
+        }
+
+        let Some(app) = self.panel_app_for_command(&command) else {
             self.launch(command);
             return;
         };
@@ -33,23 +35,7 @@ impl WebShell {
     }
 
     pub(super) fn panel_window_for(&self, app: &PanelApp) -> Option<luft_ipc::WindowId> {
-        self.model
-            .windows
-            .iter()
-            .find(|window| window.is_active && panel_app_matches_window(app, window))
-            .or_else(|| {
-                self.model
-                    .windows
-                    .iter()
-                    .find(|window| window.is_visible && panel_app_matches_window(app, window))
-            })
-            .or_else(|| {
-                self.model
-                    .windows
-                    .iter()
-                    .find(|window| panel_app_matches_window(app, window))
-            })
-            .map(|window| window.id)
+        next_window(self.ordered_panel_windows(app)).map(|window| window.id)
     }
 
     pub(super) fn pin_panel_app(&mut self, label: String, command: String, icon: Option<String>) {
@@ -137,8 +123,16 @@ impl WebShell {
     fn panel_app_for_command(&self, command: &str) -> Option<PanelApp> {
         self.panel_apps
             .iter()
-            .find(|app| app.command == command)
+            .find(|app| commands_equal(&app.command, command))
             .cloned()
+            .or_else(|| {
+                self.applications
+                    .iter()
+                    .find(|app| commands_equal(&app.command, command))
+                    .map(|app| {
+                        PanelApp::new(app.name.clone(), app.command.clone(), app.icon_path.clone())
+                    })
+            })
     }
 
     fn window_pids_for_panel_app(&self, app: &PanelApp) -> Vec<u32> {
@@ -152,6 +146,38 @@ impl WebShell {
         pids.sort_unstable();
         pids.dedup();
         pids
+    }
+
+    fn ordered_panel_windows<'a>(&'a self, app: &PanelApp) -> Vec<&'a luft_ipc::WindowSummary> {
+        self.ordered_windows()
+            .into_iter()
+            .filter(|window| panel_app_matches_window(app, window))
+            .collect()
+    }
+
+    fn next_group_window(&self, group: &str) -> Option<luft_ipc::WindowId> {
+        next_window(
+            self.ordered_windows()
+                .into_iter()
+                .filter(|window| window_matches_group(window, group))
+                .collect(),
+        )
+        .map(|window| window.id)
+    }
+
+    fn ordered_windows(&self) -> Vec<&luft_ipc::WindowSummary> {
+        let mut windows = Vec::new();
+        for id in &self.running_app_order {
+            if let Some(window) = self.model.windows.iter().find(|window| window.id == *id) {
+                windows.push(window);
+            }
+        }
+        for window in &self.model.windows {
+            if !windows.iter().any(|ordered| ordered.id == window.id) {
+                windows.push(window);
+            }
+        }
+        windows
     }
 
     pub(super) fn open_panel_menu(&mut self, command: String, x: Option<i32>) {
@@ -192,6 +218,44 @@ impl WebShell {
 
 fn window_command_id(command: &str) -> Option<u64> {
     command.strip_prefix("window:")?.parse::<u64>().ok()
+}
+
+fn window_group_id(command: &str) -> Option<&str> {
+    command.strip_prefix("window-group:")
+}
+
+fn next_window(windows: Vec<&luft_ipc::WindowSummary>) -> Option<&luft_ipc::WindowSummary> {
+    if let Some(active) = windows.iter().position(|window| window.is_active) {
+        if windows.len() > 1 {
+            return Some(windows[(active + 1) % windows.len()]);
+        }
+        return windows.get(active).copied();
+    }
+    windows
+        .iter()
+        .find(|window| window.is_visible)
+        .copied()
+        .or_else(|| windows.first().copied())
+}
+
+fn window_matches_group(window: &luft_ipc::WindowSummary, group: &str) -> bool {
+    [window.app_id.as_deref(), window.title.as_deref()]
+        .into_iter()
+        .flatten()
+        .map(normalized_identifier)
+        .any(|identifier| identifier == group)
+}
+
+fn commands_equal(left: &str, right: &str) -> bool {
+    normalize_launch_command(left) == normalize_launch_command(right)
+}
+
+fn normalized_identifier(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 fn command_basename(command: &str) -> Option<&str> {

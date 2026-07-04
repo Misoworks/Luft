@@ -66,4 +66,5 @@ cargo test --workspace
 - [Running Luft](docs/running.md)
 - [Configuration](docs/configuration.md)
 - [Shell and Compositor Behavior](docs/shell-and-compositor.md)
+- [App Compatibility Inventory](docs/app-compatibility-inventory.md)
 - [Shortcuts](docs/shortcuts.md)

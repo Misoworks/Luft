@@ -24,16 +24,20 @@ use smithay::{
     },
     utils::{Logical, Point},
     wayland::{
-        compositor::CompositorState,
-        selection::{data_device::DataDeviceState, primary_selection::PrimarySelectionState},
+        compositor::{self, CompositorState},
+        foreign_toplevel_list::ForeignToplevelHandle,
+        selection::{
+            data_device::DataDeviceState, ext_data_control::DataControlState,
+            primary_selection::PrimarySelectionState,
+        },
         shell::{
             wlr_layer::WlrLayerShellState,
-            xdg::{ToplevelSurface, XdgShellState},
+            xdg::{ToplevelSurface, XdgShellState, XdgToplevelSurfaceData},
         },
         shm::ShmState,
     },
 };
-use std::{cell::RefCell, path::PathBuf};
+use std::{cell::RefCell, collections::BTreeMap, path::PathBuf};
 use tracing::debug;
 
 mod frame_callbacks;
@@ -54,11 +58,13 @@ pub struct KestrelState {
     pub seat_state: SeatState<Self>,
     pub data_device_state: DataDeviceState,
     pub primary_selection_state: PrimarySelectionState,
+    pub data_control_state: DataControlState,
     pub seat: Seat<Self>,
     pub keyboard: Option<KeyboardHandle<Self>>,
     pub outputs: OutputGraph,
     pub layout: LayoutEngine,
     pub windows: WindowStack,
+    pub foreign_toplevel_handles: BTreeMap<WindowId, ForeignToplevelHandle>,
     pub popup_manager: PopupManager,
     pub pointer_location: Point<f64, Logical>,
     pub drag: Option<WindowGrab>,
@@ -110,6 +116,8 @@ impl KestrelState {
         let shm_state = ShmState::new::<Self>(display, vec![]);
         let data_device_state = DataDeviceState::new::<Self>(display);
         let primary_selection_state = PrimarySelectionState::new::<Self>(display);
+        let data_control_state =
+            DataControlState::new::<Self, _>(display, Some(&primary_selection_state), |_| true);
         let mut seat_state = SeatState::new();
         let seat = seat_state.new_wl_seat(display, "luft-seat");
         let outputs = OutputGraph::new(display, &config.display, output_descriptors);
@@ -127,11 +135,13 @@ impl KestrelState {
             seat_state,
             data_device_state,
             primary_selection_state,
+            data_control_state,
             seat,
             keyboard: None,
             outputs,
             layout,
             windows: WindowStack::default(),
+            foreign_toplevel_handles: BTreeMap::new(),
             popup_manager: PopupManager::default(),
             pointer_location: (0.0, 0.0).into(),
             drag: None,
@@ -188,6 +198,7 @@ impl KestrelState {
                 if let Some(parent) = parent {
                     self.raise_transient(parent, id);
                 }
+                self.register_foreign_toplevel(id, &surface);
                 self.enter_output(surface.wl_surface());
                 self.mark_scene_dirty();
             }
@@ -245,6 +256,7 @@ impl KestrelState {
         self.dismiss_popups_for_surface(surface.wl_surface());
         self.leave_output(surface.wl_surface());
         if let Some(window) = self.windows.remove(surface) {
+            self.remove_foreign_toplevel(window.id);
             self.layout.unregister_window(window.id);
             self.apply_active_arrangement();
             self.mark_scene_dirty();
@@ -254,6 +266,7 @@ impl KestrelState {
     pub fn remove_dead_windows(&mut self) -> bool {
         let removed = self.windows.retain_alive();
         for id in &removed {
+            self.remove_foreign_toplevel(*id);
             self.layout.unregister_window(*id);
         }
         if !removed.is_empty() {
@@ -445,6 +458,34 @@ impl KestrelState {
         }
     }
 
+    pub fn sync_foreign_toplevel(&mut self, surface: &WlSurface) -> bool {
+        let Some((id, toplevel)) = self
+            .windows
+            .iter()
+            .find(|window| window.surface.wl_surface() == surface)
+            .map(|window| (window.id, window.surface.clone()))
+        else {
+            return false;
+        };
+        let Some(handle) = self.foreign_toplevel_handles.get(&id) else {
+            return false;
+        };
+        let metadata = toplevel_metadata(&toplevel);
+        let mut changed = false;
+        if handle.title() != metadata.title {
+            handle.send_title(&metadata.title);
+            changed = true;
+        }
+        if handle.app_id() != metadata.app_id {
+            handle.send_app_id(&metadata.app_id);
+            changed = true;
+        }
+        if changed {
+            handle.send_done();
+        }
+        changed
+    }
+
     fn clear_activated_windows(&self) {
         for managed in self.windows.iter() {
             managed.surface.with_pending_state(|surface_state| {
@@ -481,10 +522,46 @@ impl KestrelState {
         self.windows.id_for_wl_surface(&parent)
     }
 
+    fn register_foreign_toplevel(&mut self, id: WindowId, surface: &ToplevelSurface) {
+        let metadata = toplevel_metadata(surface);
+        let handle = self
+            .protocol_state
+            .foreign_toplevel_list
+            .new_toplevel::<Self>(metadata.title, metadata.app_id);
+        self.foreign_toplevel_handles.insert(id, handle);
+    }
+
+    fn remove_foreign_toplevel(&mut self, id: WindowId) {
+        if let Some(handle) = self.foreign_toplevel_handles.remove(&id) {
+            self.protocol_state
+                .foreign_toplevel_list
+                .remove_toplevel(&handle);
+        }
+    }
+
     fn raise_transient(&mut self, parent: WindowId, child: WindowId) {
         let _ = self.windows.raise_by_id(parent);
         let _ = self.windows.raise_by_id(child);
     }
+}
+
+fn toplevel_metadata(surface: &ToplevelSurface) -> ToplevelMetadata {
+    compositor::with_states(surface.wl_surface(), |states| {
+        let Some(data) = states.data_map.get::<XdgToplevelSurfaceData>() else {
+            return ToplevelMetadata::default();
+        };
+        let role = data.lock().unwrap();
+        ToplevelMetadata {
+            title: role.title.clone().unwrap_or_default(),
+            app_id: role.app_id.clone().unwrap_or_default(),
+        }
+    })
+}
+
+#[derive(Debug, Default)]
+struct ToplevelMetadata {
+    title: String,
+    app_id: String,
 }
 
 #[derive(Clone)]

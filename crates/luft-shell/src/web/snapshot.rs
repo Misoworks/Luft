@@ -269,21 +269,50 @@ fn application_for_window<'a>(
     window: &luft_ipc::WindowSummary,
     applications: &'a [AppEntry],
 ) -> Option<&'a AppEntry> {
-    applications.iter().find(|app| {
-        [window.app_id.as_deref(), window.title.as_deref()]
-            .into_iter()
-            .flatten()
-            .any(|identifier| app_matches_window_identifier(app, identifier))
-    })
+    window
+        .app_id
+        .as_deref()
+        .and_then(|app_id| {
+            applications
+                .iter()
+                .find(|app| app_matches_app_id(app, app_id))
+        })
+        .or_else(|| {
+            window.title.as_deref().and_then(|title| {
+                applications
+                    .iter()
+                    .find(|app| app_matches_window_title(app, title))
+            })
+        })
 }
 
-fn app_matches_window_identifier(app: &AppEntry, identifier: &str) -> bool {
+fn app_matches_app_id(app: &AppEntry, identifier: &str) -> bool {
     let identifier = normalized_identifier(identifier);
     if identifier.is_empty() {
         return false;
     }
 
+    app_identity_candidates(app).any(|candidate| {
+        candidate == identifier
+            || (candidate.len() >= 4 && identifier.contains(&candidate))
+            || (identifier.len() >= 4 && candidate.contains(&identifier))
+    })
+}
+
+fn app_matches_window_title(app: &AppEntry, title: &str) -> bool {
+    let title = normalized_identifier(title);
+    if title.is_empty() {
+        return false;
+    }
+
+    app_identity_candidates(app)
+        .filter(|candidate| candidate.len() >= 4)
+        .any(|candidate| title.contains(&candidate))
+}
+
+fn app_identity_candidates(app: &AppEntry) -> impl Iterator<Item = String> + '_ {
     [
+        app.desktop_id.as_deref(),
         app.startup_wm_class.as_deref(),
         app.icon.as_deref(),
         Some(app.name.as_str()),
@@ -293,7 +322,6 @@ fn app_matches_window_identifier(app: &AppEntry, identifier: &str) -> bool {
     .flatten()
     .map(normalized_identifier)
     .filter(|candidate| !candidate.is_empty())
-    .any(|candidate| identifier.contains(&candidate) || candidate.contains(&identifier))
 }
 
 fn normalized_identifier(value: &str) -> String {

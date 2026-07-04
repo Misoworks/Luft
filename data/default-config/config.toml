@@ -6,7 +6,7 @@ xwayland = true
 default_scale = 1.0
 
 [session]
-lock_command = "if command -v luft-lock >/dev/null 2>&1; then exec luft-lock; elif command -v gtklock >/dev/null 2>&1; then exec gtklock; elif command -v swaylock >/dev/null 2>&1; then exec swaylock; elif command -v waylock >/dev/null 2>&1; then exec waylock; else exec loginctl lock-session; fi"
+lock_command = "if command -v luft-lock >/dev/null 2>&1; then exec luft-lock; elif command -v swaylock >/dev/null 2>&1; then exec swaylock; elif command -v waylock >/dev/null 2>&1; then exec waylock; else exec loginctl lock-session; fi"
 suspend_command = "systemctl suspend"
 reboot_command = "systemctl reboot"
 poweroff_command = "systemctl poweroff"
@@ -17,7 +17,7 @@ count = 1
 
 [default_apps]
 terminal = "ghostty"
-file_manager = "nautilus"
+file_manager = "rover"
 browser = "google-chrome-stable"
 settings = ""
 launcher = "vicinae"

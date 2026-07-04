@@ -22,7 +22,6 @@ pub fn start(wayland_display: &str, x11_display: Option<&str>) {
     }
 
     start_portal_broker();
-    start_secret_service();
     start_policykit_agent();
 }
 
@@ -55,34 +54,6 @@ pub fn sync_activation_environment(wayland_display: &str, x11_display: Option<&s
     }
 }
 
-fn start_secret_service() {
-    let Some(binary) =
-        find_known_program("gnome-keyring-daemon", &["/usr/bin/gnome-keyring-daemon"])
-    else {
-        debug!("gnome-keyring-daemon is not installed; Secret Service is unavailable");
-        return;
-    };
-
-    match Command::new(&binary)
-        .arg("--start")
-        .arg("--components=secrets")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-    {
-        Ok(status) if status.success() => {
-            info!("started Secret Service provider");
-        }
-        Ok(status) => {
-            warn!(%status, path = %binary.display(), "Secret Service provider exited unsuccessfully");
-        }
-        Err(error) => {
-            warn!(%error, path = %binary.display(), "failed to start Secret Service provider");
-        }
-    }
-}
-
 fn start_portal_broker() {
     let Some(binary) =
         find_known_program("xdg-desktop-portal", &["/usr/libexec/xdg-desktop-portal"])
@@ -107,8 +78,6 @@ fn start_policykit_agent() {
 
 fn policykit_agent() -> Option<PathBuf> {
     [
-        "/usr/libexec/polkit-gnome-authentication-agent-1",
-        "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1",
         "/usr/libexec/polkit-kde-authentication-agent-1",
         "/usr/lib64/libexec/polkit-kde-authentication-agent-1",
         "/usr/bin/lxpolkit",
