@@ -7,7 +7,7 @@ use smithay::{
     delegate_output, delegate_pointer_gestures, delegate_presentation, delegate_primary_selection,
     delegate_relative_pointer, delegate_seat, delegate_shm, delegate_single_pixel_buffer,
     delegate_text_input_manager, delegate_viewporter, delegate_xdg_activation,
-    delegate_xdg_decoration, delegate_xdg_foreign, delegate_xdg_shell, delegate_xdg_toplevel_icon,
+    delegate_xdg_decoration, delegate_xdg_foreign, delegate_xdg_shell,
     desktop::PopupKind,
     input::{
         Seat, SeatHandler,
@@ -64,6 +64,8 @@ use std::os::unix::io::OwnedFd;
 use tracing::debug;
 
 mod xdg;
+mod toplevel_icon;
+pub use toplevel_icon::{ToplevelIconGlobal, toplevel_icon_for_surface};
 use self::xdg::configure_existing_popup;
 
 impl BufferHandler for KestrelState {
@@ -305,7 +307,6 @@ delegate_keyboard_shortcuts_inhibit!(KestrelState);
 delegate_relative_pointer!(KestrelState);
 delegate_pointer_gestures!(KestrelState);
 delegate_xdg_activation!(KestrelState);
-delegate_xdg_toplevel_icon!(KestrelState);
 delegate_cursor_shape!(KestrelState);
 delegate_fractional_scale!(KestrelState);
 delegate_viewporter!(KestrelState);
@@ -322,6 +323,7 @@ delegate_primary_selection!(KestrelState);
 delegate_ext_data_control!(KestrelState);
 delegate_alpha_modifier!(KestrelState);
 delegate_single_pixel_buffer!(KestrelState);
+
 #[cfg(feature = "session-backend")]
 delegate_drm_syncobj!(KestrelState);
 

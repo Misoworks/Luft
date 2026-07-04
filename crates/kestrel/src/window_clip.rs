@@ -107,7 +107,6 @@ fn append_window_elements(
                 .max(1.0) as i32,
         )),
     );
-    append_popup_elements(renderer, window, transform, surface_offset, elements);
     elements.extend(
         render_elements_from_surface_tree(
             renderer,
@@ -127,6 +126,7 @@ fn append_window_elements(
             RoundedWindowElement::new(element, clip, radius)
         }),
     );
+    append_popup_elements(renderer, window, transform, surface_offset, elements);
 }
 
 fn append_popup_elements(
@@ -145,15 +145,6 @@ fn append_popup_elements(
                 + (window.titlebar_height() + popup_surface_offset.y) as f64 * transform.scale)
                 .round() as i32,
         ));
-        let popup_size = Size::<i32, Physical>::from((
-            (popup_geometry.size.w as f64 * transform.scale)
-                .round()
-                .max(1.0) as i32,
-            (popup_geometry.size.h as f64 * transform.scale)
-                .round()
-                .max(1.0) as i32,
-        ));
-        let popup_clip = Rectangle::<i32, Physical>::new(popup_location, popup_size);
         elements.extend(
             render_elements_from_surface_tree(
                 renderer,
@@ -164,8 +155,9 @@ fn append_popup_elements(
                 Kind::Unspecified,
             )
             .into_iter()
-            .map(|element| {
-                RoundedWindowElement::new_with_shape(element, popup_clip, ClipShape::Rect)
+            .map(|element: WaylandSurfaceRenderElement<GlesRenderer>| {
+                let clip = element.geometry(Scale::from(1.0));
+                RoundedWindowElement::new_with_shape(element, clip, ClipShape::Rect)
             }),
         );
     }

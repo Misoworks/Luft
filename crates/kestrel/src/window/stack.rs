@@ -7,7 +7,6 @@ use luft_ipc::{Rect, WindowId, WorkspaceId};
 use smithay::{
     desktop::PopupManager,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Logical, Size},
     wayland::shell::xdg::ToplevelSurface,
 };
 
@@ -146,11 +145,6 @@ impl WindowStack {
 
         window.initial_size_pending = pending;
         true
-    }
-
-    pub fn committed_surface_size(&self, id: WindowId) -> Option<Size<i32, Logical>> {
-        let geometry = self.window(id)?.committed_surface_geometry()?;
-        (geometry.size.w > 0 && geometry.size.h > 0).then_some(geometry.size)
     }
 
     pub fn id_for_surface(&self, surface: &ToplevelSurface) -> Option<WindowId> {

@@ -1780,6 +1780,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "luft-portal"
+version = "0.1.0"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+ "zbus",
+ "zvariant",
+]
+
+[[package]]
 name = "luft-session"
 version = "0.1.0"
 dependencies = [

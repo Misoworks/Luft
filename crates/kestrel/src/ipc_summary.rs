@@ -1,3 +1,4 @@
+use crate::protocols::toplevel_icon_for_surface;
 use crate::state::KestrelState;
 use luft_ipc::{OutputSummary, StatusPayload, WindowState, WindowSummary, WorkspaceSummary};
 use smithay::wayland::{
@@ -28,6 +29,7 @@ pub fn window_summaries(state: &KestrelState) -> Vec<WindowSummary> {
         .map(|managed| {
             let info = state.layout.window(managed.id);
             let metadata = window_metadata(&managed.surface);
+            let toplevel_icon = toplevel_icon_for_surface(managed.surface.wl_surface());
             WindowSummary {
                 id: managed.id,
                 title: metadata
@@ -47,6 +49,8 @@ pub fn window_summaries(state: &KestrelState) -> Vec<WindowSummary> {
                 is_active: active == Some(managed.id),
                 is_visible: &managed.workspace == state.layout.active_workspace()
                     && !managed.hidden,
+                icon_uri: toplevel_icon.uri,
+                icon_name: toplevel_icon.name,
             }
         })
         .collect()

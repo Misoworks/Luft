@@ -21,8 +21,8 @@ pub fn start(wayland_display: &str, x11_display: Option<&str>) {
         return;
     }
 
+    start_luft_portal();
     start_portal_broker();
-    start_policykit_agent();
 }
 
 pub fn sync_activation_environment(wayland_display: &str, x11_display: Option<&str>) {
@@ -46,12 +46,31 @@ pub fn sync_activation_environment(wayland_display: &str, x11_display: Option<&s
     if let Some(display) = x11_display {
         entries.push(format!("DISPLAY={display}"));
     }
+    if let Some(address) = env::var_os("DBUS_SESSION_BUS_ADDRESS") {
+        entries.push(format!(
+            "DBUS_SESSION_BUS_ADDRESS={}",
+            address.to_string_lossy()
+        ));
+    }
+    if let Some(runtime_dir) = env::var_os("XDG_RUNTIME_DIR") {
+        entries.push(format!("XDG_RUNTIME_DIR={}", runtime_dir.to_string_lossy()));
+    }
 
     if update_activation_environment(&binary, &entries, true)
         || update_activation_environment(&binary, &entries, false)
     {
         debug!("updated D-Bus activation environment");
     }
+}
+
+fn start_luft_portal() {
+    let Some(binary) = luft_portal_binary() else {
+        warn!("luft-portal is not installed; portal Settings will be unavailable");
+        return;
+    };
+
+    let mut command = Command::new(binary);
+    spawn_session_helper("luft-portal", &mut command);
 }
 
 fn start_portal_broker() {
@@ -66,29 +85,21 @@ fn start_portal_broker() {
     spawn_session_helper("xdg-desktop-portal", &mut command);
 }
 
-fn start_policykit_agent() {
-    let Some(binary) = policykit_agent() else {
-        debug!("no PolicyKit authentication agent is installed");
-        return;
-    };
+fn luft_portal_binary() -> Option<PathBuf> {
+    if let Some(path) = env::var_os("LUFT_PORTAL") {
+        let path = PathBuf::from(path);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
 
-    let mut command = Command::new(binary);
-    spawn_session_helper("PolicyKit authentication agent", &mut command);
+    find_in_path("luft-portal").or_else(sibling_binary)
 }
 
-fn policykit_agent() -> Option<PathBuf> {
-    [
-        "/usr/libexec/polkit-kde-authentication-agent-1",
-        "/usr/lib64/libexec/polkit-kde-authentication-agent-1",
-        "/usr/bin/lxpolkit",
-        "/usr/libexec/lxqt-policykit-agent",
-        "/usr/bin/lxqt-policykit-agent",
-        "/usr/lib/mate-polkit/polkit-mate-authentication-agent-1",
-        "/usr/libexec/xfce-polkit",
-    ]
-    .into_iter()
-    .map(PathBuf::from)
-    .find(|path| path.is_file())
+fn sibling_binary() -> Option<PathBuf> {
+    let mut path = env::current_exe().ok()?;
+    path.set_file_name("luft-portal");
+    path.is_file().then_some(path)
 }
 
 fn spawn_session_helper(label: &'static str, command: &mut Command) {

@@ -6,8 +6,8 @@ use super::{
 use crate::{
     background::Background,
     background_effect,
-    compositor_damage::{CompositorDamageContext, CompositorDamagePlan, plan_compositor_damage},
-    damage::{DamageTracker, LayerGeometryTracker},
+    compositor_damage::{CompositorDamageContext, plan_compositor_damage},
+    damage::{DamageTracker, LayerGeometryTracker, resolve_render_damage},
     frame_clock::FrameClock,
     frame_clock::FrameTime,
     layers,
@@ -116,7 +116,7 @@ impl SessionFrameRenderer {
             self.shell_layers_seen_ready = true;
         }
         let workspace_transition_active = state.workspace_transition().is_some();
-        let scene_dirty = state.take_scene_dirty();
+        let scene_dirty = state.scene_dirty();
         let visible_popups = state.has_visible_popups();
         let popup_visibility_changed =
             std::mem::replace(&mut self.visible_popups, visible_popups) != visible_popups;
@@ -231,40 +231,52 @@ impl SessionFrameRenderer {
         })?;
         let force_scene_full_damage = force_full_damage
             || self.previous_frame_direct
-            || show_loading
-            || workspace_transition_active
-            || layer_geometry_changed;
-        let CompositorDamagePlan {
-            damage,
-            blur_damage,
-            ..
-        } = plan_compositor_damage(
-            CompositorDamageContext {
-                output_size: state.output_size(),
-                output: state.output(),
-                buffer_age: usize::from(buffer_age),
-                force_full_damage: force_scene_full_damage,
-                blur_animating,
-                window_effect_targets: &window_effect_targets,
-                top_targets: &top_targets,
-                overlay_targets: &overlay_targets,
-                background: background_element.as_ref(),
-                background_layer: &background_layer,
-                bottom_layer: &bottom_layer,
-                windows: &windows,
-                window_chrome: &window_chrome,
-                top_layer: &top_layer,
-                overlay_layer: &overlay_layer,
-                loading: loading_overlay.as_ref(),
-            },
-            &mut self.damage_tracker,
-            &mut self.blur_damage_tracker,
-            &mut self.layer_geometry,
+            || workspace_transition_active;
+        let mut plan_damage = |buffer_age: usize, force_full: bool| {
+            plan_compositor_damage(
+                CompositorDamageContext {
+                    output_size: state.output_size(),
+                    output: state.output(),
+                    buffer_age,
+                    force_full_damage: force_full,
+                    blur_animating,
+                    window_effect_targets: &window_effect_targets,
+                    top_targets: &top_targets,
+                    overlay_targets: &overlay_targets,
+                    background: background_element.as_ref(),
+                    background_layer: &background_layer,
+                    bottom_layer: &bottom_layer,
+                    windows: &windows,
+                    window_chrome: &window_chrome,
+                    top_layer: &top_layer,
+                    overlay_layer: &overlay_layer,
+                    loading: loading_overlay.as_ref(),
+                },
+                &mut self.damage_tracker,
+                &mut self.blur_damage_tracker,
+                &mut self.layer_geometry,
+            )
+        };
+        let mut plan_buffer_age = usize::from(buffer_age);
+        let mut compositor_plan = plan_damage(plan_buffer_age, force_scene_full_damage);
+        let mut damage = resolve_render_damage(
+            state.output_size(),
+            u32::try_from(plan_buffer_age).unwrap_or(u32::MAX),
+            force_scene_full_damage,
+            compositor_plan.damage,
         );
+        if damage.is_none() && scene_dirty {
+            compositor_plan = plan_damage(0, false);
+            damage = resolve_render_damage(state.output_size(), 0, false, compositor_plan.damage);
+        }
+        let Some(damage) = damage else {
+            return Ok(FrameResult::Idle);
+        };
+        let blur_damage = compositor_plan.blur_damage;
+        state.take_scene_dirty();
 
-        if !damage.is_empty() {
-            let output_size = state.output_size();
-            render_scene(
+        let output_size = state.output_size();
+        render_scene(
                 &mut self.blur_cache,
                 renderer,
                 &mut framebuffer,
@@ -288,20 +300,17 @@ impl SessionFrameRenderer {
                 },
             )
             .map_err(render_error)?;
-            drop(framebuffer);
-            surface
-                .queue_buffer(None, Some(damage.clone()), ())
-                .map_err(|error| {
-                    DrmError::Unsupported(format!("failed to queue DRM frame: {error}"))
-                })?;
-            self.previous_frame_direct = false;
-            return Ok(FrameResult::Queued {
-                submitted: SubmittedFrame::Composited,
-                callback_surfaces: state.frame_callback_surfaces(),
-            });
-        }
-
-        Ok(FrameResult::Idle)
+        drop(framebuffer);
+        surface
+            .queue_buffer(None, Some(damage.clone()), ())
+            .map_err(|error| {
+                DrmError::Unsupported(format!("failed to queue DRM frame: {error}"))
+            })?;
+        self.previous_frame_direct = false;
+        return Ok(FrameResult::Queued {
+            submitted: SubmittedFrame::Composited,
+            callback_surfaces: state.frame_callback_surfaces(),
+        });
     }
 
     pub fn mark_shell_not_ready(&mut self) {

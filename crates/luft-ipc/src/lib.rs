@@ -220,4 +220,6 @@ pub struct WindowSummary {
     pub geometry: Rect,
     pub is_active: bool,
     pub is_visible: bool,
+    pub icon_uri: Option<String>,
+    pub icon_name: Option<String>,
 }

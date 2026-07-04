@@ -36,7 +36,8 @@ type NativePopupControls = {
     y: number;
     width: number;
     height: number;
-    html: string;
+    html?: string;
+    url?: string;
   }) => void | Promise<unknown>;
   close?: () => void | Promise<unknown>;
 };

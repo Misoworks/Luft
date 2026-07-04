@@ -4,9 +4,32 @@ use std::{
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
 };
+use luft_ipc::WindowSummary;
 
 static ICON_URI_CACHE: OnceLock<Mutex<HashMap<PathBuf, Option<String>>>> = OnceLock::new();
 const BASE64_TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+pub fn window_icon_uri(window: &WindowSummary) -> Option<String> {
+    window
+        .icon_uri
+        .clone()
+        .or_else(|| {
+            window
+                .icon_name
+                .as_deref()
+                .and_then(|icon| crate::apps::resolve_icon_path(Some(icon)))
+                .as_deref()
+                .and_then(icon_data_uri)
+        })
+        .or_else(|| {
+            window
+                .app_id
+                .as_deref()
+                .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
+                .as_deref()
+                .and_then(icon_data_uri)
+        })
+}
 
 pub fn icon_data_uri(path: &Path) -> Option<String> {
     let cache = ICON_URI_CACHE.get_or_init(|| Mutex::new(HashMap::new()));

@@ -3,6 +3,7 @@ members = [
     "crates/kestrel",
     "crates/luft-config",
     "crates/luft-ipc",
+    "crates/luft-portal",
     "crates/luft-session",
     "crates/luft-shell",
 ]

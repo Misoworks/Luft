@@ -48,7 +48,6 @@ impl KestrelState {
         self.popup_manager.cleanup();
     }
 
-    #[cfg(feature = "session-backend")]
     pub fn has_visible_popups(&self) -> bool {
         self.windows.iter().any(|window| {
             PopupManager::popups_for_surface(window.surface.wl_surface())

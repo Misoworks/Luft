@@ -14,7 +14,7 @@ The session backend opens the active seat through libseat, selects the primary D
 
 Fullscreen Wayland clients can be scanned out directly on the primary plane when there are no visible shell/effect layers and KMS accepts the client framebuffer. Otherwise Kestrel falls back to normal composition.
 
-Install `data/xdg-desktop-portal/luft-portals.conf` to `/usr/share/xdg-desktop-portal/luft-portals.conf` or `/etc/xdg/xdg-desktop-portal/luft-portals.conf` so the portal broker uses Luft's explicit backend preferences instead of a desktop-specific fallback.
+Install `data/xdg-desktop-portal/luft-portals.conf` to `/usr/share/xdg-desktop-portal/luft-portals.conf` or `/etc/xdg/xdg-desktop-portal/luft-portals.conf` so the portal broker routes to Luft's own backend. Kestrel starts `luft-portal` before `xdg-desktop-portal`.
 
 Viewport-aware scene rendering on non-primary outputs and cursor/overlay plane assignment are the remaining KMS work.
 

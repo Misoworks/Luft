@@ -6,7 +6,7 @@ The workspace uses Rust and Bun. The shell UI is built with the shared Fenestra 
 
 For X11 application support, install `xwayland-satellite` and `Xwayland`. Luft starts the satellite process automatically when `compositor.xwayland = true`.
 
-The DRM/KMS backend requires libseat and graphics/input development packages. On Fedora, install `libseat-devel`, `systemd-devel`, `mesa-libgbm-devel`, `mesa-libEGL-devel`, `mesa-libGLES-devel`, `libxkbcommon-devel`, `libudev-devel`, `libinput-devel`, `xwayland-satellite`, `xorg-x11-server-Xwayland`, `xdg-desktop-portal`, and a PolicyKit agent such as `lxpolkit`, `lxqt-policykit-agent`, `xfce-polkit`, or KDE's polkit agent. On Arch-based systems, install `seatd`. On Debian/Ubuntu-style systems, install `libseat-dev`.
+The DRM/KMS backend requires libseat and graphics/input development packages. On Fedora, install `libseat-devel`, `systemd-devel`, `mesa-libgbm-devel`, `mesa-libEGL-devel`, `mesa-libGLES-devel`, `libxkbcommon-devel`, `libudev-devel`, `libinput-devel`, `xwayland-satellite`, `xorg-x11-server-Xwayland`, and `xdg-desktop-portal`. On Arch-based systems, install `seatd`. On Debian/Ubuntu-style systems, install `libseat-dev`.
 
 For a complete login session, install `dbus-run-session`, `dbus-update-activation-environment`, and a PolicyKit authentication agent.
 

@@ -3,7 +3,7 @@ use crate::{
     output::{NestedOutput, OutputDescriptor, OutputGraph},
     protocol_state::ProtocolState,
     titlebar::TitlebarCache,
-    window::{WindowGrab, WindowStack},
+    window::{WindowGrab, WindowStack, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH},
     workspace_transition::WorkspaceTransition,
 };
 use luft_config::LuftConfig;
@@ -213,9 +213,19 @@ impl KestrelState {
         if !self.windows.initial_size_pending(id) {
             return false;
         }
-        let Some(size) = self.windows.committed_surface_size(id) else {
+        let Some(window) = self.windows.window(id) else {
             return false;
         };
+        let Some(geometry) = window.committed_surface_geometry() else {
+            return false;
+        };
+        let size = smithay::utils::Size::<i32, Logical>::from((
+            geometry.size.w.max(MIN_WINDOW_WIDTH),
+            geometry.size.h.max(MIN_WINDOW_HEIGHT),
+        ));
+        if size.w < MIN_WINDOW_WIDTH || size.h < MIN_WINDOW_HEIGHT {
+            return false;
+        }
 
         let geometry = self
             .windows

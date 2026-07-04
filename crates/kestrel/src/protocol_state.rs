@@ -1,6 +1,6 @@
 use crate::{
-    background_effect::BackgroundEffectGlobal, state::KestrelState,
-    vicinae_hotkey::VicinaeHotkeyState,
+    background_effect::BackgroundEffectGlobal, protocols::ToplevelIconGlobal,
+    state::KestrelState, vicinae_hotkey::VicinaeHotkeyState,
 };
 #[cfg(feature = "session-backend")]
 use smithay::wayland::{dmabuf::DmabufGlobal, drm_syncobj::DrmSyncobjState};
@@ -16,7 +16,7 @@ use smithay::{
         relative_pointer::RelativePointerManagerState, shell::xdg::decoration::XdgDecorationState,
         single_pixel_buffer::SinglePixelBufferState, text_input::TextInputManagerState,
         viewporter::ViewporterState, xdg_activation::XdgActivationState,
-        xdg_foreign::XdgForeignState, xdg_toplevel_icon::XdgToplevelIconManager,
+        xdg_foreign::XdgForeignState,
     },
 };
 
@@ -34,7 +34,7 @@ pub struct ProtocolState {
     _cursor_shape: CursorShapeManagerState,
     _fractional_scale: FractionalScaleManagerState,
     _viewporter: ViewporterState,
-    _xdg_toplevel_icon: XdgToplevelIconManager,
+    _toplevel_icon: ToplevelIconGlobal,
     _text_input: TextInputManagerState,
     _presentation: PresentationState,
     _output: OutputManagerState,
@@ -48,11 +48,6 @@ pub struct ProtocolState {
 
 impl ProtocolState {
     pub fn new(display: &DisplayHandle) -> Self {
-        let mut xdg_toplevel_icon = XdgToplevelIconManager::new::<KestrelState>(display);
-        for size in [16, 24, 32, 48, 64, 128] {
-            xdg_toplevel_icon.add_icon_size(size);
-        }
-
         Self {
             xdg_activation: XdgActivationState::new::<KestrelState>(display),
             xdg_foreign: XdgForeignState::new::<KestrelState>(display),
@@ -67,7 +62,7 @@ impl ProtocolState {
             _cursor_shape: CursorShapeManagerState::new::<KestrelState>(display),
             _fractional_scale: FractionalScaleManagerState::new::<KestrelState>(display),
             _viewporter: ViewporterState::new::<KestrelState>(display),
-            _xdg_toplevel_icon: xdg_toplevel_icon,
+            _toplevel_icon: ToplevelIconGlobal::new(display),
             _text_input: TextInputManagerState::new::<KestrelState>(display),
             _presentation: PresentationState::new::<KestrelState>(
                 display,

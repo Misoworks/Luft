@@ -3,8 +3,8 @@ use crate::{
     background::Background,
     background_effect,
     client::ClientState,
-    compositor_damage::{CompositorDamageContext, CompositorDamagePlan, plan_compositor_damage},
-    damage::{DamageTracker, LayerGeometryTracker},
+    compositor_damage::{CompositorDamageContext, plan_compositor_damage},
+    damage::{DamageTracker, LayerGeometryTracker, resolve_render_damage},
     frame_clock::{FrameClock, send_surface_frame_tree},
     input::handle_input_event,
     ipc::IpcServer,
@@ -33,7 +33,6 @@ use smithay::{
         wayland_server::{Display, ListeningSocket},
         winit::platform::pump_events::PumpStatus,
     },
-    utils::{Physical, Rectangle},
     wayland::shell::wlr_layer::Layer,
 };
 use std::{
@@ -92,6 +91,7 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
     let session_started = Instant::now();
     let mut blur_cache = SceneBlurCache::default();
     let mut shell_layers_seen_ready = false;
+    let mut visible_popups = state.has_visible_popups();
 
     println!("Kestrel nested compositor is running");
     println!("WAYLAND_DISPLAY={socket_name}");
@@ -233,11 +233,15 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
             shell_layers_seen_ready = true;
         }
         let workspace_transition_active = state.workspace_transition().is_some();
-        let scene_dirty = state.take_scene_dirty();
+        let scene_dirty = state.scene_dirty();
+        let current_popups = state.has_visible_popups();
+        let popup_visibility_changed =
+            std::mem::replace(&mut visible_popups, current_popups) != current_popups;
         let layer_geometry_changed = layer_geometry
             .geometry_changed(output.size, &layers::layer_surface_rects(state.output()));
         let content_render_needed = force_full_damage
             || scene_dirty
+            || popup_visibility_changed
             || layer_geometry_changed
             || removed_windows
             || finished_window_closes
@@ -250,81 +254,74 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
         }
 
         let buffer_age = backend.buffer_age().unwrap_or_default();
-        let mut rendered = false;
-        let mut submit_damage: Vec<Rectangle<i32, Physical>> = Vec::new();
-        {
-            let (renderer, mut framebuffer) = backend.bind()?;
-            let fullscreen_active = state
-                .windows
-                .fullscreen_on_workspace(state.layout.active_workspace())
-                .is_some();
-            let mut top_targets = if fullscreen_active {
-                Vec::new()
-            } else {
-                layers::render_targets(state.output(), Layer::Top)
-            };
-            if !fullscreen_active {
-                top_targets.extend(background_effect::layer_popup_blur_targets(
-                    &state,
-                    Layer::Top,
-                ));
-            }
-            let mut overlay_targets = if fullscreen_active {
-                Vec::new()
-            } else {
-                layers::render_targets(state.output(), Layer::Overlay)
-            };
-            if !fullscreen_active {
-                overlay_targets.extend(background_effect::layer_popup_blur_targets(
-                    &state,
-                    Layer::Overlay,
-                ));
-            }
-            let background_element = background.render_element(renderer, output.size)?;
-            let background_layer =
-                render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Background));
-            let bottom_layer =
-                render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Bottom));
-            let window_effect_targets = background_effect::window_blur_targets(&state);
-            let mut blur_targets = window_effect_targets.clone();
-            blur_targets.extend(top_targets.iter().cloned());
-            blur_targets.extend(overlay_targets.iter().cloned());
-            blur_cache.retain_targets(&blur_targets);
-            let blur_animating = blur_cache.is_animating();
-            let windows = window_elements(renderer, &state);
-            let window_chrome = window_chrome_elements(renderer, &state)?;
-            let top_layer = if fullscreen_active {
-                Vec::new()
-            } else {
-                render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Top))
-            };
-            let overlay_layer = if fullscreen_active {
-                Vec::new()
-            } else {
-                render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Overlay))
-            };
-            let loading_overlay = if show_loading {
-                Some(render_loading_overlay(
-                    renderer,
-                    output.size,
-                    loading_phase(session_started.elapsed()),
-                )?)
-            } else {
-                None
-            };
-            let CompositorDamagePlan {
-                damage,
-                blur_damage,
-                ..
-            } = plan_compositor_damage(
+        let (renderer, mut framebuffer) = backend.bind()?;
+        let fullscreen_active = state
+            .windows
+            .fullscreen_on_workspace(state.layout.active_workspace())
+            .is_some();
+        let mut top_targets = if fullscreen_active {
+            Vec::new()
+        } else {
+            layers::render_targets(state.output(), Layer::Top)
+        };
+        if !fullscreen_active {
+            top_targets.extend(background_effect::layer_popup_blur_targets(
+                &state,
+                Layer::Top,
+            ));
+        }
+        let mut overlay_targets = if fullscreen_active {
+            Vec::new()
+        } else {
+            layers::render_targets(state.output(), Layer::Overlay)
+        };
+        if !fullscreen_active {
+            overlay_targets.extend(background_effect::layer_popup_blur_targets(
+                &state,
+                Layer::Overlay,
+            ));
+        }
+        let background_element = background.render_element(renderer, output.size)?;
+        let background_layer =
+            render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Background));
+        let bottom_layer =
+            render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Bottom));
+        let window_effect_targets = background_effect::window_blur_targets(&state);
+        let mut blur_targets = window_effect_targets.clone();
+        blur_targets.extend(top_targets.iter().cloned());
+        blur_targets.extend(overlay_targets.iter().cloned());
+        blur_cache.retain_targets(&blur_targets);
+        let blur_animating = blur_cache.is_animating();
+        let windows = window_elements(renderer, &state);
+        let window_chrome = window_chrome_elements(renderer, &state)?;
+        let top_layer = if fullscreen_active {
+            Vec::new()
+        } else {
+            render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Top))
+        };
+        let overlay_layer = if fullscreen_active {
+            Vec::new()
+        } else {
+            render_stage_elements(renderer, &state, RenderStage::Layer(Layer::Overlay))
+        };
+        let loading_overlay = if show_loading {
+            Some(render_loading_overlay(
+                renderer,
+                output.size,
+                loading_phase(session_started.elapsed()),
+            )?)
+        } else {
+            None
+        };
+        let force_scene_full_damage =
+            force_full_damage || workspace_transition_active;
+        let mut plan_damage = |buffer_age: usize, force_full: bool| {
+            plan_compositor_damage(
                 CompositorDamageContext {
                     output_size: output.size,
                     output: state.output(),
                     buffer_age,
-                    force_full_damage: force_full_damage
-                        || show_loading
-                        || workspace_transition_active
-                        || layer_geometry_changed,
+                    force_full_damage: force_full,
                     blur_animating,
                     window_effect_targets: &window_effect_targets,
                     top_targets: &top_targets,
@@ -341,47 +338,58 @@ pub fn run(options: NestedOptions) -> Result<(), NestedError> {
                 &mut damage_tracker,
                 &mut blur_damage_tracker,
                 &mut layer_geometry,
-            );
-            if !damage.is_empty() {
-                submit_damage = damage.clone();
-                render_scene(
-                    &mut blur_cache,
-                    renderer,
-                    &mut framebuffer,
-                    SceneRenderRequest {
-                        state: &state,
-                        output_size: output.size,
-                        target_transform: state.output_transform(),
-                        damage: &damage,
-                        blur_damage: &blur_damage,
-                        background: background_element,
-                        background_layer: &background_layer,
-                        bottom_layer: &bottom_layer,
-                        windows: &windows,
-                        window_chrome: &window_chrome,
-                        window_targets: &window_effect_targets,
-                        top_targets: &top_targets,
-                        top_layer: &top_layer,
-                        overlay_targets: &overlay_targets,
-                        overlay_layer: &overlay_layer,
-                        loading: loading_overlay,
-                    },
-                )?;
-                rendered = true;
-            }
+            )
+        };
+        let mut compositor_plan = plan_damage(buffer_age, force_scene_full_damage);
+        let mut damage = resolve_render_damage(
+            output.size,
+            u32::try_from(buffer_age).unwrap_or(u32::MAX),
+            force_scene_full_damage,
+            compositor_plan.damage,
+        );
+        if damage.is_none() && scene_dirty {
+            compositor_plan = plan_damage(0, false);
+            damage = resolve_render_damage(output.size, 0, false, compositor_plan.damage);
         }
-
-        if rendered {
-            let frame_time = frame_clock.next_frame();
-            for surface in state.frame_callback_surfaces() {
-                send_surface_frame_tree(state.output(), &surface, frame_time);
-            }
-
-            backend.submit(Some(&submit_damage))?;
-            pace_frame(frame_started, frame_interval);
-        } else {
+        let Some(damage) = damage else {
             idle_wait();
+            continue;
+        };
+        let blur_damage = compositor_plan.blur_damage;
+        state.take_scene_dirty();
+        let submit_damage = damage.clone();
+        render_scene(
+            &mut blur_cache,
+            renderer,
+            &mut framebuffer,
+            SceneRenderRequest {
+                state: &state,
+                output_size: output.size,
+                target_transform: state.output_transform(),
+                damage: &damage,
+                blur_damage: &blur_damage,
+                background: background_element,
+                background_layer: &background_layer,
+                bottom_layer: &bottom_layer,
+                windows: &windows,
+                window_chrome: &window_chrome,
+                window_targets: &window_effect_targets,
+                top_targets: &top_targets,
+                top_layer: &top_layer,
+                overlay_targets: &overlay_targets,
+                overlay_layer: &overlay_layer,
+                loading: loading_overlay,
+            },
+        )?;
+        drop(framebuffer);
+
+        let frame_time = frame_clock.next_frame();
+        for surface in state.frame_callback_surfaces() {
+            send_surface_frame_tree(state.output(), &surface, frame_time);
         }
+
+        backend.submit(Some(&submit_damage))?;
+        pace_frame(frame_started, frame_interval);
     }
 }
 

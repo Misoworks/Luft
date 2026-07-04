@@ -8,7 +8,7 @@ license.workspace = true
 bitflags.workspace = true
 calloop.workspace = true
 clap.workspace = true
-image = { version = "0.25.10", default-features = false, features = ["jpeg"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 input = { workspace = true, optional = true }
 smithay.workspace = true
 luft-config.workspace = true

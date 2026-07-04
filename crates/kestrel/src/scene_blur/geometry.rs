@@ -139,16 +139,16 @@ pub(super) fn blur_texture_size(
 
 fn blur_downscale(target: &LayerRenderTarget, width: i32, height: i32) -> i32 {
     if target.blur_layer != BlurLayer::Window {
-        2
+        return 2;
+    }
+
+    let area = width.saturating_mul(height);
+    if area >= 420_000 {
+        8
+    } else if area >= 120_000 {
+        6
     } else {
-        let area = width.saturating_mul(height);
-        if area >= 420_000 {
-            12
-        } else if area >= 120_000 {
-            10
-        } else {
-            7
-        }
+        4
     }
 }
 

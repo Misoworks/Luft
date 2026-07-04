@@ -53,12 +53,18 @@ impl SceneBlurCache {
                 .iter()
                 .find(|target| target.size.w > 1 && target.size.h > 1 && entry.matches(target))
             {
-                if entry.location != target.location || entry.target_opacity != target.opacity {
-                    self.animating = true;
-                    entry.rect = Rectangle::<i32, Physical>::new((0, 0).into(), (0, 0).into());
+                let location_moved = entry.location != target.location;
+                let opacity_changed =
+                    (entry.target_opacity - target.opacity).abs() > f32::EPSILON;
+                if location_moved {
+                    entry.rect =
+                        Rectangle::<i32, Physical>::new((0, 0).into(), (0, 0).into());
                 }
                 entry.location = target.location;
                 entry.target_opacity = target.opacity;
+                if opacity_changed && !location_moved {
+                    self.animating = true;
+                }
             }
         }
         self.entries

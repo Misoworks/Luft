@@ -315,6 +315,12 @@ fn apply_app_environment(command: &mut Command, xwayland_display: Option<&str>) 
     for (name, value) in cursor_environment_entries() {
         command.env(name, value);
     }
+    if let Some(address) = env::var_os("DBUS_SESSION_BUS_ADDRESS") {
+        command.env("DBUS_SESSION_BUS_ADDRESS", address);
+    }
+    if let Some(runtime_dir) = env::var_os("XDG_RUNTIME_DIR") {
+        command.env("XDG_RUNTIME_DIR", runtime_dir);
+    }
     command.env_remove("WAYLAND_DISPLAY");
     if let Some(display) = luft_wayland_display() {
         command.env("WAYLAND_DISPLAY", display);

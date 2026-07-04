@@ -1,4 +1,4 @@
-use super::{icons::icon_data_uri, palette::WebPalette};
+use super::{icons::{icon_data_uri, window_icon_uri}, palette::WebPalette};
 use crate::services::{
     notifications::{NotificationItem, NotificationUrgency},
     system_status::{AudioInfo, BatteryInfo, BrightnessInfo, NetworkInfo, SystemStatus},
@@ -74,12 +74,7 @@ impl From<&WindowSummary> for WebWindow {
                 .or_else(|| window.app_id.clone())
                 .unwrap_or_else(|| "Window".to_string()),
             app_id: window.app_id.clone(),
-            icon_uri: window
-                .app_id
-                .as_deref()
-                .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
-                .as_deref()
-                .and_then(icon_data_uri),
+            icon_uri: window_icon_uri(window),
             workspace: window.workspace.0.clone(),
             geometry: WebGeometry {
                 x: window.geometry.x,

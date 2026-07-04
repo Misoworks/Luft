@@ -4,9 +4,9 @@ This list tracks protocol and service work needed for ordinary apps to behave li
 
 ## Portals
 
-- Own portal backend: screenshot, screencast, remote desktop, settings, wallpaper, and background app policy should be provided by a Luft backend when those features are ready.
-- File chooser: the current portal preference allows Rover's portal backend as a temporary bridge.
-- Secret service: Luft does not start a provider. Add a shell-owned unlock flow or prefer a non-desktop-specific provider later.
+- Own portal backend: screenshot, screencast, remote desktop, file chooser, wallpaper, and background app policy should grow in `luft-portal` as Luft-owned implementations.
+- Settings: `luft-portal` provides `org.freedesktop.impl.portal.Settings` so toolkits and Electron apps can read appearance preferences without GNOME/KDE backends.
+- Secret service: add a Luft-owned provider later; do not depend on KWallet or GNOME Keyring.
 - Permission store: rely on the portal broker for now; replace only when Luft owns a complete portal backend.
 
 ## Frame Pacing

@@ -5,6 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 SESSION_DIR="${SESSION_DIR:-/usr/share/wayland-sessions}"
 PORTAL_DIR="${PORTAL_DIR:-/usr/share/xdg-desktop-portal}"
+DBUS_SERVICE_DIR="${DBUS_SERVICE_DIR:-/usr/share/dbus-1/services}"
 PROFILE="${PROFILE:-release}"
 
 if [[ "$PROFILE" != "release" && "$PROFILE" != "debug" ]]; then
@@ -43,6 +44,7 @@ cargo build "${build_args[@]}" \
   -p kestrel \
   -p luft-shell \
   -p luft-session \
+  -p luft-portal \
   --features kestrel/session-backend
 
 "$target_dir/luft-shell" --refresh-fenestra-host
@@ -50,9 +52,11 @@ cargo build "${build_args[@]}" \
 "${SUDO[@]}" install -Dm755 "$target_dir/kestrel" "$BIN_DIR/kestrel"
 "${SUDO[@]}" install -Dm755 "$target_dir/luft-shell" "$BIN_DIR/luft-shell"
 "${SUDO[@]}" install -Dm755 "$target_dir/luft-session" "$BIN_DIR/luft-session"
+"${SUDO[@]}" install -Dm755 "$target_dir/luft-portal" "$BIN_DIR/luft-portal"
 
 desktop_entry="$(mktemp)"
-trap 'rm -f "$desktop_entry"' EXIT
+portal_service="$(mktemp)"
+trap 'rm -f "$desktop_entry" "$portal_service"' EXIT
 cat >"$desktop_entry" <<EOF
 [Desktop Entry]
 Name=Luft
@@ -68,10 +72,24 @@ EOF
 "${SUDO[@]}" install -Dm644 \
   "$ROOT/data/xdg-desktop-portal/luft-portals.conf" \
   "$PORTAL_DIR/luft-portals.conf"
+"${SUDO[@]}" install -Dm644 \
+  "$ROOT/data/xdg-desktop-portal/portals/luft.portal" \
+  "$PORTAL_DIR/portals/luft.portal"
+
+portal_service="$(mktemp)"
+cat >"$portal_service" <<EOF
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.luft
+Exec=$BIN_DIR/luft-portal
+EOF
+"${SUDO[@]}" install -Dm644 \
+  "$portal_service" \
+  "$DBUS_SERVICE_DIR/org.freedesktop.impl.portal.desktop.luft.service"
 
 echo "Installed Luft session:"
 echo "  binaries: $BIN_DIR"
 echo "  session:  $SESSION_DIR/luft.desktop"
 echo "  portals:  $PORTAL_DIR/luft-portals.conf"
+echo "  portal backend: $PORTAL_DIR/portals/luft.portal"
 echo
 echo "Pick Luft from your display manager's session menu."

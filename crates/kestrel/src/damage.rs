@@ -69,7 +69,7 @@ impl DamageTracker {
 
         DamagePlan {
             rectangles: if force_full {
-                vec![full_damage(output_size)]
+                vec![Rectangle::from_size(output_size)]
             } else {
                 rectangles
             },
@@ -233,8 +233,19 @@ pub(crate) fn expand_damage_for_blur_targets(
     expanded
 }
 
-fn full_damage(output_size: Size<i32, Physical>) -> Rectangle<i32, Physical> {
-    Rectangle::from_size(output_size)
+pub fn resolve_render_damage(
+    output_size: Size<i32, Physical>,
+    buffer_age: u32,
+    force_full: bool,
+    damage: Vec<Rectangle<i32, Physical>>,
+) -> Option<Vec<Rectangle<i32, Physical>>> {
+    if !damage.is_empty() {
+        return Some(damage);
+    }
+    if force_full || buffer_age == 0 {
+        return Some(vec![Rectangle::from_size(output_size)]);
+    }
+    None
 }
 
 fn output_tracker(output_size: Size<i32, Physical>, transform: Transform) -> OutputDamageTracker {

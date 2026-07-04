@@ -77,14 +77,23 @@ pub fn plan_compositor_damage(
         blur_damage_tracker.plan(ctx.output_size, ctx.buffer_age, force_damage, &elements)
     };
     let blur_animation_damage = if ctx.blur_animating {
-        blur_target_rectangles(
+        let candidates = blur_target_rectangles(
             ctx.output_size,
             &[
                 ctx.window_effect_targets,
                 ctx.top_targets,
                 ctx.overlay_targets,
             ],
-        )
+        );
+        candidates
+            .into_iter()
+            .filter(|rect| {
+                damage_plan
+                    .rectangles
+                    .iter()
+                    .any(|damage| damage.intersection(*rect).is_some())
+            })
+            .collect()
     } else {
         Vec::new()
     };
@@ -111,17 +120,9 @@ pub fn plan_compositor_damage(
         Rectangle::<i32, Physical>::from_size(ctx.output_size),
         blur_damage_rectangles,
     );
-    let force_geometry_damage = geometry_changed;
-    let blur_damage = if force_geometry_damage {
-        vec![Rectangle::<i32, Physical>::from_size(ctx.output_size)]
-    } else {
-        blur_damage
-    };
+    let _ = geometry_changed;
 
-    CompositorDamagePlan {
-        damage,
-        blur_damage,
-    }
+    CompositorDamagePlan { damage, blur_damage }
 }
 
 fn blur_target_rectangles(

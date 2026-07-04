@@ -1,5 +1,5 @@
 use super::{
-    icons::icon_data_uri,
+    icons::{icon_data_uri, window_icon_uri},
     model::{
         WebApplication, WebPanelApp, WebShellSnapshot, WebTrayItem, WebTrayStatus, WebWindow,
         WebWorkspace,
@@ -171,16 +171,11 @@ fn append_running_window_app(
         return;
     }
     let matched_app = application_for_window(window, applications);
-    let app_id_icon_uri = window
-        .app_id
-        .as_deref()
-        .and_then(|app_id| crate::apps::resolve_icon_path(Some(app_id)))
-        .as_deref()
-        .and_then(icon_data_uri);
-    let icon_uri = matched_app
-        .and_then(|app| app.icon_path.as_deref())
-        .and_then(icon_data_uri)
-        .or(app_id_icon_uri);
+    let icon_uri = window_icon_uri(window).or_else(|| {
+        matched_app
+            .and_then(|app| app.icon_path.as_deref())
+            .and_then(icon_data_uri)
+    });
     if matched_app.is_none() && icon_uri.is_none() {
         return;
     }

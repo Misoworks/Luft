@@ -2,7 +2,7 @@ use smithay::{
     reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason},
     wayland::compositor::CompositorClientState,
 };
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Default)]
 pub struct ClientState {
@@ -15,6 +15,6 @@ impl ClientData for ClientState {
     }
 
     fn disconnected(&self, client_id: ClientId, reason: DisconnectReason) {
-        debug!(?client_id, ?reason, "wayland client disconnected");
+        warn!(?client_id, ?reason, "wayland client disconnected");
     }
 }

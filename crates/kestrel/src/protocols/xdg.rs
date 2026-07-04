@@ -19,7 +19,6 @@ use smithay::{
             PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
             decoration::XdgDecorationHandler,
         },
-        xdg_toplevel_icon::XdgToplevelIconHandler,
     },
 };
 use tracing::debug;
@@ -43,7 +42,10 @@ impl XdgShellHandler for KestrelState {
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
         self.enter_output(surface.wl_surface());
-        configure_popup(&surface, positioner, self.popup_constraint_for(&surface));
+        let target = self
+            .popup_constraint_for(&surface)
+            .or_else(|| Some(Rectangle::from_size(self.output_logical_size())));
+        configure_popup(&surface, positioner, target);
         let _ = self
             .popup_manager
             .track_popup(PopupKind::from(surface.clone()));
@@ -110,7 +112,10 @@ impl XdgShellHandler for KestrelState {
         positioner: PositionerState,
         token: u32,
     ) {
-        configure_popup(&surface, positioner, self.popup_constraint_for(&surface));
+        let target = self
+            .popup_constraint_for(&surface)
+            .or_else(|| Some(Rectangle::from_size(self.output_logical_size())));
+        configure_popup(&surface, positioner, target);
         let _ = surface.send_repositioned(token);
         self.mark_scene_dirty();
     }
@@ -196,8 +201,6 @@ impl FractionalScaleHandler for KestrelState {
         self.update_surface_scale(&surface);
     }
 }
-
-impl XdgToplevelIconHandler for KestrelState {}
 
 impl KestrelState {
     pub(crate) fn update_surface_scale(&self, surface: &WlSurface) {
@@ -397,9 +400,18 @@ fn popup_surface_origin(
     root_origin: Point<i32, Logical>,
     surface: &WlSurface,
 ) -> Option<Point<i32, Logical>> {
-    PopupManager::popups_for_surface(root)
-        .find(|(popup, _)| popup.wl_surface() == surface)
-        .map(|(_, offset)| root_origin + offset)
+    for (popup, offset) in PopupManager::popups_for_surface(root) {
+        let popup_origin = root_origin + offset;
+        if popup.wl_surface() == surface {
+            return Some(popup_origin);
+        }
+        if let Some(origin) =
+            popup_surface_origin(popup.wl_surface(), popup_origin, surface)
+        {
+            return Some(origin);
+        }
+    }
+    None
 }
 
 fn output_constraint(

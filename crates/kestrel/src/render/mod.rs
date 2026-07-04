@@ -9,7 +9,7 @@ use luft_ipc::WorkspaceId;
 use smithay::{
     backend::renderer::{
         element::{
-            Kind,
+            Element, Kind,
             memory::MemoryRenderBufferRenderElement,
             surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
         },
@@ -18,7 +18,7 @@ use smithay::{
     },
     desktop::PopupManager,
     reexports::wayland_server::protocol::wl_surface,
-    utils::{Logical, Physical, Point, Rectangle, Size},
+    utils::{Logical, Physical, Point, Rectangle, Scale, Size},
     wayland::shell::wlr_layer::Layer,
 };
 
@@ -169,10 +169,6 @@ fn append_layer_elements(
                     target.location.x + offset.x,
                     target.location.y + offset.y,
                 ));
-                let popup_size = popup.geometry().size;
-                let popup_clip =
-                    Rectangle::<i32, Physical>::new(popup_location, popup_size.to_physical(1));
-
                 render_elements_from_surface_tree(
                     renderer,
                     popup.wl_surface(),
@@ -182,11 +178,14 @@ fn append_layer_elements(
                     Kind::Unspecified,
                 )
                 .into_iter()
-                .map(move |element| RoundedWindowElement::new(element, popup_clip, 0))
+                .map(move |element: WaylandSurfaceRenderElement<GlesRenderer>| {
+                    let clip = element.geometry(Scale::from(1.0));
+                    RoundedWindowElement::new(element, clip, 0)
+                })
             });
 
-        elements.extend(popup_elements);
         elements.extend(surface_elements);
+        elements.extend(popup_elements);
     }
 }
 

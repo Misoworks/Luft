@@ -1,0 +1,15 @@
+[package]
+name = "luft-portal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "luft-portal"
+path = "src/main.rs"
+
+[dependencies]
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zbus = { version = "5.15.0", features = ["blocking-api"] }
+zvariant = "5.11.0"
