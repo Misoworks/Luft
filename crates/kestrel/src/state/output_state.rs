@@ -4,7 +4,7 @@ use luft_ipc::Rect;
 use smithay::{
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Physical, Size},
+    utils::{Logical, Physical, Size},
 };
 
 impl KestrelState {
@@ -25,6 +25,16 @@ impl KestrelState {
         self.outputs.primary_scale()
     }
 
+    pub fn output_logical_size(&self) -> Size<i32, Logical> {
+        let output = self.output_size();
+        let scale = self.output_scale().max(1.0);
+        (
+            (f64::from(output.w) / scale).round().max(1.0) as i32,
+            (f64::from(output.h) / scale).round().max(1.0) as i32,
+        )
+            .into()
+    }
+
     pub fn output_transform(&self) -> smithay::utils::Transform {
         self.outputs.primary_transform()
     }
@@ -38,7 +48,7 @@ impl KestrelState {
 
     #[cfg(feature = "session-backend")]
     fn resize_primary_layout(&mut self) {
-        let size = self.output_size();
+        let size = self.output_logical_size();
         self.layout.set_bounds(Rect::new(0, 0, size.w, size.h));
         layers::arrange(self.output());
         self.apply_active_arrangement();
@@ -47,7 +57,8 @@ impl KestrelState {
 
     pub fn set_output_size(&mut self, size: Size<i32, Physical>) {
         self.outputs.set_primary_size(size);
-        self.layout.set_bounds(Rect::new(0, 0, size.w, size.h));
+        let logical = self.output_logical_size();
+        self.layout.set_bounds(Rect::new(0, 0, logical.w, logical.h));
         layers::arrange(self.output());
         self.apply_active_arrangement();
         self.mark_scene_dirty();

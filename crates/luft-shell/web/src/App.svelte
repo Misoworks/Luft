@@ -1,6 +1,7 @@
 <script lang="ts">
   import DateCenter from "./components/DateCenter.svelte";
   import PanelMenu from "./components/PanelMenu.svelte";
+  import SessionMenu from "./components/SessionMenu.svelte";
   import NotificationToast from "./components/NotificationToast.svelte";
   import StartMenu from "./components/StartMenu.svelte";
   import QuickSettings from "./components/QuickSettings.svelte";
@@ -129,6 +130,7 @@
       return;
     }
     if (event.key === "Escape") {
+      sendAction({ type: "session-menu-close" });
       sendAction({ type: "panel-menu-close" });
     }
   }
@@ -148,7 +150,12 @@
       }
       return;
     }
-    if (target.closest(".panel-menu, .panel-item, .app-button")) return;
+    if (surface === "session-menu" && !target.closest(".session-menu")) {
+      sendAction({ type: "session-menu-close" });
+      return;
+    }
+    if (target.closest(".panel-menu, .session-menu, .panel-item, .app-button")) return;
+    sendAction({ type: "session-menu-close" });
     sendAction({ type: "panel-menu-close" });
   }
 </script>
@@ -157,6 +164,8 @@
 
 {#if surface === "panel-menu"}
   <PanelMenu {snapshot} />
+{:else if surface === "session-menu"}
+  <SessionMenu {snapshot} />
 {:else if surface === "quick-settings"}
   <QuickSettings {snapshot} />
 {:else if surface === "date-center"}

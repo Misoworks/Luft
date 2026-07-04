@@ -82,6 +82,10 @@ impl OutputGraph {
         &self.primary().output
     }
 
+    pub fn output(&self, name: &str) -> Option<&Output> {
+        self.outputs.get(name).map(|managed| &managed.output)
+    }
+
     pub fn primary_size(&self) -> Size<i32, Physical> {
         self.primary().descriptor.size
     }

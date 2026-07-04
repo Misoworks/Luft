@@ -10,7 +10,7 @@ calloop.workspace = true
 clap.workspace = true
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
 input = { workspace = true, optional = true }
-smithay.workspace = true
+smithay = { workspace = true, features = ["backend_winit", "desktop", "wayland_frontend"] }
 luft-config.workspace = true
 luft-ipc = { version = "0.1.0", path = "../luft-ipc" }
 thiserror.workspace = true

@@ -474,7 +474,7 @@ impl KestrelState {
     }
 }
 
-fn configure_surface(surface: &ToplevelSurface, geometry: Rect, maximized: bool, fullscreen: bool) {
+pub(crate) fn configure_surface(surface: &ToplevelSurface, geometry: Rect, maximized: bool, fullscreen: bool) {
     surface.with_pending_state(|state| {
         state.size = Some((geometry.width, geometry.height).into());
         if maximized {

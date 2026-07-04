@@ -1,6 +1,7 @@
 export type ShellSurface =
   | "panel"
   | "panel-menu"
+  | "session-menu"
   | "quick-settings"
   | "date-center"
   | "notification-toast"
@@ -138,6 +139,9 @@ export type ShellAction =
   | { type: "quick-set-volume"; percent: number }
   | { type: "quick-toggle-mute" }
   | { type: "quick-set-brightness"; percent: number }
+  | { type: "session-menu-open" }
+  | { type: "session-menu-close" }
+  | { type: "toggle-session-menu" }
   | { type: "session-command"; command: "lock" | "suspend" | "reboot" | "power-off" }
   | { type: "reload-config" }
   | { type: "open-logs-folder" }

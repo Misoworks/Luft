@@ -1,19 +1,17 @@
 use crate::{
-    damage::merge_damage_rectangles,
-    layers::{BlurLayer, LayerRenderTarget},
+    background_effect,
+    damage::DamageTracker,
     render::{LayerElement, window_chrome_elements_for_window},
-    scene_blur::{self, BlurElement, SceneBlurCache},
+    scene_backdrop::SceneBackdrop,
+    scene_blur::{BlurEffectManager, FramebufferBlurElement},
+    scene_composite::{scene_backdrop_elements, scene_elements, WindowSceneLayerRef},
     state::KestrelState,
-    window::ManagedWindow,
-    window_clip::{RoundedWindowElement, window_elements_for_window},
+    window_clip::{window_elements_for_window, RoundedWindowElement},
 };
-use luft_ipc::WorkspaceId;
 use smithay::{
     backend::renderer::{
-        Color32F, Frame, Renderer, RendererSuper,
         element::{memory::MemoryRenderBufferRenderElement, surface::WaylandSurfaceRenderElement},
         gles::{GlesError, GlesRenderer, GlesTarget},
-        utils::draw_render_elements,
     },
     utils::{Physical, Rectangle, Size, Transform},
 };
@@ -23,391 +21,156 @@ type WindowSurfaceElement = WaylandSurfaceRenderElement<GlesRenderer>;
 type MemoryElement = MemoryRenderBufferRenderElement<GlesRenderer>;
 type WindowElement = RoundedWindowElement<WindowSurfaceElement>;
 
+pub struct WindowSceneLayer {
+    pub chrome: Vec<MemoryElement>,
+    pub surfaces: Vec<WindowElement>,
+    pub blurs: Vec<FramebufferBlurElement>,
+}
+
 pub struct SceneRenderRequest<'a> {
-    pub state: &'a KestrelState,
     pub output_size: Size<i32, Physical>,
-    pub target_transform: Transform,
-    pub damage: &'a [Rectangle<i32, Physical>],
-    pub blur_damage: &'a [Rectangle<i32, Physical>],
     pub background: Option<MemoryElement>,
     pub background_layer: &'a [LayerSurfaceElement],
     pub bottom_layer: &'a [LayerSurfaceElement],
-    pub windows: &'a [WindowElement],
-    pub window_chrome: &'a [MemoryElement],
-    pub window_targets: &'a [LayerRenderTarget],
-    pub top_targets: &'a [LayerRenderTarget],
+    pub window_layers: &'a [WindowSceneLayer],
+    pub top_blurs: &'a [FramebufferBlurElement],
     pub top_layer: &'a [LayerSurfaceElement],
-    pub overlay_targets: &'a [LayerRenderTarget],
+    pub overlay_blurs: &'a [FramebufferBlurElement],
     pub overlay_layer: &'a [LayerSurfaceElement],
-    pub loading: Option<MemoryElement>,
 }
 
-fn draw_blur_elements(
-    frame: &mut <GlesRenderer as RendererSuper>::Frame<'_, '_>,
-    elements: &[BlurElement],
-    damage: &[Rectangle<i32, Physical>],
-) -> Result<(), GlesError> {
-    for element in elements.iter().rev() {
-        draw_render_elements::<GlesRenderer, f64, BlurElement>(
-            frame,
-            1.0,
-            std::slice::from_ref(element),
-            damage,
-        )?;
-    }
-    Ok(())
-}
-
-pub fn render_scene(
-    blur_cache: &mut SceneBlurCache,
+pub fn collect_window_scene_layers(
     renderer: &mut GlesRenderer,
-    framebuffer: &mut GlesTarget<'_>,
-    request: SceneRenderRequest<'_>,
-) -> Result<(), GlesError> {
-    if request.window_targets.is_empty()
-        && request.top_targets.is_empty()
-        && request.overlay_targets.is_empty()
-        && !blur_cache.has_cached_elements()
-    {
-        return render_flat_scene(renderer, framebuffer, request);
-    }
-
-    if request.window_targets.is_empty()
-        && !blur_cache.targets_need_capture(
-            request.output_size,
-            request.top_targets,
-            request.blur_damage,
-        )
-        && !blur_cache.targets_need_capture(
-            request.output_size,
-            request.overlay_targets,
-            request.blur_damage,
-        )
-    {
-        render_flat_scene_with_cached_layer_blur(blur_cache, renderer, framebuffer, request)
-    } else {
-        render_staged_scene(blur_cache, renderer, framebuffer, request)
-    }
-}
-
-fn render_flat_scene(
-    renderer: &mut GlesRenderer,
-    framebuffer: &mut GlesTarget<'_>,
-    request: SceneRenderRequest<'_>,
-) -> Result<(), GlesError> {
-    let mut frame = renderer.render(framebuffer, request.output_size, request.target_transform)?;
-    frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), request.damage)?;
-    draw_optional_memory(&mut frame, request.background.as_ref(), request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.background_layer, request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.bottom_layer, request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.windows, request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.window_chrome, request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
-    draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
-    let _ = frame.finish()?;
-    Ok(())
-}
-
-fn render_flat_scene_with_cached_layer_blur(
-    blur_cache: &SceneBlurCache,
-    renderer: &mut GlesRenderer,
-    framebuffer: &mut GlesTarget<'_>,
-    request: SceneRenderRequest<'_>,
-) -> Result<(), GlesError> {
-    let top_blur = blur_cache.cached_elements(
-        renderer,
-        request.output_size,
-        request.target_transform,
-        BlurLayer::Top,
-        request.top_targets,
-    )?;
-    let overlay_blur = blur_cache.cached_elements(
-        renderer,
-        request.output_size,
-        request.target_transform,
-        BlurLayer::Overlay,
-        request.overlay_targets,
-    )?;
-    let top_blur_damage = blur_target_damage(request.output_size, request.top_targets);
-    let overlay_blur_damage = blur_target_damage(request.output_size, request.overlay_targets);
-    let mut frame = renderer.render(framebuffer, request.output_size, request.target_transform)?;
-    frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), request.damage)?;
-    draw_optional_memory(&mut frame, request.background.as_ref(), request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.background_layer, request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.bottom_layer, request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.windows, request.damage)?;
-    draw_render_elements(&mut frame, 1.0, request.window_chrome, request.damage)?;
-    draw_blur_elements(&mut frame, &top_blur, &top_blur_damage)?;
-    draw_render_elements(&mut frame, 1.0, request.top_layer, request.damage)?;
-    draw_blur_elements(&mut frame, &overlay_blur, &overlay_blur_damage)?;
-    draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
-    draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
-    let _ = frame.finish()?;
-    Ok(())
-}
-
-fn render_staged_scene(
-    blur_cache: &mut SceneBlurCache,
-    renderer: &mut GlesRenderer,
-    framebuffer: &mut GlesTarget<'_>,
-    request: SceneRenderRequest<'_>,
-) -> Result<(), GlesError> {
-    let capture_damage = capture_damage_for_blur_targets(blur_cache, &request);
-    let pre_capture_damage =
-        merged_render_damage(request.output_size, request.damage, &capture_damage);
-    {
-        let mut frame =
-            renderer.render(framebuffer, request.output_size, request.target_transform)?;
-        frame.clear(Color32F::new(0.08, 0.085, 0.09, 1.0), &pre_capture_damage)?;
-        draw_optional_memory(&mut frame, request.background.as_ref(), &pre_capture_damage)?;
-        draw_render_elements(
-            &mut frame,
-            1.0,
-            request.background_layer,
-            &pre_capture_damage,
-        )?;
-        draw_render_elements(&mut frame, 1.0, request.bottom_layer, &pre_capture_damage)?;
-        let _ = frame.finish()?;
-    }
-
-    let mut batched_windows = Vec::new();
-    let mut batched_chrome = Vec::new();
-    for entry in scene_window_entries(request.state) {
-        let targets = targets_for_window(request.window_targets, entry.window);
-        let window =
-            window_elements_for_window(renderer, entry.window, entry.offset_x, request.output_size);
-        let chrome = window_chrome_elements_for_window(
-            renderer,
-            request.state,
-            entry.window,
-            entry.offset_x,
-        )?;
-        if targets.is_empty() {
-            batched_windows.extend(window);
-            batched_chrome.extend(chrome);
-            continue;
-        }
-
-        flush_window_batch(
-            renderer,
-            framebuffer,
-            request.output_size,
-            request.target_transform,
-            &pre_capture_damage,
-            &mut batched_windows,
-            &mut batched_chrome,
-        )?;
-        let blur = scene_blur::capture_blur_elements(
-            blur_cache,
-            renderer,
-            scene_blur::BlurCaptureRequest {
-                framebuffer,
-                output_size: request.output_size,
-                target_transform: request.target_transform,
-                targets: &targets,
-                damage: request.blur_damage,
-            },
-        )?;
-        let mut frame =
-            renderer.render(framebuffer, request.output_size, request.target_transform)?;
-        let blur_damage = blur_target_damage(request.output_size, &targets);
-        draw_blur_elements(&mut frame, &blur, &blur_damage)?;
-        draw_render_elements(&mut frame, 1.0, &window, &pre_capture_damage)?;
-        draw_render_elements(&mut frame, 1.0, &chrome, &pre_capture_damage)?;
-        let _ = frame.finish()?;
-    }
-    flush_window_batch(
-        renderer,
-        framebuffer,
-        request.output_size,
-        request.target_transform,
-        &pre_capture_damage,
-        &mut batched_windows,
-        &mut batched_chrome,
-    )?;
-
-    let top_blur = scene_blur::capture_blur_elements(
-        blur_cache,
-        renderer,
-        scene_blur::BlurCaptureRequest {
-            framebuffer,
-            output_size: request.output_size,
-            target_transform: request.target_transform,
-            targets: request.top_targets,
-            damage: request.blur_damage,
-        },
-    )?;
-    {
-        let mut frame =
-            renderer.render(framebuffer, request.output_size, request.target_transform)?;
-        let blur_damage = blur_target_damage(request.output_size, request.top_targets);
-        draw_blur_elements(&mut frame, &top_blur, &blur_damage)?;
-        draw_render_elements(&mut frame, 1.0, request.top_layer, &pre_capture_damage)?;
-        let _ = frame.finish()?;
-    }
-
-    let overlay_blur = scene_blur::capture_blur_elements(
-        blur_cache,
-        renderer,
-        scene_blur::BlurCaptureRequest {
-            framebuffer,
-            output_size: request.output_size,
-            target_transform: request.target_transform,
-            targets: request.overlay_targets,
-            damage: request.blur_damage,
-        },
-    )?;
-    let mut frame = renderer.render(framebuffer, request.output_size, request.target_transform)?;
-    let blur_damage = blur_target_damage(request.output_size, request.overlay_targets);
-    draw_blur_elements(&mut frame, &overlay_blur, &blur_damage)?;
-    draw_render_elements(&mut frame, 1.0, request.overlay_layer, request.damage)?;
-    draw_optional_memory(&mut frame, request.loading.as_ref(), request.damage)?;
-    let _ = frame.finish()?;
-
-    Ok(())
-}
-
-fn capture_damage_for_blur_targets(
-    blur_cache: &SceneBlurCache,
-    request: &SceneRenderRequest<'_>,
-) -> Vec<Rectangle<i32, Physical>> {
-    let output = Rectangle::<i32, Physical>::from_size(request.output_size);
-    merge_damage_rectangles(
-        output,
-        blur_cache
-            .target_capture_sample_rects(
-                request.output_size,
-                request.window_targets,
-                request.blur_damage,
-            )
-            .into_iter()
-            .chain(blur_cache.target_capture_sample_rects(
-                request.output_size,
-                request.top_targets,
-                request.blur_damage,
-            ))
-            .chain(blur_cache.target_capture_sample_rects(
-                request.output_size,
-                request.overlay_targets,
-                request.blur_damage,
-            ))
-            .collect(),
-    )
-}
-
-fn merged_render_damage(
-    output_size: Size<i32, Physical>,
-    damage: &[Rectangle<i32, Physical>],
-    extra: &[Rectangle<i32, Physical>],
-) -> Vec<Rectangle<i32, Physical>> {
-    merge_damage_rectangles(
-        Rectangle::<i32, Physical>::from_size(output_size),
-        damage
-            .iter()
-            .copied()
-            .chain(extra.iter().copied())
-            .collect(),
-    )
-}
-
-fn flush_window_batch(
-    renderer: &mut GlesRenderer,
-    framebuffer: &mut GlesTarget<'_>,
+    state: &KestrelState,
+    blur_effects: &mut BlurEffectManager,
     output_size: Size<i32, Physical>,
     target_transform: Transform,
-    damage: &[Rectangle<i32, Physical>],
-    windows: &mut Vec<WindowElement>,
-    chrome: &mut Vec<MemoryElement>,
-) -> Result<(), GlesError> {
-    if windows.is_empty() && chrome.is_empty() {
-        return Ok(());
-    }
+    backdrop: Option<&SceneBackdrop>,
+) -> Result<Vec<WindowSceneLayer>, GlesError> {
+    let mut layers = Vec::new();
+    let grouped_targets = background_effect::window_blur_targets_grouped(state);
+    let mut target_groups = grouped_targets.into_iter();
 
-    windows.reverse();
-    chrome.reverse();
-    let mut frame = renderer.render(framebuffer, output_size, target_transform)?;
-    draw_render_elements(&mut frame, 1.0, windows.as_slice(), damage)?;
-    draw_render_elements(&mut frame, 1.0, chrome.as_slice(), damage)?;
-    let _ = frame.finish()?;
-    windows.clear();
-    chrome.clear();
-    Ok(())
-}
-
-fn draw_optional_memory(
-    frame: &mut <GlesRenderer as RendererSuper>::Frame<'_, '_>,
-    element: Option<&MemoryElement>,
-    damage: &[Rectangle<i32, Physical>],
-) -> Result<(), GlesError> {
-    if let Some(element) = element {
-        draw_render_elements(frame, 1.0, std::slice::from_ref(element), damage)?;
-    }
-
-    Ok(())
-}
-
-fn blur_target_damage(
-    output_size: Size<i32, Physical>,
-    targets: &[LayerRenderTarget],
-) -> Vec<Rectangle<i32, Physical>> {
-    let output = Rectangle::<i32, Physical>::from_size(output_size);
-    targets
-        .iter()
-        .filter_map(|target| {
-            Rectangle::<i32, Physical>::new(
-                (target.location.x, target.location.y).into(),
-                (target.size.w, target.size.h).into(),
-            )
-            .intersection(output)
-        })
-        .collect()
-}
-
-#[derive(Debug, Clone, Copy)]
-struct SceneWindowEntry<'a> {
-    window: &'a ManagedWindow,
-    offset_x: i32,
-}
-
-fn scene_window_entries(state: &KestrelState) -> Vec<SceneWindowEntry<'_>> {
-    let mut entries = Vec::new();
     if let Some(transition) = state.workspace_transition() {
         let width = state.output_size().w as f64;
         let direction = transition.direction as f64;
         let from_offset = (-direction * width * transition.progress).round() as i32;
         let to_offset = (direction * width * (1.0 - transition.progress)).round() as i32;
-        append_workspace_entries(state, &transition.from, from_offset, &mut entries);
-        append_workspace_entries(state, &transition.to, to_offset, &mut entries);
+        append_workspace_layers(
+            renderer,
+            state,
+            blur_effects,
+            output_size,
+            target_transform,
+            backdrop,
+            &transition.from,
+            from_offset,
+            &mut target_groups,
+            &mut layers,
+        )?;
+        append_workspace_layers(
+            renderer,
+            state,
+            blur_effects,
+            output_size,
+            target_transform,
+            backdrop,
+            &transition.to,
+            to_offset,
+            &mut target_groups,
+            &mut layers,
+        )?;
     } else {
-        append_workspace_entries(state, state.layout.active_workspace(), 0, &mut entries);
+        append_workspace_layers(
+            renderer,
+            state,
+            blur_effects,
+            output_size,
+            target_transform,
+            backdrop,
+            state.layout.active_workspace(),
+            0,
+            &mut target_groups,
+            &mut layers,
+        )?;
     }
-    entries.reverse();
-    entries
+
+    Ok(layers)
 }
 
-fn append_workspace_entries<'a>(
-    state: &'a KestrelState,
-    workspace: &WorkspaceId,
+#[allow(clippy::too_many_arguments)]
+fn append_workspace_layers(
+    renderer: &mut GlesRenderer,
+    state: &KestrelState,
+    blur_effects: &mut BlurEffectManager,
+    output_size: Size<i32, Physical>,
+    target_transform: Transform,
+    backdrop: Option<&SceneBackdrop>,
+    workspace: &luft_ipc::WorkspaceId,
     offset_x: i32,
-    entries: &mut Vec<SceneWindowEntry<'a>>,
-) {
-    entries.extend(
-        state
-            .windows
-            .render_windows_on_workspace(workspace)
-            .map(|window| SceneWindowEntry { window, offset_x }),
-    );
+    target_groups: &mut impl Iterator<Item = Vec<crate::layers::LayerRenderTarget>>,
+    layers: &mut Vec<WindowSceneLayer>,
+) -> Result<(), GlesError> {
+    for window in state.windows.render_windows_on_workspace(workspace) {
+        let targets = target_groups.next().unwrap_or_default();
+        layers.push(WindowSceneLayer {
+            chrome: window_chrome_elements_for_window(renderer, state, window, offset_x)?,
+            surfaces: window_elements_for_window(renderer, window, offset_x, output_size),
+            blurs: blur_effects.elements_for(
+                output_size,
+                target_transform,
+                &targets,
+                backdrop,
+            ),
+        });
+    }
+    Ok(())
 }
 
-fn targets_for_window(
-    targets: &[LayerRenderTarget],
-    window: &ManagedWindow,
-) -> Vec<LayerRenderTarget> {
-    let surface = window.surface.wl_surface();
-    targets
+pub fn render_scene(
+    damage_tracker: &mut DamageTracker,
+    backdrop: &mut SceneBackdrop,
+    renderer: &mut GlesRenderer,
+    framebuffer: &mut GlesTarget<'_>,
+    request: SceneRenderRequest<'_>,
+    buffer_age: usize,
+) -> Result<Option<Vec<Rectangle<i32, Physical>>>, GlesError> {
+    let window_layer_refs = window_layer_refs(request.window_layers);
+    let backdrop_elements = scene_backdrop_elements(
+        request.background.as_ref(),
+        request.background_layer,
+        request.bottom_layer,
+        &window_layer_refs,
+    );
+    backdrop.render(renderer, request.output_size, &backdrop_elements)?;
+
+    let elements = scene_elements(
+        request.background.as_ref(),
+        request.background_layer,
+        request.bottom_layer,
+        &window_layer_refs,
+        request.top_blurs,
+        request.top_layer,
+        request.overlay_blurs,
+        request.overlay_layer,
+    );
+
+    damage_tracker.render_output(
+        renderer,
+        framebuffer,
+        request.output_size,
+        buffer_age,
+        &elements,
+    )
+}
+
+pub fn window_layer_refs(window_layers: &[WindowSceneLayer]) -> Vec<WindowSceneLayerRef<'_>> {
+    window_layers
         .iter()
-        .filter(|target| &target.surface == surface)
-        .cloned()
+        .map(|layer| WindowSceneLayerRef {
+            chrome: &layer.chrome,
+            surfaces: &layer.surfaces,
+            blurs: &layer.blurs,
+        })
         .collect()
 }

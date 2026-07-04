@@ -302,16 +302,6 @@ impl KestrelState {
 
         None
     }
-
-    fn output_logical_size(&self) -> Size<i32, Logical> {
-        let output = self.output_size();
-        let scale = self.output_scale().max(1.0);
-        (
-            (f64::from(output.w) / scale).round().max(1.0) as i32,
-            (f64::from(output.h) / scale).round().max(1.0) as i32,
-        )
-            .into()
-    }
 }
 
 pub(super) fn configure_existing_popup(

@@ -39,7 +39,7 @@ impl KestrelState {
 
     pub fn replace_config(&mut self, config: luft_config::LuftConfig) {
         let mut layout = layout_from_config(&config);
-        layout.set_bounds(Rect::new(0, 0, self.output_size().w, self.output_size().h));
+        layout.set_bounds(Rect::new(0, 0, self.output_logical_size().w, self.output_logical_size().h));
 
         let active = self.layout.active_workspace().clone();
         if layout.workspaces().any(|workspace| workspace.id == active) {

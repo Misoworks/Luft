@@ -16,6 +16,7 @@ impl WebShellSurface {
         match self {
             Self::Panel => "panel",
             Self::PanelMenu => "panel-menu",
+            Self::SessionMenu => "session-menu",
             Self::QuickSettings => "quick-settings",
             Self::DateCenter => "date-center",
             Self::NotificationToast => "notification-toast",
@@ -29,6 +30,7 @@ impl WebShellSurface {
         match self {
             Self::Panel => "luft-panel",
             Self::PanelMenu => "luft-panel-menu",
+            Self::SessionMenu => "luft-session-menu",
             Self::QuickSettings => "luft-quick-settings",
             Self::DateCenter => "luft-date-center",
             Self::NotificationToast => "luft-notifications",
@@ -45,11 +47,12 @@ pub(crate) fn shell_surface(
     kind: WebShellSurface,
     size: (i32, i32),
     panel_menu_x: Option<i32>,
+    session_menu_qs_height: Option<i32>,
 ) -> ShellSurfaceOptions {
     let mut shell_surface = ShellSurfaceOptions::new(kind.namespace())
         .layer(layer(kind))
         .anchor(anchor(kind, panel_menu_x))
-        .margin(margin(kind, size, panel_menu_x))
+        .margin(margin(kind, size, panel_menu_x, session_menu_qs_height))
         .keyboard_interactivity(keyboard_interactivity(kind));
     let (width, height) = shell_size(kind, size);
     shell_surface = shell_surface.size(width, height);
@@ -70,6 +73,7 @@ fn shell_size(kind: WebShellSurface, size: (i32, i32)) -> (u32, u32) {
 fn layer(kind: WebShellSurface) -> ShellSurfaceLayer {
     match kind {
         WebShellSurface::PanelMenu
+        | WebShellSurface::SessionMenu
         | WebShellSurface::NotificationToast
         | WebShellSurface::Panel => ShellSurfaceLayer::Overlay,
         _ => ShellSurfaceLayer::Top,
@@ -85,6 +89,7 @@ fn anchor(kind: WebShellSurface, panel_menu_x: Option<i32>) -> ShellSurfaceAncho
         WebShellSurface::PanelMenu => ShellSurfaceAnchor::BOTTOM,
         WebShellSurface::QuickSettings
         | WebShellSurface::DateCenter
+        | WebShellSurface::SessionMenu
         | WebShellSurface::NotificationToast => {
             ShellSurfaceAnchor::BOTTOM | ShellSurfaceAnchor::RIGHT
         }
@@ -96,6 +101,7 @@ fn margin(
     kind: WebShellSurface,
     size: (i32, i32),
     panel_menu_x: Option<i32>,
+    session_menu_qs_height: Option<i32>,
 ) -> ShellSurfaceMargin {
     match kind {
         WebShellSurface::PanelMenu => ShellSurfaceMargin::new(
@@ -104,6 +110,15 @@ fn margin(
             PANEL_BAR_HEIGHT + PANEL_MENU_GAP,
             panel_menu_left_margin(size.0, panel_menu_x),
         ),
+        WebShellSurface::SessionMenu => {
+            let qs_height = session_menu_qs_height.unwrap_or(280);
+            ShellSurfaceMargin::new(
+                0,
+                0,
+                PANEL_BAR_HEIGHT + 8 + qs_height - 76 - size.1,
+                0,
+            )
+        }
         WebShellSurface::StartMenu => ShellSurfaceMargin::new(0, 0, PANEL_BAR_HEIGHT + 10, 0),
         WebShellSurface::QuickSettings => ShellSurfaceMargin::new(0, 0, PANEL_BAR_HEIGHT + 8, 0),
         WebShellSurface::DateCenter => ShellSurfaceMargin::new(0, 0, PANEL_BAR_HEIGHT + 8, 0),
@@ -134,6 +149,7 @@ fn exclusive_zone(kind: WebShellSurface) -> Option<i32> {
         WebShellSurface::Panel | WebShellSurface::StartMenu | WebShellSurface::PanelMenu => {
             Some(LAYER_SURFACE_ZONE_IGNORE)
         }
+        WebShellSurface::SessionMenu => Some(LAYER_SURFACE_ZONE_IGNORE),
         _ => None,
     }
 }
@@ -145,6 +161,7 @@ fn keyboard_interactivity(kind: WebShellSurface) -> ShellSurfaceKeyboardInteract
         }
         WebShellSurface::StartMenu => ShellSurfaceKeyboardInteractivity::OnDemand,
         WebShellSurface::PanelMenu
+        | WebShellSurface::SessionMenu
         | WebShellSurface::QuickSettings
         | WebShellSurface::DateCenter => ShellSurfaceKeyboardInteractivity::OnDemand,
     }

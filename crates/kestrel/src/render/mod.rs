@@ -5,7 +5,6 @@ use crate::{
     window::{ManagedWindow, TITLEBAR_HEIGHT},
     window_clip::{ClipShape, RoundedWindowElement, WINDOW_RADIUS},
 };
-use luft_ipc::WorkspaceId;
 use smithay::{
     backend::renderer::{
         element::{
@@ -38,37 +37,6 @@ pub fn render_stage_elements(
         RenderStage::Layer(layer) => append_layer_elements(renderer, state, layer, &mut elements),
     }
     elements
-}
-
-pub fn window_chrome_elements(
-    renderer: &mut GlesRenderer,
-    state: &KestrelState,
-) -> Result<Vec<MemoryRenderBufferRenderElement<GlesRenderer>>, GlesError> {
-    let mut elements = Vec::new();
-    if let Some(transition) = state.workspace_transition() {
-        let width = state.output_size().w as f64;
-        let direction = transition.direction as f64;
-        let from_offset = (-direction * width * transition.progress).round() as i32;
-        let to_offset = (direction * width * (1.0 - transition.progress)).round() as i32;
-        append_workspace_chrome(
-            renderer,
-            state,
-            &mut elements,
-            &transition.from,
-            from_offset,
-        )?;
-        append_workspace_chrome(renderer, state, &mut elements, &transition.to, to_offset)?;
-        return Ok(elements);
-    }
-
-    append_workspace_chrome(
-        renderer,
-        state,
-        &mut elements,
-        state.layout.active_workspace(),
-        0,
-    )?;
-    Ok(elements)
 }
 
 pub fn window_chrome_elements_for_window(
@@ -119,22 +87,6 @@ fn titlebar_radius(window: &ManagedWindow) -> i32 {
 #[derive(Debug, Clone, Copy)]
 pub enum RenderStage {
     Layer(Layer),
-}
-
-fn append_workspace_chrome(
-    renderer: &mut GlesRenderer,
-    state: &KestrelState,
-    elements: &mut Vec<MemoryRenderBufferRenderElement<GlesRenderer>>,
-    workspace: &WorkspaceId,
-    offset_x: i32,
-) -> Result<(), GlesError> {
-    for window in state.windows.render_windows_on_workspace(workspace) {
-        elements.extend(window_chrome_elements_for_window(
-            renderer, state, window, offset_x,
-        )?);
-    }
-
-    Ok(())
 }
 
 fn append_layer_elements(

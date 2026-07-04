@@ -4,6 +4,8 @@ use zbus::{fdo, interface};
 use zvariant::{OwnedValue, Value};
 
 const APPEARANCE: &str = "org.freedesktop.appearance";
+const GNOME_WM: &str = "org.gnome.desktop.wm.preferences";
+const GNOME_INTERFACE: &str = "org.gnome.desktop.interface";
 
 pub struct PortalSettings {
     values: HashMap<String, HashMap<String, OwnedValue>>,
@@ -12,18 +14,34 @@ pub struct PortalSettings {
 impl PortalSettings {
     pub fn new() -> Self {
         let mut appearance = HashMap::new();
-        appearance.insert(
-            "color-scheme".to_string(),
-            OwnedValue::from(1u32),
-        );
+        appearance.insert("color-scheme".to_string(), OwnedValue::from(1u32));
         appearance.insert("contrast".to_string(), OwnedValue::from(0u32));
-        appearance.insert(
-            "reduced-motion".to_string(),
-            OwnedValue::from(0u32),
+        appearance.insert("reduced-motion".to_string(), OwnedValue::from(0u32));
+
+        let mut wm_preferences = HashMap::new();
+        wm_preferences.insert(
+            "button-layout".to_string(),
+            Value::from(":minimize,:maximize,:close")
+                .try_into()
+                .expect("portal string value"),
+        );
+
+        let mut interface = HashMap::new();
+        interface.insert(
+            "gtk-decoration-layout".to_string(),
+            Value::from(":minimize,:maximize,:close")
+                .try_into()
+                .expect("portal string value"),
+        );
+        interface.insert(
+            "enable-animations".to_string(),
+            OwnedValue::from(true),
         );
 
         let mut values = HashMap::new();
         values.insert(APPEARANCE.to_string(), appearance);
+        values.insert(GNOME_WM.to_string(), wm_preferences);
+        values.insert(GNOME_INTERFACE.to_string(), interface);
         Self { values }
     }
 

@@ -32,8 +32,7 @@ use smithay::{
         selection::{
             SelectionHandler,
             data_device::{
-                ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
-                set_data_device_focus,
+                DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler, set_data_device_focus,
             },
             ext_data_control::{DataControlHandler, DataControlState},
             primary_selection::{
@@ -60,7 +59,6 @@ use smithay::{
         drm_syncobj::{DrmSyncobjCachedState, DrmSyncobjHandler, DrmSyncobjState},
     },
 };
-use std::os::unix::io::OwnedFd;
 use tracing::debug;
 
 mod xdg;
@@ -194,28 +192,24 @@ impl SelectionHandler for KestrelState {
 }
 
 impl DataDeviceHandler for KestrelState {
-    fn data_device_state(&self) -> &DataDeviceState {
-        &self.data_device_state
+    fn data_device_state(&mut self) -> &mut DataDeviceState {
+        &mut self.data_device_state
     }
 }
 
 impl PrimarySelectionHandler for KestrelState {
-    fn primary_selection_state(&self) -> &PrimarySelectionState {
-        &self.primary_selection_state
+    fn primary_selection_state(&mut self) -> &mut PrimarySelectionState {
+        &mut self.primary_selection_state
     }
 }
 
 impl DataControlHandler for KestrelState {
-    fn data_control_state(&self) -> &DataControlState {
-        &self.data_control_state
+    fn data_control_state(&mut self) -> &mut DataControlState {
+        &mut self.data_control_state
     }
 }
 
-impl ClientDndGrabHandler for KestrelState {}
-
-impl ServerDndGrabHandler for KestrelState {
-    fn send(&mut self, _mime_type: String, _fd: OwnedFd, _seat: Seat<Self>) {}
-}
+impl WaylandDndGrabHandler for KestrelState {}
 
 impl CompositorHandler for KestrelState {
     fn compositor_state(&mut self) -> &mut CompositorState {

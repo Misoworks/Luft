@@ -17,18 +17,25 @@ use smithay::{
 };
 
 pub fn window_blur_targets(state: &KestrelState) -> Vec<LayerRenderTarget> {
-    let mut targets = Vec::new();
+    window_blur_targets_grouped(state)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+pub fn window_blur_targets_grouped(state: &KestrelState) -> Vec<Vec<LayerRenderTarget>> {
+    let mut grouped = Vec::new();
     if let Some(transition) = state.workspace_transition() {
         let width = state.output_size().w as f64;
         let direction = transition.direction as f64;
         let from_offset = (-direction * width * transition.progress).round() as i32;
         let to_offset = (direction * width * (1.0 - transition.progress)).round() as i32;
-        append_workspace_targets(state, &transition.from, from_offset, &mut targets);
-        append_workspace_targets(state, &transition.to, to_offset, &mut targets);
+        append_workspace_targets_grouped(state, &transition.from, from_offset, &mut grouped);
+        append_workspace_targets_grouped(state, &transition.to, to_offset, &mut grouped);
     } else {
-        append_workspace_targets(state, state.layout.active_workspace(), 0, &mut targets);
+        append_workspace_targets_grouped(state, state.layout.active_workspace(), 0, &mut grouped);
     }
-    targets
+    grouped
 }
 
 pub fn layer_popup_blur_targets(state: &KestrelState, layer: Layer) -> Vec<LayerRenderTarget> {
@@ -65,16 +72,18 @@ pub fn layer_popup_blur_targets(state: &KestrelState, layer: Layer) -> Vec<Layer
     targets
 }
 
-fn append_workspace_targets(
+fn append_workspace_targets_grouped(
     state: &KestrelState,
     workspace: &WorkspaceId,
     offset_x: i32,
-    targets: &mut Vec<LayerRenderTarget>,
+    grouped: &mut Vec<Vec<LayerRenderTarget>>,
 ) {
     let mut opaque_above = Vec::new();
     for window in state.windows.render_windows_on_workspace(workspace) {
         let transform = window.render_transform(offset_x, state.output_size());
-        append_window_targets(window, transform, targets, &opaque_above);
+        let mut window_targets = Vec::new();
+        append_window_targets(window, transform, &mut window_targets, &opaque_above);
+        grouped.push(window_targets);
         opaque_above.extend(window_opaque_rects(window, transform));
     }
 }

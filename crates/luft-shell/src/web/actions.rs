@@ -78,6 +78,9 @@ pub enum WebShellAction {
     SessionCommand {
         command: SessionCommand,
     },
+    SessionMenuOpen,
+    SessionMenuClose,
+    ToggleSessionMenu,
     ReloadConfig,
     OpenLogsFolder,
     NotificationClose {

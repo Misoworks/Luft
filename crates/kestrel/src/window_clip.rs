@@ -1,4 +1,4 @@
-use crate::{state::KestrelState, window::ManagedWindow};
+use crate::window::ManagedWindow;
 use smithay::{
     backend::renderer::{
         Renderer,
@@ -10,7 +10,7 @@ use smithay::{
         utils::{CommitCounter, DamageSet, OpaqueRegions},
     },
     desktop::PopupManager,
-    utils::{Buffer, Physical, Point, Rectangle, Scale, Size},
+    utils::{user_data::UserDataMap, Buffer, Physical, Point, Rectangle, Scale, Size},
 };
 
 pub const WINDOW_RADIUS: i32 = 12;
@@ -30,36 +30,6 @@ pub enum ClipShape {
     RoundRight { radius: i32 },
 }
 
-pub fn window_elements(
-    renderer: &mut GlesRenderer,
-    state: &KestrelState,
-) -> Vec<RoundedWindowElement<WaylandSurfaceRenderElement<GlesRenderer>>> {
-    let mut elements = Vec::new();
-    if let Some(transition) = state.workspace_transition() {
-        let width = state.output_size().w as f64;
-        let direction = transition.direction as f64;
-        let from_offset = (-direction * width * transition.progress).round() as i32;
-        let to_offset = (direction * width * (1.0 - transition.progress)).round() as i32;
-        append_workspace_elements(
-            renderer,
-            state,
-            &transition.from,
-            from_offset,
-            &mut elements,
-        );
-        append_workspace_elements(renderer, state, &transition.to, to_offset, &mut elements);
-    } else {
-        append_workspace_elements(
-            renderer,
-            state,
-            state.layout.active_workspace(),
-            0,
-            &mut elements,
-        );
-    }
-    elements
-}
-
 pub fn window_elements_for_window(
     renderer: &mut GlesRenderer,
     window: &ManagedWindow,
@@ -69,18 +39,6 @@ pub fn window_elements_for_window(
     let mut elements = Vec::new();
     append_window_elements(renderer, window, offset_x, output_size, &mut elements);
     elements
-}
-
-fn append_workspace_elements(
-    renderer: &mut GlesRenderer,
-    state: &KestrelState,
-    workspace: &luft_ipc::WorkspaceId,
-    offset_x: i32,
-    elements: &mut Vec<RoundedWindowElement<WaylandSurfaceRenderElement<GlesRenderer>>>,
-) {
-    for window in state.windows.render_windows_on_workspace(workspace) {
-        append_window_elements(renderer, window, offset_x, state.output_size(), elements);
-    }
 }
 
 fn append_window_elements(
@@ -118,12 +76,20 @@ fn append_window_elements(
         )
         .into_iter()
         .map(|element: WaylandSurfaceRenderElement<GlesRenderer>| {
-            let (clip, radius) = if window.server_decorated {
-                (frame_clip, window_radius(window, transform.scale))
+            if window.server_decorated {
+                let radius = window_radius(window, transform.scale);
+                let shape = if titlebar_height > 0 && radius > 0 {
+                    ClipShape::RoundTop { radius }
+                } else if radius > 0 {
+                    ClipShape::RoundRect { radius }
+                } else {
+                    ClipShape::Rect
+                };
+                RoundedWindowElement::new_with_shape(element, frame_clip, shape)
             } else {
-                (element.geometry(Scale::from(1.0)), 0)
-            };
-            RoundedWindowElement::new(element, clip, radius)
+                let clip = element.geometry(Scale::from(1.0));
+                RoundedWindowElement::new(element, clip, 0)
+            }
         }),
     );
     append_popup_elements(renderer, window, transform, surface_offset, elements);
@@ -282,6 +248,7 @@ where
         dst: Rectangle<i32, Physical>,
         damage: &[Rectangle<i32, Physical>],
         opaque_regions: &[Rectangle<i32, Physical>],
+        cache: Option<&UserDataMap>,
     ) -> Result<(), R::Error> {
         let element_geometry = self.element.geometry(Scale::from(1.0));
         for strip in clip_strips(self.clip, self.shape) {
@@ -296,7 +263,7 @@ where
             let piece_src =
                 source_for_piece(src, element_geometry, piece, self.element.transform());
             self.element
-                .draw(frame, piece_src, piece, &piece_damage, opaque_regions)?;
+                .draw(frame, piece_src, piece, &piece_damage, opaque_regions, cache)?;
         }
         Ok(())
     }

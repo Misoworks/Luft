@@ -23,6 +23,7 @@ pub(super) fn close_animation_duration(kind: WebShellSurface) -> Option<Duration
         WebShellSurface::PanelMenu | WebShellSurface::NotificationToast => {
             Some(Duration::from_millis(170))
         }
+        WebShellSurface::SessionMenu => Some(Duration::from_millis(140)),
         WebShellSurface::Panel => None,
     }
 }
@@ -36,6 +37,7 @@ pub(super) fn open_animation_duration(kind: WebShellSurface) -> Option<Duration>
         WebShellSurface::PanelMenu | WebShellSurface::NotificationToast => {
             Some(Duration::from_millis(190))
         }
+        WebShellSurface::SessionMenu => Some(Duration::from_millis(150)),
         WebShellSurface::Panel => None,
     }
 }
@@ -51,6 +53,7 @@ pub(super) fn surface_margin_animates(kind: WebShellSurface) -> bool {
             | WebShellSurface::QuickSettings
             | WebShellSurface::DateCenter
             | WebShellSurface::PanelMenu
+            | WebShellSurface::SessionMenu
             | WebShellSurface::NotificationToast
     )
 }
@@ -61,6 +64,7 @@ pub(super) fn hidden_process_ttl(kind: WebShellSurface) -> Option<Duration> {
         | WebShellSurface::QuickSettings
         | WebShellSurface::DateCenter
         | WebShellSurface::PanelMenu
+        | WebShellSurface::SessionMenu
         | WebShellSurface::NotificationToast
         | WebShellSurface::Panel => None,
     }
@@ -81,6 +85,9 @@ pub(super) fn hidden_shell_margin(
         }
         WebShellSurface::PanelMenu => {
             margin.bottom = -(size.1 + 8);
+        }
+        WebShellSurface::SessionMenu => {
+            margin.right = -(size.0 + 8);
         }
         WebShellSurface::NotificationToast => {
             margin.right = -(size.0 + 12);
@@ -114,7 +121,7 @@ fn lerp_i32(from: i32, to: i32, progress: f32) -> i32 {
 
 pub(super) fn shell_blur_region(kind: WebShellSurface, _width: i32, _height: i32) -> WindowRegion {
     match kind {
-        WebShellSurface::QuickSettings | WebShellSurface::DateCenter => {
+        WebShellSurface::QuickSettings | WebShellSurface::DateCenter | WebShellSurface::SessionMenu => {
             WindowRegion::adaptive_rounded_rect(26)
         }
         WebShellSurface::NotificationToast => WindowRegion::adaptive_rounded_rect(22),

@@ -3,7 +3,7 @@ use crate::{
     output::{NestedOutput, OutputDescriptor, OutputGraph},
     protocol_state::ProtocolState,
     titlebar::TitlebarCache,
-    window::{WindowGrab, WindowStack, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH},
+    window::{WindowGrab, WindowStack},
     workspace_transition::WorkspaceTransition,
 };
 use luft_config::LuftConfig;
@@ -22,7 +22,7 @@ use smithay::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
         wayland_server::{DisplayHandle, protocol::wl_surface::WlSurface},
     },
-    utils::{Logical, Point},
+    utils::{Logical, Point, Size},
     wayland::{
         compositor::{self, CompositorState},
         foreign_toplevel_list::ForeignToplevelHandle,
@@ -123,7 +123,12 @@ impl KestrelState {
         let outputs = OutputGraph::new(display, &config.display, output_descriptors);
         let mut layout = layout_from_config(&config);
         let output_size = outputs.primary_size();
-        layout.set_bounds(Rect::new(0, 0, output_size.w, output_size.h));
+        let scale = outputs.primary_scale().max(1.0);
+        let logical = Size::<i32, Logical>::from((
+            (f64::from(output_size.w) / scale).round().max(1.0) as i32,
+            (f64::from(output_size.h) / scale).round().max(1.0) as i32,
+        ));
+        layout.set_bounds(Rect::new(0, 0, logical.w, logical.h));
 
         Self {
             display_handle: display.clone(),
@@ -219,13 +224,10 @@ impl KestrelState {
         let Some(geometry) = window.committed_surface_geometry() else {
             return false;
         };
-        let size = smithay::utils::Size::<i32, Logical>::from((
-            geometry.size.w.max(MIN_WINDOW_WIDTH),
-            geometry.size.h.max(MIN_WINDOW_HEIGHT),
-        ));
-        if size.w < MIN_WINDOW_WIDTH || size.h < MIN_WINDOW_HEIGHT {
+        if geometry.size.w < 1 || geometry.size.h < 1 {
             return false;
         }
+        let size = geometry.size;
 
         let geometry = self
             .windows

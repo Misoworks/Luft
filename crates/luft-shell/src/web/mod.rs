@@ -112,6 +112,8 @@ pub(super) struct WebShell {
     pub(super) panel_menu_open: bool,
     pub(super) panel_menu_command: Option<String>,
     pub(super) panel_menu_x: Option<i32>,
+    pub(super) session_menu_visible: bool,
+    pub(super) session_menu_qs_height: Option<i32>,
     last_model_refresh: Instant,
     last_status_refresh: Instant,
     last_config_refresh: Instant,

@@ -20,7 +20,7 @@ use std::sync::{
 
 mod targets;
 
-pub use targets::{layer_popup_blur_targets, window_blur_targets};
+pub use targets::{layer_popup_blur_targets, window_blur_targets, window_blur_targets_grouped};
 
 #[derive(Debug)]
 pub struct BackgroundEffectGlobal {

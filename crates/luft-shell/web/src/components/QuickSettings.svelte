@@ -4,10 +4,8 @@
   import { sendAction } from "../shell/bridge";
   import { batteryLabel, networkLabel } from "../lib/labels";
   import type { ShellSnapshot } from "../shell/model";
-  import { onMount } from "svelte";
 
   let { snapshot }: { snapshot: ShellSnapshot } = $props();
-  let powerMenuOpen = $state(false);
   const showNetwork = $derived(Boolean(snapshot.status.network));
   const showPower = $derived(Boolean(snapshot.status.battery));
   const showVolume = $derived(Boolean(snapshot.status.audio));
@@ -16,22 +14,6 @@
   const volume = $derived(snapshot.status.audio?.percent ?? 0);
   const brightness = $derived(snapshot.status.brightness?.percent ?? 0);
   const notificationLabel = $derived(snapshot.notifications.length === 1 ? "1 notification" : `${snapshot.notifications.length} notifications`);
-  const sessionMenuUrl = $derived(new URL("session-menu.html", window.location.href).toString());
-
-  onMount(() => {
-    const closePowerMenu = () => {
-      void closeNativePopup();
-      powerMenuOpen = false;
-    };
-    window.addEventListener("fenestra:luft.surface-open", closePowerMenu);
-    window.addEventListener("fenestra:luft.surface-close", closePowerMenu);
-    window.addEventListener("fenestra:popup.close", closePowerMenu);
-    return () => {
-      window.removeEventListener("fenestra:luft.surface-open", closePowerMenu);
-      window.removeEventListener("fenestra:luft.surface-close", closePowerMenu);
-      window.removeEventListener("fenestra:popup.close", closePowerMenu);
-    };
-  });
 
   function setVolume(percent: number) {
     sendAction({ type: "quick-set-volume", percent });
@@ -49,62 +31,8 @@
     sendAction({ type: "notification-do-not-disturb", enabled: !snapshot.doNotDisturb });
   }
 
-  async function togglePowerMenu(event: MouseEvent) {
-    if (powerMenuOpen) {
-      await closeNativePopup();
-      powerMenuOpen = false;
-      return;
-    }
-    if (!canUseNativePopup()) {
-      console.error("native popup bridge unavailable");
-      return;
-    }
-    const target = event.currentTarget;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-    const rect = target.getBoundingClientRect();
-    const width = 188;
-    const height = 172;
-    try {
-      await openNativePopup({
-        x: Math.round(rect.right - width),
-        y: Math.round(rect.bottom + 8),
-        width,
-        height,
-        url: sessionMenuUrl,
-      });
-      powerMenuOpen = true;
-    } catch (error) {
-      powerMenuOpen = false;
-      console.error("failed to open native power popup", error);
-    }
-  }
-
-  function canUseNativePopup() {
-    const bridge = window.fenestra?.bridge;
-    return Boolean(
-      window.fenestra?.popup?.open ||
-        (bridge?.commands.includes("fenestra.popup.open") && bridge.commands.includes("fenestra.popup.close")),
-    );
-  }
-
-  function openNativePopup(options: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    url: string;
-  }) {
-    const popup = window.fenestra?.popup;
-    if (popup?.open) return popup.open(options);
-    return window.fenestra?.bridge?.invoke("fenestra.popup.open", options);
-  }
-
-  function closeNativePopup() {
-    const popup = window.fenestra?.popup;
-    if (popup?.close) return popup.close();
-    return window.fenestra?.bridge?.invoke("fenestra.popup.close", {});
+  function togglePowerMenu() {
+    sendAction({ type: "toggle-session-menu" });
   }
 </script>
 
@@ -129,9 +57,7 @@
       <button
         type="button"
         class="round-action is-compact"
-        class:is-active={powerMenuOpen}
-        aria-label={powerMenuOpen ? "Close power menu" : "Open power menu"}
-        aria-expanded={powerMenuOpen}
+        aria-label="Open power menu"
         onclick={togglePowerMenu}
       >
         <Icon name="power" />

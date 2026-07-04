@@ -165,6 +165,7 @@ function isSurface(value: string | null): value is ShellSurface {
   return (
     value === "panel" ||
     value === "panel-menu" ||
+    value === "session-menu" ||
     value === "quick-settings" ||
     value === "date-center" ||
     value === "notification-toast" ||

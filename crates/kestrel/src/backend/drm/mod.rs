@@ -7,8 +7,6 @@ mod frame;
 #[cfg(feature = "session-backend")]
 mod runtime;
 #[cfg(feature = "session-backend")]
-mod scanout;
-#[cfg(feature = "session-backend")]
 mod scheduler;
 
 use luft_config::LuftConfig;

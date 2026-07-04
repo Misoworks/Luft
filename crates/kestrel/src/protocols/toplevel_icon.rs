@@ -91,36 +91,33 @@ fn buffer_to_rgba(buffer: &CopiedIconBuffer) -> Option<Vec<u8>> {
 }
 
 fn write_rgba_pixel(out: &mut [u8], pixel: &[u8], format: wl_shm::Format) {
+    // Wayland shm formats are named by byte order with the least significant byte first.
     match format {
-        wl_shm::Format::Argb8888 => {
-            out[0] = pixel[1];
-            out[1] = pixel[2];
-            out[2] = pixel[3];
-            out[3] = pixel[0];
+        wl_shm::Format::Argb8888 | wl_shm::Format::Xrgb8888 => {
+            out[0] = pixel[2];
+            out[1] = pixel[1];
+            out[2] = pixel[0];
+            out[3] = if matches!(format, wl_shm::Format::Xrgb8888) {
+                255
+            } else {
+                pixel[3]
+            };
         }
-        wl_shm::Format::Xrgb8888 => {
-            out[0] = pixel[1];
-            out[1] = pixel[2];
-            out[2] = pixel[3];
-            out[3] = 255;
-        }
-        wl_shm::Format::Abgr8888 => {
-            out[0] = pixel[3];
-            out[1] = pixel[2];
-            out[2] = pixel[1];
-            out[3] = pixel[0];
-        }
-        wl_shm::Format::Xbgr8888 => {
-            out[0] = pixel[3];
-            out[1] = pixel[2];
-            out[2] = pixel[1];
-            out[3] = 255;
+        wl_shm::Format::Abgr8888 | wl_shm::Format::Xbgr8888 => {
+            out[0] = pixel[0];
+            out[1] = pixel[1];
+            out[2] = pixel[2];
+            out[3] = if matches!(format, wl_shm::Format::Xbgr8888) {
+                255
+            } else {
+                pixel[3]
+            };
         }
         _ => {
-            out[0] = pixel[1];
-            out[1] = pixel[2];
-            out[2] = pixel[3];
-            out[3] = pixel[0];
+            out[0] = pixel[2];
+            out[1] = pixel[1];
+            out[2] = pixel[0];
+            out[3] = pixel[3];
         }
     }
 }

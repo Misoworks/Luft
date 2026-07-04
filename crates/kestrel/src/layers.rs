@@ -5,7 +5,7 @@ use smithay::{
     },
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Logical, Physical, Point, Rectangle},
+    utils::{Logical, Point},
     wayland::{
         alpha_modifier::AlphaModifierSurfaceCachedState,
         compositor,
@@ -52,13 +52,6 @@ pub fn surfaces(output: &Output) -> Vec<WlSurface> {
         .collect()
 }
 
-pub fn has_panel_surface(output: &Output) -> bool {
-    layer_map_for_output(output).layers().any(|layer| {
-        layer.namespace() == "luft-panel"
-            && !bbox_from_surface_tree(layer.wl_surface(), (0, 0)).is_empty()
-    })
-}
-
 pub fn pointer_focus(output: &Output, point: Point<f64, Logical>) -> Option<LayerPointerFocus> {
     for layer in [Layer::Overlay, Layer::Top, Layer::Bottom, Layer::Background] {
         if let Some(focus) = pointer_focus_on_layer(output, point, layer) {
@@ -98,24 +91,6 @@ pub fn has_layer_above_windows(output: &Output, point: Point<f64, Logical>) -> b
 
 const SHELL_CHROME_NAMESPACES: &[&str] = &["luft-panel"];
 
-pub fn layer_surface_rects(output: &Output) -> Vec<(WlSurface, Rectangle<i32, Physical>)> {
-    let layer_map = layer_map_for_output(output);
-    let mut rects = Vec::new();
-    for layer in [Layer::Background, Layer::Bottom, Layer::Top, Layer::Overlay] {
-        for surface in layer_map.layers_on(layer) {
-            let Some(geometry) = layer_map.layer_geometry(surface) else {
-                continue;
-            };
-            let rect = Rectangle::<i32, Physical>::new(
-                (geometry.loc.x, geometry.loc.y).into(),
-                (geometry.size.w, geometry.size.h).into(),
-            );
-            rects.push((surface.wl_surface().clone(), rect));
-        }
-    }
-    rects
-}
-
 pub fn should_close_transient_popover(output: &Output, point: Point<f64, Logical>) -> bool {
     if pointer_on_shell_chrome(output, point) {
         return false;
@@ -128,6 +103,7 @@ pub fn should_close_transient_popover(output: &Output, point: Point<f64, Logical
             if !matches!(
                 surface.namespace(),
                 "luft-quick-settings" | "luft-date-center" | "luft-start-menu" | "luft-panel-menu"
+                    | "luft-session-menu"
             ) {
                 continue;
             }
@@ -247,6 +223,7 @@ pub(crate) fn material_for(namespace: &str) -> Option<LayerMaterial> {
         "luft-date-center" => Some(LayerMaterial::RoundRect { radius: 26 }),
         "luft-launcher" => Some(LayerMaterial::RoundRect { radius: 22 }),
         "luft-quick-settings" => Some(LayerMaterial::RoundRect { radius: 26 }),
+        "luft-session-menu" => Some(LayerMaterial::RoundRect { radius: 18 }),
         "luft-start-menu" => Some(LayerMaterial::RoundRect { radius: 24 }),
         "luft-notifications" => Some(LayerMaterial::RoundRect { radius: 26 }),
         _ => None,

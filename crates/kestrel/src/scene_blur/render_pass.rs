@@ -16,6 +16,7 @@ pub(super) struct BlurRenderPass<'a> {
     pub texture_size: Size<i32, Physical>,
     pub capture_size: Size<i32, Physical>,
     pub visible_source: Rectangle<f64, Buffer>,
+    pub capture_source: Rectangle<f64, Buffer>,
     pub capture: &'a GlesTexture,
     pub scratch: &'a mut GlesTexture,
     pub blurred: &'a mut GlesTexture,
@@ -27,10 +28,6 @@ pub(super) fn render_blur_texture(
     pass: BlurRenderPass<'_>,
 ) -> Result<(), GlesError> {
     let full_damage = [Rectangle::<i32, Physical>::from_size(pass.texture_size)];
-    let capture_source = Rectangle::<f64, Buffer>::from_size(Size::<f64, Buffer>::from((
-        pass.capture_size.w as f64,
-        pass.capture_size.h as f64,
-    )));
     let capture_damage = [Rectangle::<i32, Physical>::from_size(pass.capture_size)];
     {
         let mut scratch_target = renderer.bind(pass.scratch)?;
@@ -42,7 +39,7 @@ pub(super) fn render_blur_texture(
         )?;
         frame.render_texture_from_to(
             pass.capture,
-            capture_source,
+            pass.capture_source,
             Rectangle::<i32, Physical>::from_size(pass.capture_size),
             &capture_damage,
             &[],
@@ -70,9 +67,13 @@ pub(super) fn render_blur_texture(
             smithay::backend::renderer::Color32F::new(0.0, 0.0, 0.0, 0.0),
             &capture_damage,
         )?;
+        let horizontal_source = Rectangle::<f64, Buffer>::from_size(Size::<f64, Buffer>::from((
+            pass.capture_size.w as f64,
+            pass.capture_size.h as f64,
+        )));
         frame.render_texture_from_to(
             pass.scratch,
-            capture_source,
+            horizontal_source,
             Rectangle::<i32, Physical>::from_size(pass.capture_size),
             &capture_damage,
             &[],

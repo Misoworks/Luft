@@ -82,6 +82,7 @@ pub fn create_output(display: &DisplayHandle, descriptor: &OutputDescriptor) -> 
             subpixel: descriptor.subpixel,
             make: descriptor.make.clone(),
             model: descriptor.model.clone(),
+            serial_number: String::new(),
         },
     );
 

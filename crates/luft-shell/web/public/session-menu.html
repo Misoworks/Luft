@@ -107,12 +107,19 @@
     <script>
       document.addEventListener("click", async (event) => {
         const button = event.target.closest("[data-command]");
-        if (!button || !window.fenestra?.bridge) return;
-        await window.fenestra.bridge.invoke("luft.action", {
-          type: "session-command",
-          command: button.dataset.command,
-        });
-        window.fenestra.popup?.close?.();
+        if (!button) return;
+        try {
+          if (window.fenestra?.bridge) {
+            await window.fenestra.bridge.invoke("luft.action", {
+              type: "session-command",
+              command: button.dataset.command,
+            });
+          }
+        } catch (error) {
+          console.error("session command failed", error);
+        } finally {
+          window.fenestra?.popup?.close?.();
+        }
       });
     </script>
   </body>

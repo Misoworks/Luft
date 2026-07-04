@@ -9,6 +9,7 @@ use super::{
     surface_layout::{PANEL_HEIGHT, PANEL_WIDTH_HINT},
     surface_sizing::{
         date_center_size, notification_toast_size, panel_menu_size, quick_settings_size,
+        session_menu_size,
     },
 };
 use std::{error::Error, sync::mpsc::Sender};
@@ -22,6 +23,7 @@ pub struct WebSurfaces {
     pub date: LazyWebSurface,
     pub notification_toast: LazyWebSurface,
     panel_menu: LazyWebSurface,
+    session_menu: LazyWebSurface,
     panel: WebSurface,
 }
 
@@ -37,12 +39,19 @@ impl WebSurfaces {
                 visible: true,
                 keep_alive_when_hidden: false,
                 panel_menu_x: None,
+                session_menu_qs_height: None,
                 actions_tx: &actions_tx,
                 snapshot,
             })?,
             panel_menu: LazyWebSurface::new(
                 WebShellSurface::PanelMenu,
                 panel_menu_size(snapshot),
+                &actions_tx,
+                snapshot,
+            ),
+            session_menu: LazyWebSurface::new(
+                WebShellSurface::SessionMenu,
+                session_menu_size(),
                 &actions_tx,
                 snapshot,
             ),
@@ -75,6 +84,7 @@ impl WebSurfaces {
         surfaces.date.prewarm();
         surfaces.start_menu.prewarm();
         surfaces.panel_menu.prewarm();
+        surfaces.session_menu.prewarm();
         surfaces.notification_toast.prewarm();
         Ok(surfaces)
     }
@@ -83,6 +93,7 @@ impl WebSurfaces {
         self.panel.evaluate_snapshot(snapshot, json);
         self.panel_menu.resize(panel_menu_size(snapshot));
         self.panel_menu.evaluate_snapshot(snapshot, json);
+        self.session_menu.evaluate_snapshot(snapshot, json);
         self.start_menu.evaluate_snapshot(snapshot, json);
         self.quick.resize(quick_settings_size(snapshot));
         self.quick.evaluate_snapshot(snapshot, json);
@@ -101,8 +112,16 @@ impl WebSurfaces {
         self.panel_menu.set_visible(visible);
     }
 
+    pub fn set_session_menu_visible(&mut self, visible: bool) {
+        self.session_menu.set_visible(visible);
+    }
+
     pub fn set_panel_menu_x(&mut self, x: Option<i32>) {
         self.panel_menu.set_panel_menu_x(x);
+    }
+
+    pub fn set_session_menu_qs_height(&mut self, height: Option<i32>) {
+        self.session_menu.set_session_menu_qs_height(height);
     }
 
     pub fn set_notification_toast_visible(&mut self, visible: bool) {
@@ -111,6 +130,7 @@ impl WebSurfaces {
 
     pub fn tick(&mut self) {
         self.panel_menu.tick();
+        self.session_menu.tick();
         self.start_menu.tick();
         self.quick.tick();
         self.date.tick();
@@ -119,6 +139,7 @@ impl WebSurfaces {
 
     pub fn is_animating(&self) -> bool {
         self.panel_menu.is_animating()
+            || self.session_menu.is_animating()
             || self.start_menu.is_animating()
             || self.quick.is_animating()
             || self.date.is_animating()

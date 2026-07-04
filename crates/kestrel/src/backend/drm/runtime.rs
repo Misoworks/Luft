@@ -10,7 +10,7 @@ use crate::{
     xwayland::XwaylandSatellite,
 };
 use ::input::{
-    Device as LibinputDevice, DeviceCapability as LibinputDeviceCapability, Led as LibinputLed,
+    Device as LibinputDevice, DeviceCapability as LibinputDeviceCapability,
 };
 use calloop::{
     EventLoop,
@@ -62,6 +62,7 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
         input,
     } = opened.sources;
     let mut state = KestrelState::new_for_outputs(&dh, options.config, device.descriptors());
+    device.link_compositor_outputs(&state);
     state.enable_dmabuf(
         device.dmabuf_main_device(),
         device.renderer.dmabuf_formats(),
@@ -198,6 +199,7 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
                 UdevEvent::Changed { .. } => {
                     if device.rescan_outputs(&state.config.display)? {
                         state.set_output_descriptors(device.descriptors());
+                        device.link_compositor_outputs(&state);
                         frame_renderer.reset_for_output(&state);
                         render_scheduler.set_refresh_interval(refresh_interval(
                             state.output_refresh_millihertz(),
@@ -276,7 +278,7 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
         if state.shell_status != shell_status {
             state.shell_status = shell_status;
             if shell_status != ShellStatus::Running {
-                frame_renderer.mark_shell_not_ready();
+                frame_renderer.reset_damage(&state);
             }
             state.mark_scene_dirty();
         }
@@ -315,8 +317,7 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
             && !device.frame_pending()
             && (force_full_damage
                 || state.scene_dirty()
-                || state.animations_active()
-                || frame_renderer.effects_active())
+                || state.animations_active())
         {
             render_scheduler.request_repaint(Instant::now());
         }
@@ -328,12 +329,11 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
                 let frame_result = frame_renderer.render(
                     &mut state,
                     renderer,
-                    &mut output.surface,
-                    &mut output.direct_scanout,
+                    &mut output.compositor,
                     force_full_damage,
                 )?;
-                if let FrameResult::Queued { submitted, .. } = &frame_result {
-                    output.mark_frame_submitted(*submitted);
+                if matches!(frame_result, FrameResult::Queued { .. }) {
+                    output.mark_frame_queued();
                 }
                 frame_result
             };
@@ -347,7 +347,6 @@ pub fn run(options: DrmOptions) -> Result<(), DrmError> {
             }
             match frame_result {
                 FrameResult::Queued {
-                    submitted: _,
                     callback_surfaces,
                 } => {
                     render_scheduler.frame_rendered(render_started.elapsed());
@@ -423,7 +422,7 @@ fn register_keyboard_device(
     if !device.has_capability(LibinputDeviceCapability::Keyboard) {
         return;
     }
-    device.led_update(LibinputLed::from(led_state));
+    device.led_update(led_state.into());
     devices.push(device);
 }
 
@@ -435,7 +434,7 @@ fn update_keyboard_leds(
     devices: &mut [LibinputDevice],
     led_state: smithay::input::keyboard::LedState,
 ) {
-    let leds = LibinputLed::from(led_state);
+    let leds = led_state.into();
     for device in devices {
         device.led_update(leds);
     }

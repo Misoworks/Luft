@@ -28,6 +28,7 @@ pub(crate) struct LazyWebSurface {
     hide_start_margin: Option<ShellSurfaceMargin>,
     release_at: Option<Instant>,
     panel_menu_x: Option<i32>,
+    session_menu_qs_height: Option<i32>,
     surface: Option<WebSurface>,
 }
 
@@ -54,6 +55,7 @@ impl LazyWebSurface {
             hide_start_margin: None,
             release_at: None,
             panel_menu_x: None,
+            session_menu_qs_height: None,
             surface: None,
         }
     }
@@ -231,6 +233,7 @@ impl LazyWebSurface {
             visible: false,
             keep_alive_when_hidden: true,
             panel_menu_x: self.panel_menu_x,
+            session_menu_qs_height: self.session_menu_qs_height,
             actions_tx: &self.actions_tx,
             snapshot: &self.snapshot,
         }) {
@@ -283,6 +286,16 @@ impl LazyWebSurface {
         self.panel_menu_x = x;
         if let Some(surface) = &mut self.surface {
             surface.set_panel_menu_x(x);
+        }
+    }
+
+    pub(super) fn set_session_menu_qs_height(&mut self, height: Option<i32>) {
+        if self.session_menu_qs_height == height {
+            return;
+        }
+        self.session_menu_qs_height = height;
+        if let Some(surface) = &mut self.surface {
+            surface.set_session_menu_qs_height(height);
         }
     }
 

@@ -1,35 +1,36 @@
 use super::{
     DrmError,
-    device::{SessionOutput, SessionSurface, SubmittedFrame},
-    scanout::DirectScanout,
+    device::{SessionCompositor, SessionOutput},
 };
 use crate::{
     background::Background,
     background_effect,
-    compositor_damage::{CompositorDamageContext, plan_compositor_damage},
-    damage::{DamageTracker, LayerGeometryTracker, resolve_render_damage},
+    damage::SCENE_CLEAR_COLOR,
     frame_clock::FrameClock,
     frame_clock::FrameTime,
     layers,
-    loading_overlay::{render_loading_overlay, shell_layers_ready, should_show_loading_overlay},
-    render::{LayerElement, RenderStage, render_stage_elements, window_chrome_elements},
-    scene_blur::SceneBlurCache,
-    scene_render::{SceneRenderRequest, render_scene},
+    render::{RenderStage, render_stage_elements},
+    scene_backdrop::SceneBackdrop,
+    scene_blur::BlurEffectManager,
+    scene_composite::SceneCompositeElement,
+    scene_composite::{scene_backdrop_elements, scene_elements},
+    scene_render::{collect_window_scene_layers, window_layer_refs},
     state::KestrelState,
-    window_clip::window_elements,
 };
 use smithay::{
-    backend::renderer::{Bind, Color32F, Frame, Renderer, gles::GlesRenderer},
+    backend::{
+        drm::compositor::FrameFlags,
+        renderer::gles::GlesRenderer,
+    },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Monotonic, Physical, Rectangle, Time, Transform},
+    utils::{Monotonic, Time, Transform},
     wayland::shell::wlr_layer::Layer,
 };
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub enum FrameResult {
     Idle,
     Queued {
-        submitted: SubmittedFrame,
         callback_surfaces: Vec<WlSurface>,
     },
 }
@@ -42,43 +43,29 @@ pub fn render_secondary_output(
         return Ok(false);
     }
 
-    let size = output.descriptor.size;
-    let damage = vec![Rectangle::<i32, Physical>::from_size(size)];
-    let (mut dmabuf, _) = output.surface.next_buffer().map_err(|error| {
-        DrmError::Unsupported(format!("failed to acquire secondary GBM buffer: {error}"))
-    })?;
-    let mut framebuffer = renderer.bind(&mut dmabuf).map_err(|error| {
-        DrmError::Unsupported(format!("failed to bind secondary GBM buffer: {error}"))
-    })?;
-    let mut frame = renderer
-        .render(&mut framebuffer, size, Transform::Normal)
-        .map_err(render_error)?;
-    frame
-        .clear(Color32F::new(0.08, 0.085, 0.09, 1.0), &damage)
-        .map_err(render_error)?;
-    drop(frame);
-    drop(framebuffer);
+    output.compositor.reset_buffer_ages();
+    let elements: &[SceneCompositeElement] = &[];
+    let frame = output
+        .compositor
+        .render_frame(renderer, elements, SCENE_CLEAR_COLOR, FrameFlags::DEFAULT)
+        .map_err(compositor_error)?;
+    if frame.is_empty {
+        return Ok(false);
+    }
     output
-        .surface
-        .queue_buffer(None, Some(damage), ())
-        .map_err(|error| {
-            DrmError::Unsupported(format!("failed to queue secondary DRM frame: {error}"))
-        })?;
-    output.mark_frame_submitted(SubmittedFrame::Composited);
+        .compositor
+        .queue_frame(())
+        .map_err(compositor_error)?;
+    output.mark_frame_queued();
     Ok(true)
 }
 
 pub struct SessionFrameRenderer {
     background: Background,
     frame_clock: FrameClock,
-    damage_tracker: DamageTracker,
-    blur_damage_tracker: DamageTracker,
-    blur_cache: SceneBlurCache,
-    session_started: Instant,
-    shell_layers_seen_ready: bool,
-    previous_frame_direct: bool,
+    scene_backdrop: SceneBackdrop,
+    blur_effects: BlurEffectManager,
     visible_popups: bool,
-    layer_geometry: LayerGeometryTracker,
 }
 
 impl SessionFrameRenderer {
@@ -86,14 +73,9 @@ impl SessionFrameRenderer {
         Self {
             background: Background::new(state.config.compositor.background_image.clone()),
             frame_clock: FrameClock::new(frame_interval),
-            damage_tracker: DamageTracker::from_output(state.output()),
-            blur_damage_tracker: DamageTracker::from_output(state.output()),
-            blur_cache: SceneBlurCache::default(),
-            session_started: Instant::now(),
-            shell_layers_seen_ready: false,
-            previous_frame_direct: false,
+            scene_backdrop: SceneBackdrop::default(),
+            blur_effects: BlurEffectManager::default(),
             visible_popups: state.has_visible_popups(),
-            layer_geometry: LayerGeometryTracker::default(),
         }
     }
 
@@ -101,39 +83,24 @@ impl SessionFrameRenderer {
         &mut self,
         state: &mut KestrelState,
         renderer: &mut GlesRenderer,
-        surface: &mut SessionSurface,
-        direct_scanout: &mut DirectScanout,
+        compositor: &mut SessionCompositor,
         force_full_damage: bool,
     ) -> Result<FrameResult, DrmError> {
         let removed_windows = state.remove_dead_windows();
         let finished_window_closes = state.send_finished_window_closes();
         state.cleanup_layers();
         state.cleanup_output();
-        let shell_layers_ready = shell_layers_ready(state.output(), state.shell_status);
-        let show_loading =
-            should_show_loading_overlay(shell_layers_ready, self.shell_layers_seen_ready);
-        if shell_layers_ready {
-            self.shell_layers_seen_ready = true;
-        }
         let workspace_transition_active = state.workspace_transition().is_some();
-        let scene_dirty = state.scene_dirty();
         let visible_popups = state.has_visible_popups();
         let popup_visibility_changed =
             std::mem::replace(&mut self.visible_popups, visible_popups) != visible_popups;
-        let layer_geometry_changed = self.layer_geometry.geometry_changed(
-            state.output_size(),
-            &layers::layer_surface_rects(state.output()),
-        );
         let content_render_needed = force_full_damage
-            || self.previous_frame_direct
-            || scene_dirty
+            || state.scene_dirty()
             || popup_visibility_changed
-            || layer_geometry_changed
             || removed_windows
             || finished_window_closes
             || state.animations_active()
             || workspace_transition_active
-            || show_loading
             || self
                 .background
                 .set_path(state.config.compositor.background_image.clone());
@@ -171,8 +138,45 @@ impl SessionFrameRenderer {
         let mut blur_targets = window_effect_targets.clone();
         blur_targets.extend(top_targets.iter().cloned());
         blur_targets.extend(overlay_targets.iter().cloned());
-        self.blur_cache.retain_targets(&blur_targets);
-        let blur_animating = self.blur_cache.is_animating();
+        self.blur_effects.retain_targets(&blur_targets);
+
+        let background_element = self
+            .background
+            .render_element(renderer, state.output_size())
+            .map_err(render_error)?;
+        let background_layer =
+            render_stage_elements(renderer, state, RenderStage::Layer(Layer::Background));
+        let bottom_layer =
+            render_stage_elements(renderer, state, RenderStage::Layer(Layer::Bottom));
+
+        if force_full_damage || removed_windows || finished_window_closes {
+            compositor.reset_buffer_ages();
+            self.scene_backdrop.reset(state.output());
+        }
+
+        let output_size = state.output_size();
+        let target_transform = Transform::Normal;
+        let window_layers = collect_window_scene_layers(
+            renderer,
+            state,
+            &mut self.blur_effects,
+            output_size,
+            target_transform,
+            Some(&self.scene_backdrop),
+        )
+        .map_err(render_error)?;
+        let top_blurs = self.blur_effects.elements_for(
+            output_size,
+            target_transform,
+            &top_targets,
+            Some(&self.scene_backdrop),
+        );
+        let overlay_blurs = self.blur_effects.elements_for(
+            output_size,
+            target_transform,
+            &overlay_targets,
+            Some(&self.scene_backdrop),
+        );
         let top_layer = if fullscreen_active {
             Vec::new()
         } else {
@@ -183,138 +187,44 @@ impl SessionFrameRenderer {
         } else {
             render_stage_elements(renderer, state, RenderStage::Layer(Layer::Overlay))
         };
-        let loading_overlay = if show_loading {
-            Some(
-                render_loading_overlay(
-                    renderer,
-                    state.output_size(),
-                    loading_phase(self.session_started.elapsed()),
-                )
-                .map_err(render_error)?,
-            )
-        } else {
-            None
-        };
-        if can_direct_scanout(
-            state,
-            fullscreen_active,
-            show_loading,
-            blur_animating,
-            &top_layer,
-            &overlay_layer,
-            &window_effect_targets,
-        ) && direct_scanout.try_queue(state, renderer, surface)?
-        {
-            self.previous_frame_direct = true;
-            return Ok(FrameResult::Queued {
-                submitted: SubmittedFrame::Direct,
-                callback_surfaces: state.frame_callback_surfaces(),
-            });
-        }
 
-        let background_element = self
-            .background
-            .render_element(renderer, state.output_size())
-            .map_err(render_error)?;
-        let background_layer =
-            render_stage_elements(renderer, state, RenderStage::Layer(Layer::Background));
-        let bottom_layer =
-            render_stage_elements(renderer, state, RenderStage::Layer(Layer::Bottom));
-        let windows = window_elements(renderer, state);
-        let window_chrome = window_chrome_elements(renderer, state).map_err(render_error)?;
-
-        let (mut dmabuf, buffer_age) = surface.next_buffer().map_err(|error| {
-            DrmError::Unsupported(format!("failed to acquire GBM buffer: {error}"))
-        })?;
-        let mut framebuffer = renderer.bind(&mut dmabuf).map_err(|error| {
-            DrmError::Unsupported(format!("failed to bind GBM buffer: {error}"))
-        })?;
-        let force_scene_full_damage = force_full_damage
-            || self.previous_frame_direct
-            || workspace_transition_active;
-        let mut plan_damage = |buffer_age: usize, force_full: bool| {
-            plan_compositor_damage(
-                CompositorDamageContext {
-                    output_size: state.output_size(),
-                    output: state.output(),
-                    buffer_age,
-                    force_full_damage: force_full,
-                    blur_animating,
-                    window_effect_targets: &window_effect_targets,
-                    top_targets: &top_targets,
-                    overlay_targets: &overlay_targets,
-                    background: background_element.as_ref(),
-                    background_layer: &background_layer,
-                    bottom_layer: &bottom_layer,
-                    windows: &windows,
-                    window_chrome: &window_chrome,
-                    top_layer: &top_layer,
-                    overlay_layer: &overlay_layer,
-                    loading: loading_overlay.as_ref(),
-                },
-                &mut self.damage_tracker,
-                &mut self.blur_damage_tracker,
-                &mut self.layer_geometry,
-            )
-        };
-        let mut plan_buffer_age = usize::from(buffer_age);
-        let mut compositor_plan = plan_damage(plan_buffer_age, force_scene_full_damage);
-        let mut damage = resolve_render_damage(
-            state.output_size(),
-            u32::try_from(plan_buffer_age).unwrap_or(u32::MAX),
-            force_scene_full_damage,
-            compositor_plan.damage,
+        let window_layer_refs = window_layer_refs(&window_layers);
+        let backdrop_elements = scene_backdrop_elements(
+            background_element.as_ref(),
+            &background_layer,
+            &bottom_layer,
+            &window_layer_refs,
         );
-        if damage.is_none() && scene_dirty {
-            compositor_plan = plan_damage(0, false);
-            damage = resolve_render_damage(state.output_size(), 0, false, compositor_plan.damage);
-        }
-        let Some(damage) = damage else {
-            return Ok(FrameResult::Idle);
-        };
-        let blur_damage = compositor_plan.blur_damage;
-        state.take_scene_dirty();
-
-        let output_size = state.output_size();
-        render_scene(
-                &mut self.blur_cache,
-                renderer,
-                &mut framebuffer,
-                SceneRenderRequest {
-                    state,
-                    output_size,
-                    target_transform: Transform::Normal,
-                    damage: &damage,
-                    blur_damage: &blur_damage,
-                    background: background_element,
-                    background_layer: &background_layer,
-                    bottom_layer: &bottom_layer,
-                    windows: &windows,
-                    window_chrome: &window_chrome,
-                    window_targets: &window_effect_targets,
-                    top_targets: &top_targets,
-                    top_layer: &top_layer,
-                    overlay_targets: &overlay_targets,
-                    overlay_layer: &overlay_layer,
-                    loading: loading_overlay,
-                },
-            )
+        self.scene_backdrop
+            .render(renderer, output_size, &backdrop_elements)
             .map_err(render_error)?;
-        drop(framebuffer);
-        surface
-            .queue_buffer(None, Some(damage.clone()), ())
-            .map_err(|error| {
-                DrmError::Unsupported(format!("failed to queue DRM frame: {error}"))
-            })?;
-        self.previous_frame_direct = false;
-        return Ok(FrameResult::Queued {
-            submitted: SubmittedFrame::Composited,
+        let elements = scene_elements(
+            background_element.as_ref(),
+            &background_layer,
+            &bottom_layer,
+            &window_layer_refs,
+            &top_blurs,
+            &top_layer,
+            &overlay_blurs,
+            &overlay_layer,
+        );
+
+        let frame = compositor
+            .render_frame(renderer, &elements, SCENE_CLEAR_COLOR, compositor_frame_flags())
+            .map_err(compositor_error)?;
+        if frame.is_empty {
+            return Ok(FrameResult::Idle);
+        }
+
+        compositor.queue_frame(()).map_err(compositor_error)?;
+        state.take_scene_dirty();
+        Ok(FrameResult::Queued {
             callback_surfaces: state.frame_callback_surfaces(),
-        });
+        })
     }
 
-    pub fn mark_shell_not_ready(&mut self) {
-        self.shell_layers_seen_ready = false;
+    pub fn reset_damage(&mut self, state: &KestrelState) {
+        self.scene_backdrop.reset(state.output());
     }
 
     pub fn frame_presented(&mut self, presentation: Option<(Time<Monotonic>, u64)>) -> FrameTime {
@@ -327,45 +237,24 @@ impl SessionFrameRenderer {
     pub fn reset_for_output(&mut self, state: &KestrelState) {
         let frame_interval = refresh_interval(state.output_refresh_millihertz());
         self.frame_clock.set_refresh(frame_interval);
-        self.damage_tracker = DamageTracker::from_output(state.output());
-        self.blur_damage_tracker = DamageTracker::from_output(state.output());
-        self.blur_cache.retain_targets(&[]);
-        self.previous_frame_direct = false;
+        self.reset_damage(state);
+        self.blur_effects.retain_targets(&[]);
         self.visible_popups = state.has_visible_popups();
-    }
-
-    pub fn effects_active(&self) -> bool {
-        self.blur_cache.is_animating()
     }
 }
 
-fn loading_phase(elapsed: Duration) -> f32 {
-    (elapsed.as_secs_f32() * 0.72).fract()
+fn compositor_frame_flags() -> FrameFlags {
+    FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT
+        | FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY
+        | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT
+}
+
+fn compositor_error<E: std::fmt::Display>(error: E) -> DrmError {
+    DrmError::Unsupported(format!("DRM compositor error: {error}"))
 }
 
 fn render_error(error: impl std::fmt::Display) -> DrmError {
     DrmError::Unsupported(format!("failed to render DRM frame: {error}"))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn can_direct_scanout(
-    state: &KestrelState,
-    fullscreen_active: bool,
-    show_loading: bool,
-    blur_animating: bool,
-    top_layer: &[LayerElement],
-    overlay_layer: &[LayerElement],
-    window_effect_targets: &[layers::LayerRenderTarget],
-) -> bool {
-    fullscreen_active
-        && !show_loading
-        && !blur_animating
-        && !state.has_visible_popups()
-        && !state.animations_active()
-        && state.workspace_transition().is_none()
-        && top_layer.is_empty()
-        && overlay_layer.is_empty()
-        && window_effect_targets.is_empty()
 }
 
 fn refresh_interval(refresh_millihertz: i32) -> Duration {

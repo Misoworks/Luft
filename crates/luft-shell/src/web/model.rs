@@ -37,6 +37,7 @@ pub struct WebShellSnapshot {
 pub enum WebShellSurface {
     Panel,
     PanelMenu,
+    SessionMenu,
     QuickSettings,
     DateCenter,
     NotificationToast,

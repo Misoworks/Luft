@@ -1,7 +1,4 @@
-use crate::{
-    layers::{BlurLayer, LayerMaterial, LayerRenderTarget},
-    window_clip::ClipShape,
-};
+use crate::layers::{BlurLayer, LayerMaterial, LayerRenderTarget};
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Size};
 
 const WINDOW_BLUR_SAMPLE_PADDING: i32 = 0;
@@ -23,33 +20,6 @@ pub(super) fn material_radius(
             let scale = scale_x.min(scale_y).max(1.0);
             radius as f32 / scale
         }
-    }
-}
-
-pub(super) fn material_clip_shape(
-    material: LayerMaterial,
-    visible_size: Size<i32, Physical>,
-) -> ClipShape {
-    let clamp = |radius: i32| {
-        radius
-            .max(0)
-            .min(visible_size.w / 2)
-            .min(visible_size.h / 2)
-    };
-    match material {
-        LayerMaterial::Rect => ClipShape::Rect,
-        LayerMaterial::RoundRect { radius } => ClipShape::RoundRect {
-            radius: clamp(radius),
-        },
-        LayerMaterial::RoundTop { radius } => ClipShape::RoundTop {
-            radius: clamp(radius),
-        },
-        LayerMaterial::RoundLeft { radius } => ClipShape::RoundLeft {
-            radius: clamp(radius),
-        },
-        LayerMaterial::RoundRight { radius } => ClipShape::RoundRight {
-            radius: clamp(radius),
-        },
     }
 }
 
@@ -154,13 +124,4 @@ fn blur_downscale(target: &LayerRenderTarget, width: i32, height: i32) -> i32 {
 
 fn div_ceil(value: i32, divisor: i32) -> i32 {
     (value + divisor - 1) / divisor
-}
-
-pub(super) fn target_is_damaged(
-    rect: Rectangle<i32, Physical>,
-    damage: &[Rectangle<i32, Physical>],
-) -> bool {
-    damage
-        .iter()
-        .any(|damage| damage.intersection(rect).is_some())
 }

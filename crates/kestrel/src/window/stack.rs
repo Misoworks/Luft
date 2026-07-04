@@ -377,12 +377,6 @@ impl WindowStack {
             .map(|window| window.id)
     }
 
-    #[cfg(feature = "session-backend")]
-    pub fn fullscreen_window(&self, workspace: &WorkspaceId) -> Option<&ManagedWindow> {
-        let id = self.fullscreen_on_workspace(workspace)?;
-        self.windows.iter().find(|window| window.id == id)
-    }
-
     pub(super) fn visible_windows_for_workspace(
         &self,
         workspace: &WorkspaceId,

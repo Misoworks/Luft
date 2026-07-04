@@ -25,6 +25,7 @@ pub struct WebSurface {
     pub(crate) visible: bool,
     keep_alive_when_hidden: bool,
     panel_menu_x: Option<i32>,
+    session_menu_qs_height: Option<i32>,
     process: Option<FenestraProcess>,
     surface_alpha: f32,
     pub(crate) shell_margin: ShellSurfaceMargin,
@@ -35,7 +36,9 @@ pub struct WebSurface {
 impl WebSurface {
     pub(crate) fn new(config: WebSurfaceConfig<'_>) -> Result<Self, Box<dyn Error>> {
         let initial = serde_json::to_string(config.snapshot)?;
-        let shell_margin = shell_surface(config.kind, config.size, config.panel_menu_x).margin;
+        let shell_margin =
+            shell_surface(config.kind, config.size, config.panel_menu_x, config.session_menu_qs_height)
+                .margin;
         let mut surface = Self {
             kind: config.kind,
             size: config.size,
@@ -44,6 +47,7 @@ impl WebSurface {
             visible: false,
             keep_alive_when_hidden: config.keep_alive_when_hidden,
             panel_menu_x: config.panel_menu_x,
+            session_menu_qs_height: config.session_menu_qs_height,
             process: None,
             surface_alpha: if config.visible { 1.0 } else { 0.0 },
             shell_margin,
@@ -89,6 +93,17 @@ impl WebSurface {
         self.panel_menu_x = x;
         self.shell_margin = self.base_shell_margin();
         if self.kind == WebShellSurface::PanelMenu {
+            self.restart_for_geometry_change();
+        }
+    }
+
+    pub(crate) fn set_session_menu_qs_height(&mut self, height: Option<i32>) {
+        if self.session_menu_qs_height == height {
+            return;
+        }
+        self.session_menu_qs_height = height;
+        self.shell_margin = self.base_shell_margin();
+        if self.kind == WebShellSurface::SessionMenu {
             self.restart_for_geometry_change();
         }
     }
@@ -206,15 +221,26 @@ impl WebSurface {
     }
 
     pub(crate) fn base_shell_margin(&self) -> ShellSurfaceMargin {
-        shell_surface(self.kind, self.size, self.panel_menu_x).margin
+        shell_surface(
+            self.kind,
+            self.size,
+            self.panel_menu_x,
+            self.session_menu_qs_height,
+        )
+        .margin
     }
 
     fn build_window(&self) -> FenestraWindow {
         let snapshot = Arc::clone(&self.snapshot);
         let action_tx = self.actions_tx.clone();
         let kind = self.kind;
-        let shell_options =
-            shell_surface(kind, self.size, self.panel_menu_x).margin(self.shell_margin);
+        let shell_options = shell_surface(
+            kind,
+            self.size,
+            self.panel_menu_x,
+            self.session_menu_qs_height,
+        )
+        .margin(self.shell_margin);
         let (width, height) = cef_initial_size(&shell_options, self.size);
         let window = FenestraWindow::new()
             .title(format!("Luft {}", kind.as_str()))
@@ -322,6 +348,7 @@ pub(crate) struct WebSurfaceConfig<'a> {
     pub visible: bool,
     pub keep_alive_when_hidden: bool,
     pub panel_menu_x: Option<i32>,
+    pub session_menu_qs_height: Option<i32>,
     pub actions_tx: &'a Sender<WebShellAction>,
     pub snapshot: &'a WebShellSnapshot,
 }

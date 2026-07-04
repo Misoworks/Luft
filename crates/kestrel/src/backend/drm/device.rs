@@ -1,6 +1,9 @@
 use self::outputs::{ConnectedOutput, descriptors};
-use super::{DrmError, cursor::HardwareCursor, scanout::DirectScanout};
-use crate::output::OutputDescriptor;
+use super::{DrmError, cursor::HardwareCursor};
+use crate::{
+    output::OutputDescriptor,
+    state::KestrelState,
+};
 use luft_config::DisplayConfig;
 use smithay::{
     backend::{
@@ -10,7 +13,7 @@ use smithay::{
             gbm::{GbmAllocator, GbmBufferFlags, GbmDevice},
         },
         drm::{
-            DrmDevice, DrmDeviceFd, DrmDeviceNotifier, GbmBufferedSurface, GbmBufferedSurfaceError,
+            DrmDevice, DrmDeviceFd, DrmDeviceNotifier, compositor::DrmCompositor,
             exporter::gbm::GbmFramebufferExporter,
         },
         egl::{EGLContext, EGLDisplay},
@@ -19,6 +22,7 @@ use smithay::{
         session::{Session, libseat::LibSeatSession, libseat::LibSeatSessionNotifier},
         udev::{UdevBackend, UdevEvent, primary_gpu},
     },
+    output::OutputModeSource,
     reexports::{
         drm::{control::crtc, node::DrmNode},
         input::Libinput,
@@ -26,13 +30,25 @@ use smithay::{
         rustix::fs::stat,
         wayland_server::DisplayHandle,
     },
-    utils::DeviceFd,
+    utils::{DeviceFd, Scale},
 };
 use tracing::info;
 
 mod outputs;
 
-pub type SessionSurface = GbmBufferedSurface<GbmAllocator<DrmDeviceFd>, ()>;
+const SUPPORTED_COLOR_FORMATS: [Fourcc; 4] = [
+    Fourcc::Xrgb8888,
+    Fourcc::Xbgr8888,
+    Fourcc::Argb8888,
+    Fourcc::Abgr8888,
+];
+
+pub type SessionCompositor = DrmCompositor<
+    GbmAllocator<DrmDeviceFd>,
+    GbmFramebufferExporter<DrmDeviceFd>,
+    (),
+    DrmDeviceFd,
+>;
 
 pub struct OpenedSessionDevice {
     pub device: SessionDevice,
@@ -174,6 +190,17 @@ pub fn open(
 }
 
 impl SessionDevice {
+    pub fn link_compositor_outputs(&mut self, state: &KestrelState) {
+        for session_output in &mut self.outputs {
+            let Some(output) = state.outputs.output(&session_output.descriptor.name) else {
+                continue;
+            };
+            session_output
+                .compositor
+                .set_output_mode_source(OutputModeSource::Auto(output.downgrade()));
+        }
+    }
+
     pub fn rescan_outputs(&mut self, display_config: &DisplayConfig) -> Result<bool, DrmError> {
         let connected = ConnectedOutput::discover_all(&self.drm, display_config)?;
         let output = connected.first().cloned().ok_or_else(|| {
@@ -234,7 +261,7 @@ impl SessionDevice {
     }
 
     pub fn is_primary_crtc(&self, crtc: crtc::Handle) -> bool {
-        self.primary_output().surface.crtc() == crtc
+        self.primary_output().compositor.crtc() == crtc
     }
 
     pub fn drm_device_fd(&self) -> DrmDeviceFd {
@@ -255,8 +282,11 @@ impl SessionDevice {
         }
     }
 
-    pub fn sync_cursor(&mut self, state: &mut crate::state::KestrelState) {
-        let crtcs = self.outputs.iter().map(|output| output.output.crtc);
+    pub fn sync_cursor(&mut self, state: &mut KestrelState) {
+        let crtcs = self
+            .outputs
+            .iter()
+            .map(|output| output.compositor.crtc());
         self.cursor.sync(&self.drm, crtcs, state);
     }
 
@@ -264,7 +294,7 @@ impl SessionDevice {
         let Some(output) = self
             .outputs
             .iter_mut()
-            .find(|output| output.surface.crtc() == crtc)
+            .find(|output| output.compositor.crtc() == crtc)
         else {
             return Ok(());
         };
@@ -288,10 +318,11 @@ impl SessionDevice {
     fn reset_surfaces(&mut self) -> Result<(), DrmError> {
         self.cursor.reset();
         for output in &mut self.outputs {
-            output.surface.surface().reset_state().map_err(|error| {
-                DrmError::Unsupported(format!("failed to reset DRM surface: {error}"))
-            })?;
-            output.surface.reset_buffer_ages();
+            output
+                .compositor
+                .reset_state()
+                .map_err(compositor_error)?;
+            output.compositor.reset_buffers();
         }
         Ok(())
     }
@@ -300,61 +331,65 @@ impl SessionDevice {
 pub struct SessionOutput {
     pub descriptor: OutputDescriptor,
     output: ConnectedOutput,
-    pub surface: SessionSurface,
-    pub direct_scanout: DirectScanout,
-    submitted_frame: Option<SubmittedFrame>,
+    pub compositor: SessionCompositor,
+    frame_queued: bool,
 }
 
 impl SessionOutput {
-    pub fn mark_frame_submitted(&mut self, frame: SubmittedFrame) {
-        self.submitted_frame = Some(frame);
+    pub fn mark_frame_queued(&mut self) {
+        self.frame_queued = true;
     }
 
     pub fn has_pending_frame(&self) -> bool {
-        self.submitted_frame.is_some() || self.direct_scanout.has_pending_frame()
+        self.frame_queued
     }
 
     fn discard_pending_frame(&mut self) {
-        self.direct_scanout.frame_submitted();
-        self.submitted_frame = None;
+        self.frame_queued = false;
     }
 
     fn frame_submitted(&mut self) -> Result<(), DrmError> {
-        match self.submitted_frame.take() {
-            Some(SubmittedFrame::Direct) => self.direct_scanout.frame_submitted(),
-            Some(SubmittedFrame::Composited) | None => {
-                let _ = self.surface.frame_submitted().map_err(|error| {
-                    DrmError::Unsupported(format!("failed to retire submitted DRM frame: {error}"))
-                })?;
-            }
+        if !self.frame_queued {
+            return Ok(());
         }
+        self.compositor
+            .frame_submitted()
+            .map_err(compositor_error)?;
+        self.frame_queued = false;
         Ok(())
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SubmittedFrame {
-    Composited,
-    Direct,
-}
-
-fn create_surface(
+fn create_compositor(
     drm: &mut DrmDevice,
     gbm: GbmDevice<DrmDeviceFd>,
     renderer_formats: Vec<Format>,
+    import_node: Option<DrmNode>,
     output: &ConnectedOutput,
-) -> Result<SessionSurface, DrmError> {
+) -> Result<SessionCompositor, DrmError> {
     let drm_surface = drm
         .create_surface(output.crtc, output.mode, &[output.connector])
         .map_err(|error| DrmError::Unsupported(format!("failed to create DRM surface: {error}")))?;
-    let allocator = GbmAllocator::new(gbm, GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT);
-    SessionSurface::new(
+    let allocator = GbmAllocator::new(gbm.clone(), GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT);
+    let exporter = GbmFramebufferExporter::new(gbm.clone(), import_node.into());
+    let mode_source = OutputModeSource::Static {
+        size: output.descriptor.size,
+        scale: output_scale(output.descriptor.scale),
+        transform: output.descriptor.transform,
+    };
+
+    DrmCompositor::new(
+        mode_source,
         drm_surface,
+        None,
         allocator,
-        &[Fourcc::Argb8888, Fourcc::Xrgb8888],
+        exporter,
+        SUPPORTED_COLOR_FORMATS,
         renderer_formats,
+        drm.cursor_size(),
+        Some(gbm),
     )
-    .map_err(surface_error)
+    .map_err(compositor_error)
 }
 
 fn create_session_outputs(
@@ -367,20 +402,27 @@ fn create_session_outputs(
     outputs
         .into_iter()
         .map(|output| {
-            let surface = create_surface(drm, gbm.clone(), renderer_formats.clone(), &output)?;
-            let direct_scanout =
-                DirectScanout::new(GbmFramebufferExporter::new(gbm.clone(), import_node));
+            let compositor = create_compositor(
+                drm,
+                gbm.clone(),
+                renderer_formats.clone(),
+                import_node,
+                &output,
+            )?;
             Ok(SessionOutput {
                 descriptor: output.descriptor.clone(),
                 output,
-                surface,
-                direct_scanout,
-                submitted_frame: None,
+                compositor,
+                frame_queued: false,
             })
         })
         .collect()
 }
 
-fn surface_error(error: GbmBufferedSurfaceError<std::io::Error>) -> DrmError {
-    DrmError::Unsupported(format!("failed to create GBM scanout surface: {error}"))
+fn output_scale(scale: f64) -> Scale<f64> {
+    Scale::from(scale.clamp(0.5, 4.0))
+}
+
+fn compositor_error<E: std::fmt::Display>(error: E) -> DrmError {
+    DrmError::Unsupported(format!("DRM compositor error: {error}"))
 }

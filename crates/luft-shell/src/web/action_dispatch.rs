@@ -72,6 +72,9 @@ impl WebShell {
                 self.refresh_status_now();
             }
             WebShellAction::SessionCommand { command } => self.run_session_command(command),
+            WebShellAction::SessionMenuOpen => self.open_session_menu(),
+            WebShellAction::SessionMenuClose => self.close_session_menu(),
+            WebShellAction::ToggleSessionMenu => self.toggle_session_menu(),
             WebShellAction::ReloadConfig => self.reload_config_from_command(),
             WebShellAction::OpenLogsFolder => self.open_logs_folder(),
             WebShellAction::NotificationClose { notification } => {
